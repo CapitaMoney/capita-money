@@ -37,6 +37,9 @@
 //! transaction fees – protection against spam is a matter for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+// FRAME derives `Clone` for events and calls field by field. Clippy versions
+// after 1.97 look into that generated code and report every `Copy` field.
+#![allow(clippy::clone_on_copy)]
 #![forbid(unsafe_code)]
 
 extern crate alloc;
