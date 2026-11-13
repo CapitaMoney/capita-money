@@ -10,7 +10,9 @@ jobs:
   core:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      # compiler errors and failed tests become annotations of the run
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
       - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt --target thumbv7em-none-eabi
       - run: cargo fmt --all --check
       - run: cargo clippy -p capita-core --all-targets --all-features -- -D warnings
@@ -23,10 +25,44 @@ jobs:
   pallet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      # compiler errors and failed tests become annotations of the run
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
       - run: rustup toolchain install stable --profile minimal --component clippy --target wasm32v1-none
       - run: cargo clippy -p pallet-capita --all-targets -- -D warnings
       - run: cargo test -p pallet-capita
       - run: cargo check -p pallet-capita --features try-runtime
       # the form the pallet takes inside a runtime: WebAssembly, no std
       - run: cargo check -p pallet-capita --no-default-features --target wasm32v1-none
+  # The test chain, natively: genesis, signed transactions, invariants.
+  runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # compiler errors and failed tests become annotations of the run
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: rustup toolchain install stable --profile minimal --component clippy
+      - run: SKIP_WASM_BUILD=1 cargo test -p capita-runtime --features try-runtime
+      - run: SKIP_WASM_BUILD=1 cargo clippy -p capita-runtime --all-targets --features try-runtime -- -D warnings
+  # The runtime as WebAssembly, the node around it, and a chain that runs.
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+      # compiler errors and failed tests become annotations of the run
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: rustup toolchain install stable --profile minimal --component clippy,rust-src --target wasm32v1-none
+      - run: cargo build --release -p capita-node
+      - name: the chain produces blocks
+        run: |
+          ./target/release/capita-node --dev --tmp > node.log 2>&1 &
+          for i in $(seq 1 30); do
+            sleep 6
+            number=$(curl -s -H 'Content-Type: application/json' -d '{"id":1,"jsonrpc":"2.0","method":"chain_getHeader","params":[]}' http://127.0.0.1:9944 | grep -o '"number":"0x[0-9a-f]*"' || true)
+            echo "$number"
+            case "$number" in ''|'"number":"0x0"') ;; *) exit 0 ;; esac
+          done
+          tail -n 50 node.log
+          exit 1
