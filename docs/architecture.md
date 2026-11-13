@@ -81,6 +81,9 @@ sequenceDiagram
 Offene Frage: B4 claim or automatic. Default claim; "automatic" is the host calling the same function on a schedule – no core change.
 Offene Frage: A1d ripening. Hook: issued money is minted only once ripe (delayed mint: a claim at `now` covers the time up to `now` − ripening), so no ledger needs a second balance. Default zero = at once. Unripe money is not on the ledger and so cannot be lent.
 
+### Open an account, verify
+`plan_open`: lowest step of the ladder and the one-time start grant. The grant is earmarked (`start_grant_reserved`): it can be paid only to the verification service, for the verification of the account itself (`plan_spend_start_grant`) – not to anybody else, not as a loan, and no demurrage is charged on it. The identity adapter then reports what it found (`plan_attest`), and the holder moves up the ladder (`plan_set_tier`).
+
 ### Purchase (euro → Capita, one way)
 Payment handling is outside the core. After the payment is confirmed, the host requests `Mint Purchased`. No operation exists for the way back.
 
