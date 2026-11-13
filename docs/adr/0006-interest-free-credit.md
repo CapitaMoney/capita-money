@@ -12,7 +12,7 @@ Two forms, both without an interest field anywhere in the data model:
 - A lender is always an account – a person or a pool. The core does not tell them apart.
 - One lender per borrower at a time; further loans from the same lender add up. Keeps the state small and the order of repayment unambiguous.
 - No fee field exists. A fee would need a recipient and a rule – a new parameter version, not a default.
-- The plan of a loan belongs to the borrower (state, operation identifier). The host verifies the consent of the lender.
+- The plan of a loan belongs to the borrower (state, operation identifier). The host verifies the consent of both sides: the lender gives money away, the borrower takes on a debt (on chain: offer and acceptance, ADR 0009).
 - A debt is not cancelled by the state of the lender: repayments also reach a frozen or closed lender account.
 
 ## Consequences

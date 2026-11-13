@@ -6,13 +6,14 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests done (M1): `capita-core`. Next: the same core inside a Substrate pallet on a local test chain (M2). Rules are being finalized in parallel; anything undecided is a parameter.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet, tested against a mock runtime (M2, first half): `pallet-capita`. Next: runtime and node of a local test chain, with Duniter's identity pallets. Rules are being finalized in parallel; anything undecided is a parameter.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
 - [`docs/adr/`](docs/adr/) – design decisions
 - [`docs/upstream-mapping.md`](docs/upstream-mapping.md) – what is reused from which project
 - [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
+- [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
 
 ## The core
 `capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
@@ -26,14 +27,20 @@ Every rule is a pure function that returns a plan (new account state, ledger ope
 
 ## Build and test
 ```
+# the core (default member of the workspace)
 cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --all --check
+# the pallet (builds the Polkadot SDK, takes longer)
+cargo test -p pallet-capita
+cargo clippy -p pallet-capita --all-targets -- -D warnings
 # no_std check on a target without an operating system
 rustup target add thumbv7em-none-eabi
 cargo build -p capita-core --all-features --target thumbv7em-none-eabi
 ```
 Tests: [`tests/rules.rs`](crates/capita-core/tests/rules.rs) – worked examples with numbers for every rule; [`tests/properties.rs`](crates/capita-core/tests/properties.rs) – invariants on random inputs (claiming often = claiming once; no balance below its credit line; supply = minted − burnt; no overflow at extreme values).
+
+The pallet decides nothing itself: every call asks the core for a plan and applies it. It adds storage, a ledger with credit lines, block time, the origins that hold authority, and consent for loans ([ADR 0009](docs/adr/0009-chain-host-pallet.md)). Its tests run the rules through a mock runtime and check the invariants on chain state after every call of random histories.
 
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.

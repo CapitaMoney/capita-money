@@ -1,6 +1,6 @@
 # Capita Money – architecture
 
-Status: M1 (2026-11-13) – rules implemented and tested in `capita-core`. Scope: how the parts fit, where trust lies, what can go wrong.
+Status: M2, first half (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`, tested against a mock runtime. Scope: how the parts fit, where trust lies, what can go wrong.
 Rules still open are marked `Offene Frage:`; they are parameters or hooks, never decided in code.
 
 ## 1. Principle
@@ -38,7 +38,8 @@ flowchart TB
 |---|---|---|
 | `capita-core` | rules, data model, ports | `crates/capita-core` |
 | service host + Taler adapters | claim/lend API, outbox, libeufin client | M4 |
-| pallet + chain | same core inside a runtime | M2 |
+| `pallet-capita` | same core inside a runtime (ADR 0009) | `pallets/capita` |
+| runtime + node | local test chain | M2, open |
 | identity adapters | attestations from providers | M3 |
 | app, website | user interface | M5 |
 | messaging, content distribution | later ports (libp2p, iroh) | – |

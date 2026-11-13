@@ -1,12 +1,12 @@
 # Upstream mapping – what we reuse, and how
 
-Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M1 **no upstream code is in this repository**.
+Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M2 **no upstream code is in this repository** (the Polkadot SDK is a dependency from crates.io).
 Licences marked ✓ were read from the `LICENSE` file and manifest of the source snapshot of 2026-11-11. Marked ✓web: checked against Taler/Parity project pages on 2026-11-13 (not the licence files themselves); re-check the `COPYING` files before any code reuse. Unmarked = unverified.
 
 | Upstream | What | Used where | How | Licence |
 |---|---|---|---|---|
 | Duniter v2 `pallet-universal-dividend` | claim-based dividend: nothing written until the member claims | `issuance`, ADR 0002 | idea | AGPL-3.0 ✓ |
-| Duniter v2 `identity`, `membership` pallets | identity life cycle on chain | chain host (M2) | code, as dependency or fork; certification/distance replaced by credential pallet | AGPL-3.0 ✓ |
+| Duniter v2 `identity`, `membership` pallets | identity life cycle on chain | chain host (M2/M3) | code, as dependency: coupled to the web of trust only through `Config` handlers (ADR 0009), so certification/distance can be replaced by a credential pallet | AGPL-3.0 ✓ |
 | Duniter v2 dividend formula (re-evaluation by money mass and members) | – | not used: our rates come from the parameter ladder and caps | – | – |
 | encointer `balances` | demurrage computed lazily from balance + last update | `demurrage`, ADR 0007: linear integer formula instead of exponential fixed-point | idea | GPL-3.0-or-later ✓ |
 | encointer ceremonies | personhood by physical meetings | not used (remote newcomers) | – | – |
