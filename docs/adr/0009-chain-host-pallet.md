@@ -1,6 +1,6 @@
 # ADR 0009 – Chain host: `pallet-capita`
 
-Status: accepted (M2, 2026-11-13). Pallet built and tested against a mock runtime; runtime, node and WebAssembly build still open.
+Status: accepted (M2, 2026-11-13). Pallet built and tested against a mock runtime. Runtime and node: ADR 0010.
 
 ## Context
 M2: the same rules inside a Substrate runtime, later next to Duniter's identity pallets. ADR 0001 demands that the rules stay in `capita-core`.
@@ -18,7 +18,8 @@ M2: the same rules inside a Substrate runtime, later next to Duniter's identity 
 - **Transparency:** every event of the core is deposited unchanged (`Event::Rule`); `PublicTotals` keeps their sums on chain; `TotalSupply` is counted separately by the ledger. `try_state` checks after every block: both supplies equal, sum of balances = supply, no balance below its line, no start grant touched, recorded debt = lent − repaid, one person one account.
 - **Account identifiers are 32 bytes** (`AccountId32`), the form the core uses.
 - **All versions of the rules are kept** (one unbounded storage value): a claim or a demurrage settlement may reach back across versions.
-- **SDK line:** `frame-support` 46 from crates.io – the version of Duniter's SDK fork (`duniter-polkadot-sdk`, branch `duniter-substrate-v1.22.3`, also 46.0.1). The pallet uses no API particular to that line.
+- **SDK line:** `frame-support` 46 – the version of Duniter's SDK fork (`duniter-polkadot-sdk`, branch `duniter-substrate-v1.22.3`). The pallet uses no API particular to the fork; its source is set by the workspace (ADR 0010).
+- **An open account is a provider:** `open` registers one provider reference with the system pallet, so that the key exists for other pallets (ADR 0010).
 
 ## Duniter pallets: what couples them
 Read from the source snapshot of 2026-10-30 (`duniter-v2s`):
@@ -35,4 +36,4 @@ Read from the source snapshot of 2026-10-30 (`duniter-v2s`):
 − Weights are placeholders until benchmarked.
 
 ## Open (technical)
-Runtime and node (solo-chain template) · WebAssembly build of core and pallet (`wasm32v1-none`; not possible in the build environment used so far, see CI) · runtime API for balance and claimable amount · benchmarks · fees or quota.
+WebAssembly build of core and pallet (`wasm32v1-none`; not possible in the build environment used so far, see CI) · runtime API for balance and claimable amount · benchmarks · fees or quota.

@@ -6,7 +6,7 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet, tested against a mock runtime (M2, first half): `pallet-capita`. Next: runtime and node of a local test chain, with Duniter's identity pallets. Rules are being finalized in parallel; anything undecided is a parameter.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Next: identity by verifiable credentials (M3). Rules are being finalized in parallel; anything undecided is a parameter, and every number on the test chain is an example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
@@ -14,6 +14,8 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`docs/upstream-mapping.md`](docs/upstream-mapping.md) – what is reused from which project
 - [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
 - [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
+- [`runtime`](runtime) – runtime of the test chain: the pallet, Duniter's identity and membership, consensus
+- [`node`](node) – node of the test chain
 
 ## The core
 `capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
@@ -42,10 +44,25 @@ Tests: [`tests/rules.rs`](crates/capita-core/tests/rules.rs) – worked examples
 
 The pallet decides nothing itself: every call asks the core for a plan and applies it. It adds storage, a ledger with credit lines, block time, the origins that hold authority, and consent for loans ([ADR 0009](docs/adr/0009-chain-host-pallet.md)). Its tests run the rules through a mock runtime and check the invariants on chain state after every call of random histories.
 
+## The test chain
+A chain for trying things out on one computer: no fees, one key with all authority (sudo), example rules ([ADR 0010](docs/adr/0010-test-chain.md)).
+
+Needed: Rust (stable) with the target `wasm32v1-none`, and the Protocol Buffers compiler.
+```
+rustup target add wasm32v1-none
+sudo apt install protobuf-compiler        # Debian, Ubuntu
+# tests of the runtime, without the WebAssembly build
+SKIP_WASM_BUILD=1 cargo test -p capita-runtime --features try-runtime
+# build the node (long the first time) and start a chain that forgets everything on exit
+cargo build --release -p capita-node
+./target/release/capita-node --dev
+```
+The node listens on `ws://127.0.0.1:9944`; [Polkadot-JS Apps](https://polkadot.js.org/apps/?rpc=ws://127.0.0.1:9944) can connect to it. Alice holds the sudo key. A first walk: any key calls `capita.open`; Alice names a service account (`sudo` → `capita.setServiceAccount`); the key calls `capita.payVerification`; Alice attests a level (`sudo` → `capita.attest`); the key chooses its step (`capita.setTier`) and claims (`capita.claim`).
+
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.
 - **Built on existing open source** instead of starting from scratch:
-  - [Duniter v2](https://git.duniter.org/nodes/rust/duniter-v2s): Substrate modules for universal dividend and identity
+  - [Duniter v2](https://git.duniter.org/nodes/rust/duniter-v2s): Substrate modules for identity and membership, and its maintained fork of the Polkadot SDK
   - [Ğecko](https://git.duniter.org/clients/gecko): mobile wallet (Flutter)
   - [GNU Taler](https://taler.net): privacy-friendly payments and shop integration
   - [Polkadot SDK / Substrate](https://github.com/paritytech/polkadot-sdk): blockchain framework

@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [workspace]
 resolver = "2"
-members = ["crates/capita-core", "pallets/capita"]
+members = ["crates/capita-core", "pallets/capita", "runtime", "node"]
 # Plain `cargo test` covers the core only; the pallet pulls in the whole
-# Polkadot SDK: `cargo test -p pallet-capita`.
+# Polkadot SDK: `cargo test -p pallet-capita`, `-p capita-runtime`, `-p capita-node`.
 default-members = ["crates/capita-core"]
 
 [workspace.package]
@@ -14,6 +14,71 @@ license = "AGPL-3.0-only"
 repository = "https://github.com/CapitaMoney/capita-money"
 homepage = "https://capitamoney.com"
 authors = ["Capita Money contributors"]
+
+# One place for every outside source of the chain side (docs/adr/0010).
+[workspace.dependencies]
+capita-core = { path = "crates/capita-core", default-features = false }
+pallet-capita = { path = "pallets/capita", default-features = false }
+capita-runtime = { path = "runtime", default-features = false }
+
+clap = { version = "4.5" }
+codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false }
+futures = { version = "0.3" }
+jsonrpsee = { version = "0.24.3" }
+scale-info = { version = "2.11", default-features = false }
+serde_json = { version = "1.0", default-features = false }
+
+# Duniter v2: identity and membership. Their crate names equal two unrelated
+# pallets of the Polkadot SDK; these are Duniter's.
+duniter-primitives = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965", default-features = false }
+pallet-identity = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965", default-features = false }
+pallet-membership = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965", default-features = false }
+sp-membership = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965", default-features = false }
+
+# Polkadot SDK, taken from Duniter's fork: Duniter's pallets are built against
+# it, and a runtime holds one copy of the SDK. The branch equals the
+# crates.io release line of frame-support 46.
+frame-executive = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+frame-support = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+frame-system = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+frame-system-rpc-runtime-api = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+frame-try-runtime = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+pallet-aura = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+pallet-grandpa = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+pallet-sudo = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+pallet-timestamp = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-api = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-block-builder = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-blockchain = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-consensus-aura = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-consensus-grandpa = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-core = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-genesis-builder = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-inherents = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-io = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-keyring = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-offchain = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-runtime = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-session = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-timestamp = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-transaction-pool = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sp-version = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-basic-authorship = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-cli = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-client-api = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-consensus = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-consensus-aura = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-consensus-grandpa = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-executor = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-network = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-offchain = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-service = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-telemetry = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-transaction-pool = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+sc-transaction-pool-api = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+substrate-build-script-utils = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+substrate-frame-rpc-system = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
+substrate-wasm-builder = { git = "https://github.com/duniter/duniter-polkadot-sdk", branch = "duniter-substrate-v1.22.3", default-features = false }
 
 # The lints below enforce docs/adr/0001 and 0003 by tooling.
 [workspace.lints.rust]
@@ -35,3 +100,18 @@ panic = "deny"
 # smaller. The crates of this workspace keep theirs.
 [profile.dev.package."*"]
 debug = false
+
+[profile.release]
+opt-level = 3
+panic = "unwind"
+
+# Two fixes Duniter maintains for dependencies of the SDK, taken from its
+# repository unchanged (docs/adr/0010): multihash without the withdrawn crate
+# core2 (RUSTSEC-2026-0105); tracing with tracing-subscriber 0.3.20
+# (RUSTSEC-2025-0055).
+[patch.crates-io]
+multihash = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965" }
+
+[patch."https://github.com/duniter/duniter-polkadot-sdk"]
+sc-tracing = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965" }
+sp-tracing = { git = "https://github.com/duniter/duniter-v2s", rev = "71884a456a47eea21bd979c83f3d9e6eee4c7965" }

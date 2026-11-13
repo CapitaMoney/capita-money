@@ -96,8 +96,11 @@ fn check() {
 #[test]
 fn opening_an_account_grants_the_start_capita_once() {
     new_test_ext(params()).execute_with(|| {
+        assert_eq!(System::providers(&acct(1)), 0);
         open(1);
         assert_eq!(balance(1), 100);
+        // the account now exists for every other pallet of the chain
+        assert_eq!(System::providers(&acct(1)), 1);
         assert_eq!(TotalSupply::<Test>::get(), 100);
         assert_eq!(PublicTotals::<Test>::get().start_grants, 100);
         assert_eq!(PublicTotals::<Test>::get().accounts_opened, 1);

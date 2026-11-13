@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-runtime"
+description = "Runtime of the Capita Money test chain: pallet-capita, Duniter's identity and membership pallets, Aura and GRANDPA."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+capita-core = { workspace = true }
+pallet-capita = { workspace = true }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive", "serde"] }
+serde_json = { workspace = true, features = ["alloc"] }
+
+duniter-primitives = { workspace = true }
+pallet-identity = { workspace = true }
+pallet-membership = { workspace = true }
+sp-membership = { workspace = true }
+
+frame-executive = { workspace = true }
+frame-support = { workspace = true, features = ["experimental"] }
+frame-system = { workspace = true }
+frame-system-rpc-runtime-api = { workspace = true }
+frame-try-runtime = { workspace = true, optional = true }
+pallet-aura = { workspace = true }
+pallet-grandpa = { workspace = true }
+pallet-sudo = { workspace = true }
+pallet-timestamp = { workspace = true }
+sp-api = { workspace = true }
+sp-block-builder = { workspace = true }
+sp-consensus-aura = { workspace = true, features = ["serde"] }
+sp-consensus-grandpa = { workspace = true, features = ["serde"] }
+sp-core = { workspace = true, features = ["serde"] }
+sp-genesis-builder = { workspace = true }
+sp-inherents = { workspace = true }
+sp-keyring = { workspace = true }
+sp-offchain = { workspace = true }
+sp-runtime = { workspace = true, features = ["serde"] }
+sp-session = { workspace = true }
+sp-transaction-pool = { workspace = true }
+sp-version = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+sp-io = { workspace = true, default-features = true }
+
+[build-dependencies]
+substrate-wasm-builder = { workspace = true, optional = true, default-features = true }
+
+[features]
+default = ["std"]
+std = [
+    "capita-core/std",
+    "codec/std",
+    "duniter-primitives/std",
+    "frame-executive/std",
+    "frame-support/std",
+    "frame-system-rpc-runtime-api/std",
+    "frame-system/std",
+    "frame-try-runtime?/std",
+    "pallet-aura/std",
+    "pallet-capita/std",
+    "pallet-grandpa/std",
+    "pallet-identity/std",
+    "pallet-membership/std",
+    "pallet-sudo/std",
+    "pallet-timestamp/std",
+    "scale-info/std",
+    "serde_json/std",
+    "sp-api/std",
+    "sp-block-builder/std",
+    "sp-consensus-aura/std",
+    "sp-consensus-grandpa/std",
+    "sp-core/std",
+    "sp-genesis-builder/std",
+    "sp-inherents/std",
+    "sp-keyring/std",
+    "sp-membership/std",
+    "sp-offchain/std",
+    "sp-runtime/std",
+    "sp-session/std",
+    "sp-transaction-pool/std",
+    "sp-version/std",
+    "substrate-wasm-builder",
+]
+try-runtime = [
+    "frame-executive/try-runtime",
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "frame-try-runtime/try-runtime",
+    "pallet-aura/try-runtime",
+    "pallet-capita/try-runtime",
+    "pallet-grandpa/try-runtime",
+    "pallet-identity/try-runtime",
+    "pallet-membership/try-runtime",
+    "pallet-sudo/try-runtime",
+    "pallet-timestamp/try-runtime",
+    "sp-membership/try-runtime",
+    "sp-runtime/try-runtime",
+]

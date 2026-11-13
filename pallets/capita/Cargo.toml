@@ -14,17 +14,17 @@ publish = false
 unsafe_code = "forbid"
 
 [dependencies]
-capita-core = { path = "../../crates/capita-core", default-features = false, features = ["scale", "serde"] }
-codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false, features = ["derive", "max-encoded-len"] }
-scale-info = { version = "2.11", default-features = false, features = ["derive"] }
-# Polkadot SDK, on the release line of Duniter v2 (docs/adr/0009).
-frame-support = { version = "46.0", default-features = false }
-frame-system = { version = "46.0", default-features = false }
-sp-runtime = { version = "46.0", default-features = false }
+capita-core = { workspace = true, features = ["scale", "serde"] }
+codec = { workspace = true, features = ["derive", "max-encoded-len"] }
+scale-info = { workspace = true, features = ["derive"] }
+# Polkadot SDK: source and version are set once, in the workspace (docs/adr/0010).
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
-pallet-timestamp = { version = "45.0" }
-sp-io = { version = "45.0" }
+pallet-timestamp = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

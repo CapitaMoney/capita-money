@@ -1,6 +1,6 @@
 # Capita Money – architecture
 
-Status: M2, first half (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`, tested against a mock runtime. Scope: how the parts fit, where trust lies, what can go wrong.
+Status: M2 (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`; runtime and node of a local test chain with Duniter's identity and membership pallets (ADR 0010). Scope: how the parts fit, where trust lies, what can go wrong.
 Rules still open are marked `Offene Frage:`; they are parameters or hooks, never decided in code.
 
 ## 1. Principle
@@ -9,7 +9,7 @@ All monetary rules live in one pure library, `capita-core`. It computes; it does
 Everything else is an adapter behind a port. Two hosts run the same core:
 
 - **Service host** (first): a small service next to a GNU Taler bank (libeufin-bank).
-- **Chain host** (later): a Substrate pallet on an own chain with Duniter pallets.
+- **Chain host**: a Substrate pallet on an own chain with Duniter pallets. A local test chain exists (ADR 0010).
 
 Same rules, same tests, either host. Swapping ledger or identity provider touches one adapter, never the rules.
 
@@ -39,7 +39,7 @@ flowchart TB
 | `capita-core` | rules, data model, ports | `crates/capita-core` |
 | service host + Taler adapters | claim/lend API, outbox, libeufin client | M4 |
 | `pallet-capita` | same core inside a runtime (ADR 0009) | `pallets/capita` |
-| runtime + node | local test chain | M2, open |
+| runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
 | identity adapters | attestations from providers | M3 |
 | app, website | user interface | M5 |
 | messaging, content distribution | later ports (libp2p, iroh) | – |

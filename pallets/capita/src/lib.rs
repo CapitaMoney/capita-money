@@ -308,13 +308,21 @@ pub mod pallet {
         /// Open an account for the caller: lowest step of the ladder, and
         /// the one-time start grant.
         #[pallet::call_index(0)]
-        #[pallet::weight(weight_of::<T>(4, 5))]
+        #[pallet::weight(weight_of::<T>(5, 6))]
         pub fn open(origin: OriginFor<T>) -> DispatchResult {
-            let who = Self::id(ensure_signed(origin)?);
+            let account = ensure_signed(origin)?;
+            let who = Self::id(account.clone());
             ensure!(!Accounts::<T>::contains_key(who), Error::<T>::AccountExists);
             let (now, list) = Self::context()?;
             let params = in_force_at(&list, now).map_err(Self::rule)?;
-            Self::apply(lifecycle::plan_open(who, params, now).map_err(Self::rule)?)
+            Self::apply(lifecycle::plan_open(who, params, now).map_err(Self::rule)?)?;
+            // For the rest of the chain a key exists once the system pallet
+            // counts a provider for it; other pallets ask there (Duniter's
+            // identity pallet before it creates an identity). The Capita
+            // account is that provider. Its record is never deleted, so
+            // the reference stays.
+            frame_system::Pallet::<T>::inc_providers(&account);
+            Ok(())
         }
 
         /// Claim the per-capita money accrued since the last claim. While

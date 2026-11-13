@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-node"
+description = "Node of the Capita Money test chain."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+build = "build.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+capita-runtime = { workspace = true, default-features = true }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true, features = ["thread-pool"] }
+jsonrpsee = { workspace = true, features = ["server"] }
+
+sc-basic-authorship = { workspace = true, default-features = true }
+# without default features: the database RocksDB (C++) is optional, see below
+sc-cli = { workspace = true }
+sc-client-api = { workspace = true, default-features = true }
+sc-consensus = { workspace = true, default-features = true }
+sc-consensus-aura = { workspace = true, default-features = true }
+sc-consensus-grandpa = { workspace = true, default-features = true }
+sc-executor = { workspace = true, default-features = true }
+sc-network = { workspace = true, default-features = true }
+sc-offchain = { workspace = true, default-features = true }
+sc-service = { workspace = true }
+sc-telemetry = { workspace = true, default-features = true }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-api = { workspace = true, default-features = true }
+sp-block-builder = { workspace = true, default-features = true }
+sp-blockchain = { workspace = true, default-features = true }
+sp-consensus-aura = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-genesis-builder = { workspace = true, default-features = true }
+sp-inherents = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-timestamp = { workspace = true, default-features = true }
+substrate-frame-rpc-system = { workspace = true, default-features = true }
+
+[build-dependencies]
+substrate-build-script-utils = { workspace = true, default-features = true }
+
+[features]
+default = []
+# The database RocksDB instead of ParityDB. Needs a C++ compiler and libclang,
+# and adds a long build step.
+rocksdb = ["sc-cli/rocksdb", "sc-service/rocksdb"]
+try-runtime = ["capita-runtime/try-runtime", "sp-runtime/try-runtime"]
