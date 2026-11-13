@@ -6,7 +6,34 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Concept and architecture phase. Rules are being finalised; code follows in modules.
+Rules as code with tests done (M1): `capita-core`. Next: the same core inside a Substrate pallet on a local test chain (M2). Rules are being finalized in parallel; anything undecided is a parameter.
+
+## Layout
+- [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
+- [`docs/adr/`](docs/adr/) – design decisions
+- [`docs/upstream-mapping.md`](docs/upstream-mapping.md) – what is reused from which project
+- [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
+
+## The core
+`capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
+- **Issuance:** every account accrues Capita by the second at the rate of its step on the incentive ladder, limited by a cap (global, later per country and seniority). Nothing is created until claimed; a claim reaches back a limited time.
+- **Lending:** interest-free credit lines and loans; a share of each claim repays the lender. The data model has no interest field.
+- **One way in:** Capita can be bought with ordinary money; there is no function for the way back.
+- **Optional:** demurrage (a holding fee) and ripening (delayed availability) – both off by default.
+- **Transparency:** public totals are sums over the event record and must equal the ledger.
+
+Every rule is a pure function that returns a plan (new account state, ledger operations, public events); the host applies it. Integer cents, checked arithmetic, no floats, `no_std`.
+
+## Build and test
+```
+cargo test --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt --all --check
+# no_std check on a target without an operating system
+rustup target add thumbv7em-none-eabi
+cargo build -p capita-core --all-features --target thumbv7em-none-eabi
+```
+Tests: [`tests/rules.rs`](crates/capita-core/tests/rules.rs) – worked examples with numbers for every rule; [`tests/properties.rs`](crates/capita-core/tests/properties.rs) – invariants on random inputs (claiming often = claiming once; no balance below its credit line; supply = minted − burnt; no overflow at extreme values).
 
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.

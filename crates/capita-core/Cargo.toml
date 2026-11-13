@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-core"
+description = "Pure monetary rules of Capita Money: per-capita issuance, interest-free loans, optional demurrage."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Serialization of all public data types (JSON for the Taler service, etc.).
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+
+[dev-dependencies]
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
+serde_json = "1.0.154"
