@@ -1,6 +1,6 @@
 # Capita Money – architecture
 
-Status: M2 (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`; runtime and node of a local test chain with Duniter's identity and membership pallets (ADR 0010). Scope: how the parts fit, where trust lies, what can go wrong.
+Status: M3 (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`; runtime and node of a local test chain with Duniter's identity and membership pallets (ADR 0010); identity by signed claims of trusted identity services, checked by `capita-credential` (ADR 0011). Scope: how the parts fit, where trust lies, what can go wrong.
 Rules still open are marked `Offene Frage:`; they are parameters or hooks, never decided in code.
 
 ## 1. Principle
@@ -28,7 +28,8 @@ flowchart TB
   core --- P["ParamsStore + Governance ports"]
   core --- E["EventSink port"]
   L --> L1["libeufin-bank (Taler)"] & L2["Substrate pallet"]
-  I --> I1["Challenger: e-mail, SMS, post"] & I2["DID/VC (ssi)"] & I3["Idena-style test (later)"]
+  I --> IC["capita-credential<br/>claims of listed issuers"]
+  IC --> I1["Challenger: e-mail, SMS, post"] & I2["DID/VC (ssi)"] & I3["Idena-style test (later)"]
   S --> S1["PostgreSQL"] & S2["chain storage"]
   P --> P1["signed config"] & P2["on-chain governance"]
   E --> E1["public totals"] & E2["chain events"]
@@ -40,7 +41,9 @@ flowchart TB
 | service host + Taler adapters | claim/lend API, outbox, libeufin client | M4 |
 | `pallet-capita` | same core inside a runtime (ADR 0009) | `pallets/capita` |
 | runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
-| identity adapters | attestations from providers | M3 |
+| `capita-credential` | claims of identity services: format, signed bytes, check (ADR 0011) | `crates/capita-credential` |
+| `pallet-capita-credential` | list of trusted issuers and their claims on chain; steers Duniter's identity and membership | `pallets/credential`, wiring `runtime/src/identity.rs` |
+| identity services (issuers) | verify people, sign claims | after M3 |
 | app, website | user interface | M5 |
 | messaging, content distribution | later ports (libp2p, iroh) | – |
 
@@ -84,6 +87,22 @@ Offene Frage: A1d ripening. Hook: issued money is minted only once ripe (delayed
 ### Open an account, verify
 `plan_open`: lowest step of the ladder and the one-time start grant. The grant is earmarked (`start_grant_reserved`): it can be paid only to the verification service, for the verification of the account itself (`plan_spend_start_grant`) – not to anybody else, not as a loan, and no demurrage is charged on it. The identity adapter then reports what it found (`plan_attest`), and the holder moves up the ladder (`plan_set_tier`).
 
+```mermaid
+sequenceDiagram
+  participant P as Person (app)
+  participant S as Identity service (issuer)
+  participant H as Host
+  participant C as capita-credential
+  P->>S: proof (e-mail, document, letter …) + account
+  S->>S: verify; pseudonym of the person
+  S-->>P: claim, signed for this host
+  P->>H: present claim (signed by the account)
+  H->>C: check_claim(claim, issuer entry, audience, now)
+  C-->>H: attestation: person, level, residence, validity
+  H->>H: plan_attest; chain: identity + membership
+```
+The host knows issuers from a public list: per service its keys and what it may state at most (level, residence, attributes, validity). A claim counts for one host, one account, once; the issuer can take it back. Details: ADR 0011.
+
 ### Purchase (euro → Capita, one way)
 Payment handling is outside the core. After the payment is confirmed, the host requests `Mint Purchased`. No operation exists for the way back.
 
@@ -107,7 +126,7 @@ Offene Frage: E1 who may change rules.
 | Device, app | signing the owner's requests | time, amounts, step | every number computed by core on host |
 | Host | running the published core, honest time | – (service: one operator; chain: consensus) | open source, public events and totals, Taler auditor; later chain |
 | Ledger | balances, applying each `OpId` once | deciding rules | `centralbank` account with debit limit, never `admin` |
-| Identity providers | one person = one `PersonId`, attributes | money | derived facts only; provider list in governance; swappable |
+| Identity providers | one person = one `PersonId`, attributes | money; more than their entry on the list allows | derived facts only; public list with limits per provider (level, residence, attributes, validity); signed claims on record; suspend or strike off; swappable |
 | Governance | changing parameters | changing past results | versions, no retroactive start |
 | Taler wallet (digital cash) | private payments | – | rules end at withdrawal: demurrage and ripening cannot reach coins in a wallet (ADR 0004) |
 
@@ -123,13 +142,15 @@ Personal data never enters the core, the events or the ledger subjects: the core
 | Clock set back on host | `now` < `last_seen` → error | core | time backwards → error |
 | Clock set forward on host | claim window limits the damage; public events expose it | core + audit | claim ≤ rate × window |
 | Overflow, rounding drift | integer cents, checked arithmetic, u128 intermediates, round down, remainder carried | core, lints | no overflow at maximum values; sums exact |
-| Duplicate accounts | `PersonId` unique; `account_of(person)` before linking; freeze on suspicion; ripening withheld | Identity + core | frozen/closed accounts get nothing |
-| Stale or revoked attestation | expiry checked at each claim; step falls back | core | – |
+| Duplicate accounts | `PersonId` unique; `account_of(person)` before linking; freeze on suspicion; ripening withheld. Open across realms of issuers (ADR 0011) | Identity + core | frozen/closed accounts get nothing; second account for a person refused |
+| Stale or revoked attestation | expiry checked at each claim; step falls back; issuer revokes by signature | core + credential host | expired and revoked claims stop counting |
+| Forged, stolen or replayed identity claim | signature of a listed issuer over fixed bytes; bound to host, account and serial; presented once | `capita-credential` + host | any changed field, other host, other account, second presentation → refused |
+| Identity service compromised or careless | limits per issuer; suspend or strike off; everything it stated is on record | credential host + governance | level above the limit refused; struck-off issuer: claims cleared |
 | Rule change by one person | governance port; versioned, public, not retroactive | Governance | version and start time checks |
 | `centralbank` credentials stolen | debit limit caps the damage; separate from `admin`; totals vs. events alarm | Ledger adapter | total supply = issued − burnt |
 | Hidden sponsor criteria | filters only over keys published in `Params::sponsor_keys` | core | filter with unknown key rejected |
 | Debt beyond the credit line | ledger refuses; core checks in plan | core + Ledger | balance never below −credit line |
-| Lost device | account bound to verified person, not to a key alone; re-verification restores access | Identity adapter | – |
+| Lost device | account bound to verified person, not to a key alone; re-verification restores access – not built: a claim is bound to a key, and identities do not move (ADR 0011) | Identity adapter | – |
 
 Out of scope for the core: denial of service, network security, operator key management (M4), legal classification (P04.3).
 

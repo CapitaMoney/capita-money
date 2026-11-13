@@ -17,8 +17,9 @@
 //!
 //! The rules live in `capita-core`, their chain form in `pallet-capita`. This
 //! crate only composes: consensus (Aura, GRANDPA), time, a sudo key that
-//! stands in for governance, the rules, and Duniter's identity and membership
-//! pallets. Design: `docs/adr/0010-test-chain.md`.
+//! stands in for governance, the rules, Duniter's identity and membership
+//! pallets, and the credential pallet that decides who is a person. Design:
+//! `docs/adr/0010-test-chain.md`, `docs/adr/0011-identity-by-credentials.md`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -30,6 +31,7 @@ extern crate alloc;
 pub mod apis;
 pub mod configs;
 pub mod genesis_config_presets;
+pub mod identity;
 pub mod nonce;
 #[cfg(test)]
 mod tests;
@@ -46,6 +48,7 @@ use sp_version::RuntimeVersion;
 
 pub use frame_system::Call as SystemCall;
 pub use pallet_capita::Call as CapitaCall;
+pub use pallet_capita_credential::Call as CredentialCall;
 pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -89,7 +92,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("capita-test"),
     impl_name: alloc::borrow::Cow::Borrowed("capita-test"),
     authoring_version: 1,
-    spec_version: 1,
+    spec_version: 2,
     impl_version: 1,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -226,4 +229,8 @@ mod runtime {
     /// Duniter: which identities currently count as members.
     #[runtime::pallet_index(21)]
     pub type Membership = pallet_membership;
+
+    /// Who is a person: trusted identity services and their claims.
+    #[runtime::pallet_index(22)]
+    pub type Credential = pallet_capita_credential;
 }

@@ -2,10 +2,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [workspace]
 resolver = "2"
-members = ["crates/capita-core", "pallets/capita", "runtime", "node"]
-# Plain `cargo test` covers the core only; the pallet pulls in the whole
-# Polkadot SDK: `cargo test -p pallet-capita`, `-p capita-runtime`, `-p capita-node`.
-default-members = ["crates/capita-core"]
+members = [
+    "crates/capita-core",
+    "crates/capita-credential",
+    "pallets/capita",
+    "pallets/credential",
+    "runtime",
+    "node",
+]
+# Plain `cargo test` covers the two pure crates only; the pallets pull in the
+# whole Polkadot SDK: `cargo test -p pallet-capita`, `-p pallet-capita-credential`,
+# `-p capita-runtime`, `-p capita-node`.
+default-members = ["crates/capita-core", "crates/capita-credential"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,7 +26,9 @@ authors = ["Capita Money contributors"]
 # One place for every outside source of the chain side (docs/adr/0010).
 [workspace.dependencies]
 capita-core = { path = "crates/capita-core", default-features = false }
+capita-credential = { path = "crates/capita-credential", default-features = false }
 pallet-capita = { path = "pallets/capita", default-features = false }
+pallet-capita-credential = { path = "pallets/credential", default-features = false }
 capita-runtime = { path = "runtime", default-features = false }
 
 clap = { version = "4.5" }

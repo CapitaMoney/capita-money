@@ -25,6 +25,7 @@ M2: the same rules inside a Substrate runtime, later next to Duniter's identity 
 Read from the source snapshot of 2026-10-30 (`duniter-v2s`):
 - `pallet-identity` and `pallet-membership` depend on FRAME, `duniter-primitives` and `sp-membership` only – not on `pallet-certification`, `pallet-distance` or `pallet-duniter-wot`.
 - The web of trust is attached through handler types of their `Config`: `CheckIdtyCallAllowed`, `OnNewIdty`, `OnRemoveIdty`, `CheckAccountWorthiness`, `OnKeyChange` (identity) and `CheckMembershipOpAllowed`, `OnNewMembership`, `OnRemoveMembership` (membership). Each has an implementation for `()`. Duniter's runtime sets them to `Wot` and its handlers.
+- Built in M3 (ADR 0011), with one difference: the level is valid until the claim expires, not until the membership does.
 - Hence: the web of trust can be left out. A credential pallet (M3) implements these handlers and tells `pallet-capita`: membership created or renewed → `do_attest` with a level valid until the membership expires; membership removed → `do_attest(None)`; identity revoked or removed → `do_set_status`.
 - `pallet-universal-dividend` is not used: issuance comes from `capita-core`, and that pallet requires `pallet-balances`.
 - The Duniter pallets are git dependencies on Duniter's SDK fork. A runtime that contains them must take the whole SDK from that fork (same version, different source).

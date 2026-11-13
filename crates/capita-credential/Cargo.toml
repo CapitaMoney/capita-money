@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-credential"
+description = "Credentials of Capita Money: what a trusted identity service states about a person, and how a host checks the statement."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Forwards `std` to the optional dependencies. The crate itself never uses
+# the standard library.
+std = ["capita-core/std", "codec?/std", "scale-info?/std", "serde?/std"]
+# Serialization of the data types (JSON for a service host, genesis of a
+# chain). Signatures have no serde form yet.
+serde = ["dep:serde", "capita-core/serde"]
+# SCALE encoding and type information, for storage and calls inside a
+# Substrate runtime. The bytes an issuer signs do not depend on it.
+scale = ["dep:codec", "dep:scale-info", "capita-core/scale"]
+
+[dependencies]
+capita-core = { workspace = true }
+codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false, features = ["derive", "max-encoded-len"], optional = true }
+scale-info = { version = "2.11", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+
+[dev-dependencies]
+blake2 = "0.10.6"
+ed25519-dalek = "2.2.0"

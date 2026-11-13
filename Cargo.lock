@@ -972,6 +972,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "capita-credential"
+version = "0.1.0"
+dependencies = [
+ "blake2 0.10.6",
+ "capita-core",
+ "ed25519-dalek",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+]
+
+[[package]]
 name = "capita-node"
 version = "0.1.0"
 dependencies = [
@@ -1011,6 +1023,7 @@ name = "capita-runtime"
 version = "0.1.0"
 dependencies = [
  "capita-core",
+ "capita-credential",
  "duniter-primitives",
  "frame-executive",
  "frame-support",
@@ -1019,6 +1032,7 @@ dependencies = [
  "frame-try-runtime",
  "pallet-aura",
  "pallet-capita",
+ "pallet-capita-credential",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-membership",
@@ -5406,6 +5420,22 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-capita-credential"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "capita-credential",
+ "frame-support",
+ "frame-system",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
  "sp-io",
  "sp-runtime",
 ]

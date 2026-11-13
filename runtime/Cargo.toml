@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [package]
 name = "capita-runtime"
-description = "Runtime of the Capita Money test chain: pallet-capita, Duniter's identity and membership pallets, Aura and GRANDPA."
+description = "Runtime of the Capita Money test chain: pallet-capita, identity by credentials on Duniter's identity and membership pallets, Aura and GRANDPA."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,9 @@ publish = false
 
 [dependencies]
 capita-core = { workspace = true }
+capita-credential = { workspace = true }
 pallet-capita = { workspace = true }
+pallet-capita-credential = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive", "serde"] }
 serde_json = { workspace = true, features = ["alloc"] }
@@ -46,6 +48,7 @@ sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
+sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 
 [build-dependencies]
@@ -55,6 +58,7 @@ substrate-wasm-builder = { workspace = true, optional = true, default-features =
 default = ["std"]
 std = [
     "capita-core/std",
+    "capita-credential/std",
     "codec/std",
     "duniter-primitives/std",
     "frame-executive/std",
@@ -63,6 +67,7 @@ std = [
     "frame-system/std",
     "frame-try-runtime?/std",
     "pallet-aura/std",
+    "pallet-capita-credential/std",
     "pallet-capita/std",
     "pallet-grandpa/std",
     "pallet-identity/std",
@@ -93,6 +98,7 @@ try-runtime = [
     "frame-system/try-runtime",
     "frame-try-runtime/try-runtime",
     "pallet-aura/try-runtime",
+    "pallet-capita-credential/try-runtime",
     "pallet-capita/try-runtime",
     "pallet-grandpa/try-runtime",
     "pallet-identity/try-runtime",

@@ -1,6 +1,7 @@
 # ADR 0010 – Test chain: runtime and node
 
 Status: accepted (M2, 2026-11-13). Runtime built and tested natively, node type-checked. The WebAssembly build and a running node are checked by CI only (see "Checked how").
+Changed by ADR 0011 (M3): the credential pallet grants memberships; `NoWebOfTrust` became `CredentialLink` (`runtime/src/identity.rs`); only that pallet creates identities; the genesis presets hold one identity (the creator of identities) and one identity service instead of the block authors as members.
 
 ## Context
 M2: a local chain on which the rules run next to Duniter's identity pallets. `pallet-capita` exists (ADR 0009). Starting point: the solo-chain template of the Polkadot SDK.

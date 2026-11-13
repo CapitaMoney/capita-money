@@ -16,13 +16,18 @@
 //! The states a chain can start from: `development` (one node, Alice) and
 //! `local_testnet` (two nodes, Alice and Bob).
 
-use crate::{configs::MembershipPeriod, AccountId, IdtyIndex, Runtime, RuntimeGenesisConfig};
+use crate::{
+    identity::{creator, CREATOR_NAME},
+    AccountId, BlockNumber, IdtyIndex, Runtime, RuntimeGenesisConfig,
+};
 use alloc::{collections::BTreeMap, vec, vec::Vec};
 use capita_core::attributes::VerificationLevel;
 use capita_core::params::{
     CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
 };
 use capita_core::types::{Amount, Duration, ParamsVersion, Rate, Share, TierId, Timestamp};
+use capita_credential::did::did_key;
+use capita_credential::types::{Issuer, IssuerStatus, PublicKey, Realm};
 use frame_support::build_struct_json_patch;
 use pallet_identity::{GenesisIdty, IdtyName, IdtyStatus, IdtyValue};
 use serde_json::Value;
@@ -76,46 +81,60 @@ pub fn test_params() -> Option<Params> {
     })
 }
 
-/// A member identity for the genesis block.
-fn member(index: IdtyIndex, name: &str, owner_key: AccountId) -> GenesisIdty<Runtime> {
-    GenesisIdty {
-        index,
-        name: IdtyName::from(name),
+/// Secret key (Ed25519 seed) of the identity service of the test chain.
+/// Public on purpose: anybody can sign claims for a test chain, for example
+/// with `cargo run -p capita-credential --example issue`.
+pub const DEV_ISSUER_SEED: [u8; 32] = *b"capita-money development issuer!";
+
+/// The public key that belongs to [`DEV_ISSUER_SEED`].
+pub const DEV_ISSUER_KEY: PublicKey = PublicKey::Ed25519([
+    0x9e, 0x59, 0x68, 0xb2, 0xe9, 0x5b, 0xa9, 0xb2, 0xd2, 0xef, 0x05, 0x4e, 0x05, 0x61, 0xe6, 0xc5,
+    0x6e, 0x8b, 0x00, 0x3b, 0x8a, 0xbd, 0xf3, 0x5b, 0xb7, 0xeb, 0x25, 0x8e, 0x2f, 0xd7, 0xb3, 0xe4,
+]);
+
+/// Issuer 0 of a test chain: named by its key (`did:key`), trusted for both
+/// verified steps of [`test_params`] and for residence, claims of any
+/// length. Its secret key is public – see [`DEV_ISSUER_SEED`].
+pub fn dev_issuer() -> Issuer {
+    Issuer {
+        did: did_key(&DEV_ISSUER_KEY),
+        keys: vec![DEV_ISSUER_KEY],
+        realm: Realm(0),
+        max_level: VerificationLevel(2),
+        residence: true,
+        attributes: vec![],
+        max_validity: None,
+        status: IssuerStatus::Active,
+    }
+}
+
+/// Number of the identity in whose name the credential pallet creates
+/// identities (`identity.rs`).
+pub const CREATOR_IDTY: IdtyIndex = 1;
+
+/// Genesis of a test network: `initial_authorities` produce and finalise
+/// blocks, `root` holds the sudo key. No person is a member yet: members
+/// come from claims. The one identity is the creator of identities, with a
+/// membership that never runs out.
+fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>, root: AccountId) -> Value {
+    let identities = vec![GenesisIdty::<Runtime> {
+        index: CREATOR_IDTY,
+        name: IdtyName::from(CREATOR_NAME),
         value: IdtyValue {
             data: (),
             next_creatable_identity_on: 0,
             old_owner_key: None,
-            owner_key,
+            owner_key: creator(),
             next_scheduled: 0,
             status: IdtyStatus::Member,
         },
-    }
-}
-
-/// Genesis of a test network: `initial_authorities` produce and finalise
-/// blocks, `root` holds the sudo key, `members` start as identities with a
-/// membership of one period.
-fn testnet_genesis(
-    initial_authorities: Vec<(AuraId, GrandpaId)>,
-    root: AccountId,
-    members: Vec<(&str, AccountId)>,
-) -> Value {
-    let identities: Vec<GenesisIdty<Runtime>> = members
-        .into_iter()
-        .zip(1..)
-        .map(|((name, key), index)| member(index, name, key))
-        .collect();
-    let memberships: BTreeMap<IdtyIndex, MembershipData<crate::BlockNumber>> = identities
-        .iter()
-        .map(|idty| {
-            (
-                idty.index,
-                MembershipData {
-                    expire_on: MembershipPeriod::get(),
-                },
-            )
-        })
-        .collect();
+    }];
+    let memberships: BTreeMap<IdtyIndex, MembershipData<BlockNumber>> = BTreeMap::from([(
+        CREATOR_IDTY,
+        MembershipData {
+            expire_on: BlockNumber::MAX,
+        },
+    )]);
     build_struct_json_patch!(RuntimeGenesisConfig {
         aura: pallet_aura::GenesisConfig {
             authorities: initial_authorities
@@ -135,10 +154,13 @@ fn testnet_genesis(
         },
         identity: pallet_identity::GenesisConfig { identities },
         membership: pallet_membership::GenesisConfig { memberships },
+        credential: pallet_capita_credential::GenesisConfig {
+            issuers: vec![dev_issuer()],
+        },
     })
 }
 
-/// One node: Alice produces the blocks, holds the sudo key and is a member.
+/// One node: Alice produces the blocks and holds the sudo key.
 pub fn development_config_genesis() -> Value {
     testnet_genesis(
         vec![(
@@ -146,12 +168,10 @@ pub fn development_config_genesis() -> Value {
             Ed25519Keyring::Alice.public().into(),
         )],
         Sr25519Keyring::Alice.to_account_id(),
-        vec![("Alice", Sr25519Keyring::Alice.to_account_id())],
     )
 }
 
-/// Two nodes: Alice and Bob produce the blocks and are members; Alice holds
-/// the sudo key.
+/// Two nodes: Alice and Bob produce the blocks; Alice holds the sudo key.
 pub fn local_config_genesis() -> Value {
     testnet_genesis(
         vec![
@@ -165,10 +185,6 @@ pub fn local_config_genesis() -> Value {
             ),
         ],
         Sr25519Keyring::Alice.to_account_id(),
-        vec![
-            ("Alice", Sr25519Keyring::Alice.to_account_id()),
-            ("Bob", Sr25519Keyring::Bob.to_account_id()),
-        ],
     )
 }
 

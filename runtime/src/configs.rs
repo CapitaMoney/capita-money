@@ -36,8 +36,9 @@ use sp_runtime::{traits::Verify, Perbill};
 use sp_version::RuntimeVersion;
 
 use super::{
-    AccountId, Aura, Block, BlockNumber, Hash, Identity, IdtyIndex, Membership, Nonce, PalletInfo,
-    Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, RuntimeTask, Signature, Timestamp, DAYS,
+    identity::{CapitaRules, CredentialLink, DuniterIdentities},
+    AccountId, Aura, Block, BlockNumber, Hash, Identity, IdtyIndex, Nonce, PalletInfo, Runtime,
+    RuntimeCall, RuntimeEvent, RuntimeOrigin, RuntimeTask, Signature, Timestamp, DAYS,
     SLOT_DURATION, VERSION,
 };
 
@@ -112,7 +113,8 @@ impl pallet_sudo::Config for Runtime {
 
 /// The rules. Every authority is root, reached through the sudo key: the
 /// questions who governs, who attests and who sells Capita are not decided
-/// (E1, F3, C1), and a test chain needs no answer.
+/// (E1, F3, C1), and a test chain needs no answer. Persons are attested by
+/// the credential pallet below; root can still do so by hand.
 impl pallet_capita::Config for Runtime {
     type Time = Timestamp;
     type GovernanceOrigin = EnsureRoot<AccountId>;
@@ -122,16 +124,38 @@ impl pallet_capita::Config for Runtime {
     type TierGate = capita_core::ports::NoGate;
 }
 
-// Periods of Duniter's pallets, in blocks. Placeholders in the order of
-// magnitude Duniter uses; the credential pallet (M3) will set them.
+/// Who is a person: claims of the identity services on the list, which root
+/// maintains (F3 and E1 are not decided).
+impl pallet_capita_credential::Config for Runtime {
+    type Time = Timestamp;
+    type RegistryOrigin = EnsureRoot<AccountId>;
+    type Memberships = DuniterIdentities;
+    type Rules = CapitaRules;
+}
+
+// Periods of Duniter's pallets, in blocks. Examples, like every number of
+// the test chain.
 parameter_types! {
+    /// Not reached: the credential pallet creates and confirms an identity
+    /// in one step.
     pub const ConfirmPeriod: BlockNumber = 14 * DAYS;
+    /// Not reached: a membership follows in the same step.
     pub const ValidationPeriod: BlockNumber = 60 * DAYS;
-    pub const AutorevocationPeriod: BlockNumber = 365 * DAYS;
+    /// In effect never: an identity without membership is not revoked by
+    /// the passing of time. A revoked identity is final, and its account
+    /// would stay frozen; a person who lets a claim lapse presents a new
+    /// one. Revoking remains an act of the holder of the key, or of root.
+    pub const AutorevocationPeriod: BlockNumber = 100 * 365 * DAYS;
     pub const DeletionPeriod: BlockNumber = 10 * 365 * DAYS;
+    /// Not reached: identities do not move to another key.
     pub const ChangeOwnerKeyPeriod: BlockNumber = 180 * DAYS;
-    pub const IdtyCreationPeriod: BlockNumber = DAYS;
+    /// None: the one creator of identities, the credential pallet, creates
+    /// as many as claims are accepted.
+    pub const IdtyCreationPeriod: BlockNumber = 0;
+    /// How long a membership lasts before the holder renews it with the
+    /// claim held (`credential.renew`) or presents a new one.
     pub const MembershipPeriod: BlockNumber = 365 * DAYS;
+    /// Not used: Duniter's web of trust reads it, the pallets here do not.
     pub const MembershipRenewalPeriod: BlockNumber = 60 * DAYS;
 }
 
@@ -143,75 +167,39 @@ impl pallet_identity::traits::IdtyNameValidator for IdtyNameValidatorImpl {
     }
 }
 
-/// Stands where Duniter's runtime has its web of trust: keeps the identity
-/// and the membership of a person in step and decides nothing. Who becomes a
-/// member is for the credential pallet (M3) to say; the same handlers will
-/// then report to `pallet-capita` (`do_attest`, `do_set_status`).
-pub struct NoWebOfTrust;
-
-impl sp_membership::traits::OnNewMembership<IdtyIndex> for NoWebOfTrust {
-    fn on_created(idty_index: &IdtyIndex) {
-        Identity::membership_added(*idty_index);
-    }
-
-    fn on_renewed(_idty_index: &IdtyIndex) {}
-}
-
-impl sp_membership::traits::OnRemoveMembership<IdtyIndex> for NoWebOfTrust {
-    fn on_removed(idty_index: &IdtyIndex) -> Weight {
-        Identity::membership_removed(*idty_index)
-    }
-}
-
-impl pallet_identity::traits::OnRemoveIdty<Runtime> for NoWebOfTrust {
-    fn on_removed(idty_index: &IdtyIndex) -> Weight {
-        Membership::do_remove_membership(
-            *idty_index,
-            pallet_membership::MembershipRemovalReason::System,
-        )
-    }
-
-    fn on_revoked(idty_index: &IdtyIndex) -> Weight {
-        Membership::do_remove_membership(
-            *idty_index,
-            pallet_membership::MembershipRemovalReason::Revoked,
-        )
-    }
-}
-
-/// Duniter's identities. `()` = the handler that allows everything and does
-/// nothing: any identity may create further ones.
+/// Duniter's identities, created by the credential pallet alone
+/// (`identity.rs`).
 impl pallet_identity::Config for Runtime {
     type AccountId32 = AccountId;
     type AccountLinker = ();
     type AutorevocationPeriod = AutorevocationPeriod;
     type ChangeOwnerKeyPeriod = ChangeOwnerKeyPeriod;
     type CheckAccountWorthiness = ();
-    type CheckIdtyCallAllowed = ();
+    type CheckIdtyCallAllowed = CredentialLink;
     type ConfirmPeriod = ConfirmPeriod;
     type DeletionPeriod = DeletionPeriod;
     type IdtyCreationPeriod = IdtyCreationPeriod;
     type IdtyData = ();
     type IdtyIndex = IdtyIndex;
     type IdtyNameValidator = IdtyNameValidatorImpl;
-    type OnKeyChange = ();
+    type OnKeyChange = CredentialLink;
     type OnNewIdty = ();
-    type OnRemoveIdty = NoWebOfTrust;
+    type OnRemoveIdty = CredentialLink;
     type Signature = Signature;
     type Signer = <Signature as Verify>::Signer;
     type ValidationPeriod = ValidationPeriod;
     type WeightInfo = ();
 }
 
-/// Duniter's memberships. No call adds one yet: they come from the genesis
-/// block and end by expiry.
+/// Duniter's memberships. The pallet has no calls: the credential pallet
+/// grants, renews and ends them; they also end by expiry.
 impl pallet_membership::Config for Runtime {
     type CheckMembershipOpAllowed = ();
     type IdtyAttr = Identity;
     type IdtyId = IdtyIndex;
     type MembershipPeriod = MembershipPeriod;
     type MembershipRenewalPeriod = MembershipRenewalPeriod;
-    type OnNewMembership = NoWebOfTrust;
-    type OnRemoveMembership = NoWebOfTrust;
+    type OnNewMembership = CredentialLink;
+    type OnRemoveMembership = CredentialLink;
     type WeightInfo = ();
 }

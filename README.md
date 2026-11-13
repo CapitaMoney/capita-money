@@ -6,15 +6,17 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Next: identity by verifiable credentials (M3). Rules are being finalized in parallel; anything undecided is a parameter, and every number on the test chain is an example.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Next: an identity service that issues such claims, and the connection to GNU Taler (M4). Rules are being finalized in parallel; anything undecided is a parameter, and every number on the test chain is an example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
 - [`docs/adr/`](docs/adr/) – design decisions
 - [`docs/upstream-mapping.md`](docs/upstream-mapping.md) – what is reused from which project
 - [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
+- [`crates/capita-credential`](crates/capita-credential) – claims of identity services: format, signed bytes, check (Rust, `no_std`)
 - [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
-- [`runtime`](runtime) – runtime of the test chain: the pallet, Duniter's identity and membership, consensus
+- [`pallets/credential`](pallets/credential) – trusted identity services and their claims on chain (FRAME pallet)
+- [`runtime`](runtime) – runtime of the test chain: the pallets, Duniter's identity and membership, consensus
 - [`node`](node) – node of the test chain
 
 ## The core
@@ -27,18 +29,27 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 
 Every rule is a pure function that returns a plan (new account state, ledger operations, public events); the host applies it. Integer cents, checked arithmetic, no floats, `no_std`.
 
+## Identity
+Who is a person is not decided by the chain and not by a web of trust: identity services check people – an e-mail address, an identity document, a letter to the home address – and sign what they found. `capita-credential` defines that statement and checks it ([ADR 0011](docs/adr/0011-identity-by-credentials.md)):
+- **A claim** names an account, a person as a pseudonym, a verification level, optionally a country of residence, and how long it holds. No name, no document, no date of birth.
+- **A public list** holds the trusted services: a decentralised identifier (DID), keys, and what each may state at most.
+- **A claim counts** for one host, one account, once; a later one replaces it; its issuer can take it back.
+- **One person, one account:** the rules refuse a second account for the same pseudonym.
+
+On chain, `pallet-capita-credential` accepts a claim from the account it is made out to and makes that account a member identity (Duniter's pallets, unchanged) with the verification level stated.
+
 ## Build and test
 ```
-# the core (default member of the workspace)
+# the two pure crates (default members of the workspace)
 cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --all --check
-# the pallet (builds the Polkadot SDK, takes longer)
-cargo test -p pallet-capita
-cargo clippy -p pallet-capita --all-targets -- -D warnings
+# the pallets (build the Polkadot SDK, take longer)
+cargo test -p pallet-capita -p pallet-capita-credential
+cargo clippy -p pallet-capita -p pallet-capita-credential --all-targets -- -D warnings
 # no_std check on a target without an operating system
 rustup target add thumbv7em-none-eabi
-cargo build -p capita-core --all-features --target thumbv7em-none-eabi
+cargo build -p capita-core -p capita-credential --all-features --target thumbv7em-none-eabi
 ```
 Tests: [`tests/rules.rs`](crates/capita-core/tests/rules.rs) – worked examples with numbers for every rule; [`tests/properties.rs`](crates/capita-core/tests/properties.rs) – invariants on random inputs (claiming often = claiming once; no balance below its credit line; supply = minted − burnt; no overflow at extreme values).
 
@@ -57,7 +68,19 @@ SKIP_WASM_BUILD=1 cargo test -p capita-runtime --features try-runtime
 cargo build --release -p capita-node
 ./target/release/capita-node --dev
 ```
-The node listens on `ws://127.0.0.1:9944`; [Polkadot-JS Apps](https://polkadot.js.org/apps/?rpc=ws://127.0.0.1:9944) can connect to it. Alice holds the sudo key. A first walk: any key calls `capita.open`; Alice names a service account (`sudo` → `capita.setServiceAccount`); the key calls `capita.payVerification`; Alice attests a level (`sudo` → `capita.attest`); the key chooses its step (`capita.setTier`) and claims (`capita.claim`).
+The node listens on `ws://127.0.0.1:9944`; [Polkadot-JS Apps](https://polkadot.js.org/apps/?rpc=ws://127.0.0.1:9944) can connect to it. Alice holds the sudo key. A first walk:
+1. Any key calls `capita.open`.
+2. Alice names a service account (`sudo` → `capita.setServiceAccount`); the key calls `capita.payVerification`.
+3. The identity service of the test chain signs a claim for the key. Its secret key is public, so anybody can play the service:
+   ```
+   cargo run -p capita-credential --example issue -- \
+       --audience 0x<hash of block 0> --subject 0x<the key, 32 bytes> --level 1
+   ```
+   In Polkadot-JS Apps: the hash under Developer → RPC calls → `chain.getBlockHash(0)`, the key in hexadecimal under Developer → Utilities → Convert address.
+4. The key sends what the tool printed: `credential.present`. It is now a member identity with verification level 1.
+5. The key chooses its step (`capita.setTier`) and claims (`capita.claim`).
+
+Root can still attest by hand (`sudo` → `capita.attest`), and keeps the list of identity services (`credential.registerIssuer`, `credential.updateIssuer`).
 
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.
@@ -66,7 +89,7 @@ The node listens on `ws://127.0.0.1:9944`; [Polkadot-JS Apps](https://polkadot.j
   - [Ğecko](https://git.duniter.org/clients/gecko): mobile wallet (Flutter)
   - [GNU Taler](https://taler.net): privacy-friendly payments and shop integration
   - [Polkadot SDK / Substrate](https://github.com/paritytech/polkadot-sdk): blockchain framework
-  - [SpruceID ssi](https://github.com/spruceid/ssi): decentralised identifiers and verifiable credentials
+  - [SpruceID ssi](https://github.com/spruceid/ssi): decentralised identifiers and verifiable credentials, for the identity services that issue claims
 - **No interest, no exchange into money:** Capita is meant for people, not for speculation.
 
 ## Contributing
