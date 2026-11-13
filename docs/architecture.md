@@ -1,7 +1,7 @@
 # Capita Money – architecture
 
 Status: M3 (2026-11-13) – rules implemented and tested in `capita-core`; chain host as `pallet-capita`; runtime and node of a local test chain with Duniter's identity and membership pallets (ADR 0010); identity by signed claims of trusted identity services, checked by `capita-credential` (ADR 0011). Scope: how the parts fit, where trust lies, what can go wrong.
-Rules still open are marked `Offene Frage:`; they are parameters or hooks, never decided in code.
+Rules still open are marked `Offene Frage:`; they are parameters or hooks, never decided in code. The values of the parameters, each with its status, stand in `rules/alpha.toml` (ADR 0012).
 
 ## 1. Principle
 
@@ -43,6 +43,7 @@ flowchart TB
 | runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
 | `capita-credential` | claims of identity services: format, signed bytes, check (ADR 0011) | `crates/capita-credential` |
 | `pallet-capita-credential` | list of trusted issuers and their claims on chain; steers Duniter's identity and membership | `pallets/credential`, wiring `runtime/src/identity.rs` |
+| `rules/*.toml`, `capita-rulefile`, `capita-rules` | every rule value in one file; read, checked and compiled for the hosts (ADR 0012) | `rules`, `crates/capita-rulefile`, `crates/capita-rules` |
 | identity services (issuers) | verify people, sign claims | after M3 |
 | app, website | user interface | M5 |
 | messaging, content distribution | later ports (libp2p, iroh) | – |

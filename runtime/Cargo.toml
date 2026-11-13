@@ -13,6 +13,7 @@ publish = false
 [dependencies]
 capita-core = { workspace = true }
 capita-credential = { workspace = true }
+capita-rules = { workspace = true }
 pallet-capita = { workspace = true }
 pallet-capita-credential = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
@@ -59,6 +60,7 @@ default = ["std"]
 std = [
     "capita-core/std",
     "capita-credential/std",
+    "capita-rules/std",
     "codec/std",
     "duniter-primitives/std",
     "frame-executive/std",

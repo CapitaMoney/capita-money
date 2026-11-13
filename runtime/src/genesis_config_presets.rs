@@ -15,6 +15,12 @@
 
 //! The states a chain can start from: `development` (one node, Alice) and
 //! `local_testnet` (two nodes, Alice and Bob).
+//!
+//! No rule value stands here. The rules a chain starts with come from the
+//! rules files of the repository, through `capita-rules`
+//! (`docs/adr/0012-rules-file.md`): `development` starts with the fast
+//! numbers for developers (`rules/dev-fast.toml`), `local_testnet` with the
+//! rules themselves (`rules/alpha.toml`).
 
 use crate::{
     identity::{creator, CREATOR_NAME},
@@ -22,10 +28,7 @@ use crate::{
 };
 use alloc::{collections::BTreeMap, vec, vec::Vec};
 use capita_core::attributes::VerificationLevel;
-use capita_core::params::{
-    CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
-};
-use capita_core::types::{Amount, Duration, ParamsVersion, Rate, Share, TierId, Timestamp};
+use capita_core::params::Params;
 use capita_credential::did::did_key;
 use capita_credential::types::{Issuer, IssuerStatus, PublicKey, Realm};
 use frame_support::build_struct_json_patch;
@@ -36,50 +39,6 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_genesis_builder::{self, PresetId};
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_membership::MembershipData;
-
-/// Rules for trying things out – every number is an example, none a decision:
-/// start grant 1 Capita; without verification 1 cent per hour, at level 1
-/// 1 cent per minute, at level 2 3 cents per minute; claims reach back
-/// 14 days; credit lines up to 500 Capita; no demurrage, no ripening.
-pub fn test_params() -> Option<Params> {
-    let step = |id: u16, level: u8, cents: u64, per: Duration| {
-        Some(LadderStep {
-            id: TierId(id),
-            min_level: VerificationLevel(level),
-            rate: Rate::new(Amount::from_cents(cents), per).ok()?,
-        })
-    };
-    Some(Params {
-        version: ParamsVersion(1),
-        valid_from: Timestamp::from_secs(0),
-        start_grant: Amount::from_cents(100),
-        ladder: vec![
-            step(0, 0, 1, Duration::HOUR)?,
-            step(1, 1, 1, Duration::MINUTE)?,
-            step(2, 2, 3, Duration::MINUTE)?,
-        ],
-        claim_window: Duration::from_secs(14 * Duration::DAY.secs()),
-        caps: CapParams {
-            period: Duration::MONTH,
-            global_cap: Amount::from_cents(100_000_000),
-            by_country: vec![],
-            ramp: Duration::ZERO,
-        },
-        loans: LoanParams {
-            max_credit_line: Amount::from_cents(50_000),
-            max_outstanding: Amount::from_cents(100_000),
-            repayment_share: Share::from_ppm(500_000).ok()?,
-        },
-        demurrage: DemurrageParams {
-            rate: Share::ZERO,
-            period: Duration::MONTH,
-            free_allowance: Amount::ZERO,
-        },
-        ripening: Duration::ZERO,
-        sponsor_keys: vec![],
-        closed_balance: ClosedBalance::Keep,
-    })
-}
 
 /// Secret key (Ed25519 seed) of the identity service of the test chain.
 /// Public on purpose: anybody can sign claims for a test chain, for example
@@ -92,15 +51,16 @@ pub const DEV_ISSUER_KEY: PublicKey = PublicKey::Ed25519([
     0x6e, 0x8b, 0x00, 0x3b, 0x8a, 0xbd, 0xf3, 0x5b, 0xb7, 0xeb, 0x25, 0x8e, 0x2f, 0xd7, 0xb3, 0xe4,
 ]);
 
-/// Issuer 0 of a test chain: named by its key (`did:key`), trusted for both
-/// verified steps of [`test_params`] and for residence, claims of any
-/// length. Its secret key is public – see [`DEV_ISSUER_SEED`].
-pub fn dev_issuer() -> Issuer {
+/// Issuer 0 of a test chain: named by its key (`did:key`), trusted up to
+/// `top_level` – the highest level the ladder of the chain asks for – and
+/// for residence, claims of any length. Its secret key is public – see
+/// [`DEV_ISSUER_SEED`].
+pub fn test_issuer(top_level: VerificationLevel) -> Issuer {
     Issuer {
         did: did_key(&DEV_ISSUER_KEY),
         keys: vec![DEV_ISSUER_KEY],
         realm: Realm(0),
-        max_level: VerificationLevel(2),
+        max_level: top_level,
         residence: true,
         attributes: vec![],
         max_validity: None,
@@ -108,15 +68,26 @@ pub fn dev_issuer() -> Issuer {
     }
 }
 
+/// Issuer 0 of the `development` chain.
+pub fn dev_issuer() -> Issuer {
+    test_issuer(capita_rules::dev_fast::TOP_LEVEL)
+}
+
 /// Number of the identity in whose name the credential pallet creates
 /// identities (`identity.rs`).
 pub const CREATOR_IDTY: IdtyIndex = 1;
 
 /// Genesis of a test network: `initial_authorities` produce and finalise
-/// blocks, `root` holds the sudo key. No person is a member yet: members
-/// come from claims. The one identity is the creator of identities, with a
-/// membership that never runs out.
-fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>, root: AccountId) -> Value {
+/// blocks, `root` holds the sudo key, `params` are the monetary rules and
+/// `top_level` the highest verification level they ask for. No person is a
+/// member yet: members come from claims. The one identity is the creator of
+/// identities, with a membership that never runs out.
+fn testnet_genesis(
+    initial_authorities: Vec<(AuraId, GrandpaId)>,
+    root: AccountId,
+    params: Option<Params>,
+    top_level: VerificationLevel,
+) -> Value {
     let identities = vec![GenesisIdty::<Runtime> {
         index: CREATOR_IDTY,
         name: IdtyName::from(CREATOR_NAME),
@@ -149,18 +120,17 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>, root: AccountI
                 .collect::<Vec<_>>(),
         },
         sudo: pallet_sudo::GenesisConfig { key: Some(root) },
-        capita: pallet_capita::GenesisConfig {
-            params: test_params(),
-        },
+        capita: pallet_capita::GenesisConfig { params },
         identity: pallet_identity::GenesisConfig { identities },
         membership: pallet_membership::GenesisConfig { memberships },
         credential: pallet_capita_credential::GenesisConfig {
-            issuers: vec![dev_issuer()],
+            issuers: vec![test_issuer(top_level)],
         },
     })
 }
 
-/// One node: Alice produces the blocks and holds the sudo key.
+/// One node: Alice produces the blocks and holds the sudo key. Rules: the
+/// fast numbers for developers.
 pub fn development_config_genesis() -> Value {
     testnet_genesis(
         vec![(
@@ -168,10 +138,13 @@ pub fn development_config_genesis() -> Value {
             Ed25519Keyring::Alice.public().into(),
         )],
         Sr25519Keyring::Alice.to_account_id(),
+        capita_rules::dev_fast::params(),
+        capita_rules::dev_fast::TOP_LEVEL,
     )
 }
 
 /// Two nodes: Alice and Bob produce the blocks; Alice holds the sudo key.
+/// Rules: the alpha rules.
 pub fn local_config_genesis() -> Value {
     testnet_genesis(
         vec![
@@ -185,6 +158,8 @@ pub fn local_config_genesis() -> Value {
             ),
         ],
         Sr25519Keyring::Alice.to_account_id(),
+        capita_rules::alpha::params(),
+        capita_rules::alpha::TOP_LEVEL,
     )
 }
 

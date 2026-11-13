@@ -6,14 +6,17 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Next: an identity service that issues such claims, and the connection to GNU Taler (M4). Rules are being finalized in parallel; anything undecided is a parameter, and every number on the test chain is an example.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Next: an identity service that issues such claims, and the connection to GNU Taler (M4). Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
 - [`docs/adr/`](docs/adr/) – design decisions
 - [`docs/upstream-mapping.md`](docs/upstream-mapping.md) – what is reused from which project
+- [`rules/`](rules) – the rules as values: `alpha.toml` (the rules), `dev-fast.toml` (fast numbers for developers)
 - [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
 - [`crates/capita-credential`](crates/capita-credential) – claims of identity services: format, signed bytes, check (Rust, `no_std`)
+- [`crates/capita-rulefile`](crates/capita-rulefile) – reads and checks a rules file
+- [`crates/capita-rules`](crates/capita-rules) – the rules files compiled: what every host is built with (Rust, `no_std`)
 - [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
 - [`pallets/credential`](pallets/credential) – trusted identity services and their claims on chain (FRAME pallet)
 - [`runtime`](runtime) – runtime of the test chain: the pallets, Duniter's identity and membership, consensus
@@ -29,6 +32,21 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 
 Every rule is a pure function that returns a plan (new account state, ledger operations, public events); the host applies it. Integer cents, checked arithmetic, no floats, `no_std`.
 
+## The rules file
+The core takes every number as a parameter; [`rules/alpha.toml`](rules/alpha.toml) is where the numbers stand ([ADR 0012](docs/adr/0012-rules-file.md)). One small table per rule:
+```toml
+[issuance.start_grant]
+value = "1.00"
+status = "decided"        # decided · default · example
+source = "diary 5"
+note = "One Capita for every new account. It can only pay the account's own verification."
+```
+To change a rule, change the file and build: the chain starts with it, a wrong value stops the build with the name of the rule. Rules that are behaviour, not numbers, stand in the same file as a register with the code that holds them. The open rules, at a glance:
+```
+cargo run -p capita-rulefile --example overview -- rules/alpha.toml
+```
+The tests use fixed numbers of their own, so a change of rules breaks none of them; what must hold for any numbers is tested for every rules file.
+
 ## Identity
 Who is a person is not decided by the chain and not by a web of trust: identity services check people – an e-mail address, an identity document, a letter to the home address – and sign what they found. `capita-credential` defines that statement and checks it ([ADR 0011](docs/adr/0011-identity-by-credentials.md)):
 - **A claim** names an account, a person as a pseudonym, a verification level, optionally a country of residence, and how long it holds. No name, no document, no date of birth.
@@ -40,7 +58,7 @@ On chain, `pallet-capita-credential` accepts a claim from the account it is made
 
 ## Build and test
 ```
-# the two pure crates (default members of the workspace)
+# the crates without the Polkadot SDK (default members of the workspace)
 cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --all --check
@@ -56,7 +74,7 @@ Tests: [`tests/rules.rs`](crates/capita-core/tests/rules.rs) – worked examples
 The pallet decides nothing itself: every call asks the core for a plan and applies it. It adds storage, a ledger with credit lines, block time, the origins that hold authority, and consent for loans ([ADR 0009](docs/adr/0009-chain-host-pallet.md)). Its tests run the rules through a mock runtime and check the invariants on chain state after every call of random histories.
 
 ## The test chain
-A chain for trying things out on one computer: no fees, one key with all authority (sudo), example rules ([ADR 0010](docs/adr/0010-test-chain.md)).
+A chain for trying things out on one computer: no fees, one key with all authority (sudo) ([ADR 0010](docs/adr/0010-test-chain.md)). Started with `--dev` it runs on the fast numbers of `rules/dev-fast.toml` (1 cent per minute at level 1); started with `--chain local` on the rules of `rules/alpha.toml`.
 
 Needed: Rust (stable) with the target `wasm32v1-none`, and the Protocol Buffers compiler.
 ```

@@ -112,6 +112,17 @@ pub const HOURS: BlockNumber = MINUTES * 60;
 /// Blocks per day.
 pub const DAYS: BlockNumber = HOURS * 24;
 
+/// A span of `secs` seconds in blocks, rounded down; the highest block
+/// number if it does not fit.
+pub const fn blocks(secs: u64) -> BlockNumber {
+    let blocks = secs.saturating_mul(1000) / MILLI_SECS_PER_BLOCK;
+    if blocks > BlockNumber::MAX as u64 {
+        BlockNumber::MAX
+    } else {
+        blocks as BlockNumber
+    }
+}
+
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {

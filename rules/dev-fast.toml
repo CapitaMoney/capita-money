@@ -1,0 +1,140 @@
+# Capita Money – rule set "dev-fast"
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Not the rules. Numbers for developers: the same structure as `alpha.toml`,
+# with rates so fast that an effect shows within minutes on a chain started
+# with `--dev`. The tests of the runtime start from these numbers; keep them.
+#
+# How values are written: see `alpha.toml`.
+
+[set]
+name = "dev-fast"
+title = "Fast numbers for developers"
+diary = "none – examples"
+params_version = 1
+
+[issuance.start_grant]
+value = "1.00"
+status = "example"
+source = "test chain"
+note = "One Capita for every new account, to pay its own verification."
+
+[issuance.claim_window]
+value = "14 days"
+status = "example"
+source = "test chain"
+note = "How far back a claim reaches."
+
+[issuance.ripening]
+value = "off"
+status = "example"
+source = "test chain"
+note = "Issued Capita is usable at once."
+
+[[issuance.ladder]]
+step = 0
+name = "not verified"
+min_level = 0
+amount = "0.01"
+per = "1 hour"
+status = "example"
+source = "test chain"
+note = "1 cent per hour."
+
+[[issuance.ladder]]
+step = 1
+name = "level 1"
+min_level = 1
+amount = "0.01"
+per = "1 minute"
+status = "example"
+source = "test chain"
+note = "1 cent per minute."
+
+[[issuance.ladder]]
+step = 2
+name = "level 2"
+min_level = 2
+amount = "0.03"
+per = "1 minute"
+status = "example"
+source = "test chain"
+note = "3 cents per minute."
+
+[caps.period]
+value = "1 month"
+status = "example"
+source = "test chain"
+note = "The time span the caps refer to."
+
+[caps.global_cap]
+value = "1_000_000.00"
+status = "example"
+source = "test chain"
+note = "Far above the rates: no cap in effect."
+
+[caps.ramp]
+value = "off"
+status = "example"
+source = "test chain"
+note = "No seniority ramp."
+
+[lending.max_credit_line]
+value = "500.00"
+status = "example"
+source = "test chain"
+note = "Highest credit line an account may be granted."
+
+[lending.max_outstanding]
+value = "1000.00"
+status = "example"
+source = "test chain"
+note = "Highest recorded debt an account may owe."
+
+[lending.repayment_share]
+value = "50 %"
+status = "example"
+source = "test chain"
+note = "Part of each claim that goes to the lender while debt is outstanding."
+
+[demurrage.rate]
+value = "off"
+status = "example"
+source = "test chain"
+note = "No holding fee."
+
+[demurrage.period]
+value = "1 month"
+status = "example"
+source = "test chain"
+note = "Without effect while the rate is off."
+
+[demurrage.free_allowance]
+value = "0.00"
+status = "example"
+source = "test chain"
+note = "Without effect while the rate is off."
+
+[accounts.closed_balance]
+value = "keep"
+status = "example"
+source = "test chain"
+note = "The balance of a closed account stays."
+
+[sponsoring.keys]
+value = []
+status = "example"
+source = "test chain"
+note = "No attributes for sponsors."
+
+[identity.membership_period]
+value = "365 days"
+status = "example"
+source = "test chain"
+note = "How long a verification holds."
+
+[verification.price_eur]
+value = "1.00"
+status = "example"
+source = "test chain"
+note = "Euro price of one verification."
