@@ -10,9 +10,6 @@ homepage.workspace = true
 authors.workspace = true
 publish = false
 
-[lints.rust]
-unsafe_code = "forbid"
-
 [dependencies]
 capita-core = { workspace = true }
 pallet-capita = { workspace = true }

@@ -59,7 +59,18 @@ jobs:
       - run: echo "::add-matcher::.github/rust-problem-matcher.json"
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy,rust-src --target wasm32v1-none
-      - run: cargo build --release -p capita-node
+      - name: the runtime as WebAssembly
+        shell: bash
+        run: cargo build --release -p capita-runtime 2>&1 | tee build.log
+      - name: the node
+        shell: bash
+        run: cargo build --release -p capita-node 2>&1 | tee build.log
+      # errors without a place in a file (build scripts, linker) too
+      - name: first errors of the build, as annotations
+        if: failure()
+        shell: bash
+        run: |
+          grep -aE "^\s*(error|thread .* panicked)" -A 2 --group-separator=@@@@ build.log | tr '\n' ' ' | sed 's/@@@@/\n/g' | head -n 10 | cut -c 1-400 | while IFS= read -r line; do echo "::error::$line"; done
       - name: the chain produces blocks
         run: |
           ./target/release/capita-node --dev --tmp > node.log 2>&1 &
@@ -70,4 +81,5 @@ jobs:
             case "$number" in ''|'"number":"0x0"') ;; *) exit 0 ;; esac
           done
           tail -n 50 node.log
+          tail -n 6 node.log | cut -c 1-300 | while IFS= read -r line; do echo "::error::$line"; done
           exit 1
