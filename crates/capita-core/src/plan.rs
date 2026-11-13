@@ -67,6 +67,18 @@ pub(crate) fn begin(state: &AccountState, now: Timestamp) -> Result<AccountState
     Ok(next)
 }
 
+/// Refuses a time earlier than one the other side of a transfer has already
+/// seen: time may not go backwards for any account involved.
+pub(crate) const fn require_clock(other: &AccountState, now: Timestamp) -> Result<(), CoreError> {
+    if now.secs() < other.last_seen.secs() {
+        return Err(CoreError::ClockWentBackwards {
+            last: other.last_seen,
+            now,
+        });
+    }
+    Ok(())
+}
+
 /// Refuses frozen and closed accounts.
 pub(crate) const fn require_active(state: &AccountState) -> Result<(), CoreError> {
     match state.status {

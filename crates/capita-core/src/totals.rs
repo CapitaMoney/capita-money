@@ -24,6 +24,16 @@ use crate::types::Amount;
 /// [`Totals::record`] every event in order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct Totals {
     /// Accounts ever opened.
     pub accounts_opened: u64,

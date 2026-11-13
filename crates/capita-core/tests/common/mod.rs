@@ -149,7 +149,8 @@ pub fn open(n: u8, params: &Params, at: Timestamp) -> AccountState {
 }
 
 /// A new account `n`, opened and verified at `at` with `level` (no expiry),
-/// standing on the ladder step with the same number.
+/// standing on the ladder step with the same number. Its start grant has
+/// been spent on that verification.
 pub fn open_verified(n: u8, level: u8, params: &Params, at: Timestamp) -> AccountState {
     let state = open(n, params, at);
     let att = attestation(n, level, None, at, None);
@@ -159,6 +160,7 @@ pub fn open_verified(n: u8, level: u8, params: &Params, at: Timestamp) -> Accoun
         .state;
     state.tier = TierId(u16::from(level));
     state.tier_since = at;
+    state.start_grant_reserved = Amount::ZERO;
     state.issuance.rate = capita_core::issuance::effective_rate(params, &state, at).unwrap();
     state
 }

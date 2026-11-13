@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "pallet-capita"
+description = "FRAME pallet: the rules of capita-core inside a Substrate runtime."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+capita-core = { path = "../../crates/capita-core", default-features = false, features = ["scale", "serde"] }
+codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.11", default-features = false, features = ["derive"] }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+# Polkadot SDK, on the release line of Duniter v2 (docs/adr/0009).
+frame-support = { version = "46.0", default-features = false }
+frame-system = { version = "46.0", default-features = false }
+sp-runtime = { version = "46.0", default-features = false }
+
+[dev-dependencies]
+pallet-timestamp = { version = "45.0" }
+sp-core = { version = "40.0" }
+sp-io = { version = "45.0" }
+
+[features]
+default = ["std"]
+std = [
+    "capita-core/std",
+    "codec/std",
+    "frame-support/std",
+    "frame-system/std",
+    "scale-info/std",
+    "serde/std",
+    "sp-runtime/std",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "sp-runtime/try-runtime",
+]

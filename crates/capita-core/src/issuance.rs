@@ -120,10 +120,12 @@ fn next_ramp_step(
         return Ok(None);
     }
     let since = state.cap_ramp.since;
-    let Some(age) = t.secs().checked_sub(since.secs()) else {
-        return Ok(None);
-    };
     let period = caps.period.secs();
+    let Some(age) = t.secs().checked_sub(since.secs()) else {
+        // The ramp has not started yet: its first step comes one period
+        // after its start.
+        return Ok(Some(since.checked_add(caps.period)?));
+    };
     let done = age
         .checked_div(period)
         .ok_or(ArithmeticError::DivisionByZero)?;
@@ -263,6 +265,10 @@ pub(crate) fn carry_forward(
 /// the ripening delay) plus anything set aside earlier that is ripe. While
 /// debt is recorded, `repayment_share` of the amount goes on to the lender.
 /// A claim with nothing to mint returns a plan without operations.
+///
+/// With demurrage switched on and debt recorded, the host settles the
+/// account of the lender up to `now` before it applies the plan (the core
+/// does not see that account here).
 ///
 /// `list`: every parameter version in force between
 /// `state.issuance.paid_until` and `now`.

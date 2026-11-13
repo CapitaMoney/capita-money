@@ -28,16 +28,46 @@ use crate::types::{CountryCode, PersonId, Timestamp};
 /// published in `Params::sponsor_keys`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct AttrKey(pub u16);
 
 /// Numeric attribute value (a code, a number of years, a community id …).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct AttrValue(pub u64);
 
 /// One proven attribute of a person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct Attribute {
     /// Which attribute.
     pub key: AttrKey,
@@ -49,12 +79,32 @@ pub struct Attribute {
 /// The parameters decide which level each ladder step requires.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct VerificationLevel(pub u8);
 
 /// Proven place of residence. The only source of the country cap; a passport
 /// proves identity, never residence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct Residence {
     /// Country of residence.
     pub country: CountryCode,
@@ -66,6 +116,15 @@ pub struct Residence {
 /// Contains derived facts only – no name, document or birth date.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
 pub struct Attestation {
     /// The unique person behind the account.
     pub person: PersonId,
@@ -84,6 +143,15 @@ pub struct Attestation {
 /// One condition on an attribute.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
 pub enum Criterion {
     /// Attribute equals the value.
     Equals(AttrKey, AttrValue),
@@ -96,6 +164,15 @@ pub enum Criterion {
 /// A target group: every criterion must hold. Empty = everybody.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
 pub struct AttributeFilter {
     /// Conditions, all of which must hold.
     pub all_of: Vec<Criterion>,

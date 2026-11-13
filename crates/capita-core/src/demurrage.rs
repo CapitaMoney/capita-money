@@ -85,7 +85,7 @@ pub fn charge(
 /// `list`: every parameter version in force between
 /// `state.demurrage_settled_at` and `now`. Time under a version without
 /// demurrage costs nothing, so switching demurrage on never reaches back.
-/// A negative balance is not charged.
+/// A negative balance is not charged, nor is a start grant not yet spent.
 pub fn plan_demurrage(
     state: &AccountState,
     balance: Balance,
@@ -97,7 +97,11 @@ pub fn plan_demurrage(
     if state.status == AccountStatus::Closed {
         return Err(CoreError::AccountNotActive(state.status));
     }
-    let mut left = balance.positive_part();
+    // The start grant is earmarked; it is not charged.
+    let mut left = balance
+        .positive_part()
+        .checked_sub(state.start_grant_reserved)
+        .unwrap_or(Amount::ZERO);
     let mut total = Amount::ZERO;
     let mut carry = state.demurrage_carry;
     let mut t = state.demurrage_settled_at;

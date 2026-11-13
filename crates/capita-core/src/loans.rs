@@ -32,14 +32,15 @@ use alloc::vec;
 use crate::account::{AccountState, AccountStatus};
 use crate::errors::CoreError;
 use crate::params::Params;
-use crate::plan::{begin, next_op, require_active, require_settled, Plan};
+use crate::plan::{begin, next_op, require_active, require_clock, require_settled, Plan};
 use crate::ports::{Event, LedgerOp, TransferPurpose};
-use crate::types::{Amount, Balance, Timestamp};
+use crate::types::{Amount, Balance, OpId, Timestamp};
 
 /// Plans a payment from `payer` to `payee`.
 ///
-/// The balance of the payer may not fall below minus the credit line. With
-/// demurrage switched on, both accounts must be settled up to `now` first.
+/// The balance of the payer may not fall below minus the credit line; a
+/// start grant not yet spent stays untouched. With demurrage switched on,
+/// both accounts must be settled up to `now` first.
 pub fn plan_payment(
     payer: &AccountState,
     payer_balance: Balance,
@@ -49,28 +50,17 @@ pub fn plan_payment(
     now: Timestamp,
 ) -> Result<Plan, CoreError> {
     let mut next = begin(payer, now)?;
-    transfer_checks(payer, payer_balance, payee, amount, params, now)?;
+    let reserved = payer.start_grant_reserved;
+    transfer_checks(payer, payer_balance, reserved, payee, amount, params, now)?;
     let id = next_op(&mut next)?;
-    let mut plan = Plan::of(next);
-    plan.ops.push(LedgerOp::Transfer {
-        id,
-        from: payer.id,
-        to: payee.id,
-        amount,
-        purpose: TransferPurpose::Payment,
-    });
-    plan.events.push(Event::Transferred {
-        from: payer.id,
-        to: payee.id,
-        amount,
-        purpose: TransferPurpose::Payment,
-        at: now,
-    });
-    Ok(plan)
+    Ok(payment(next, id, payee, amount, now))
 }
 
 /// Plans the payment of the start grant for the verification of the
-/// account itself, to the account of the verification service. Once only.
+/// account itself, to the account of the verification service. Once only:
+/// the grant is earmarked for this and can be spent on nothing else.
+///
+/// The host passes the account it has designated as verification service.
 pub fn plan_spend_start_grant(
     state: &AccountState,
     balance: Balance,
@@ -78,18 +68,49 @@ pub fn plan_spend_start_grant(
     params: &Params,
     now: Timestamp,
 ) -> Result<Plan, CoreError> {
-    if state.start_grant_spent {
+    let mut next = begin(state, now)?;
+    let grant = state.start_grant_reserved;
+    if grant.is_zero() {
         return Err(CoreError::StartGrantAlreadySpent);
     }
-    let mut plan = plan_payment(state, balance, service, params.start_grant, params, now)?;
-    plan.state.start_grant_spent = true;
-    Ok(plan)
+    transfer_checks(state, balance, Amount::ZERO, service, grant, params, now)?;
+    next.start_grant_reserved = Amount::ZERO;
+    let id = next_op(&mut next)?;
+    Ok(payment(next, id, service, grant, now))
+}
+
+/// The plan of a payment whose checks have passed.
+fn payment(
+    next: AccountState,
+    id: OpId,
+    payee: &AccountState,
+    amount: Amount,
+    now: Timestamp,
+) -> Plan {
+    let from = next.id;
+    let mut plan = Plan::of(next);
+    plan.ops.push(LedgerOp::Transfer {
+        id,
+        from,
+        to: payee.id,
+        amount,
+        purpose: TransferPurpose::Payment,
+    });
+    plan.events.push(Event::Transferred {
+        from,
+        to: payee.id,
+        amount,
+        purpose: TransferPurpose::Payment,
+        at: now,
+    });
+    plan
 }
 
 /// Plans a new credit line for the account (granting, raising, lowering).
 ///
 /// The line may not exceed `max_credit_line`, and it may not be lowered
-/// below what is already drawn.
+/// below what is already drawn. Who may grant a line is for the host to
+/// check (Offene Frage: C1).
 pub fn plan_set_credit_line(
     state: &AccountState,
     balance: Balance,
@@ -102,7 +123,7 @@ pub fn plan_set_credit_line(
     if limit > params.loans.max_credit_line {
         return Err(CoreError::CreditLineTooHigh);
     }
-    balance.check_debit(Amount::ZERO, limit)?;
+    balance.check_debit(state.start_grant_reserved, limit)?;
     if limit == state.loan.credit_line {
         return Ok(Plan::of(next));
     }
@@ -127,9 +148,11 @@ pub fn plan_set_credit_line(
 
 /// Plans the hand-out of a recorded loan from `lender` to `borrower`.
 ///
-/// The plan belongs to the borrower (state and operation identifier); the
-/// host has to make sure the lender agreed. A borrower owes one lender at a
-/// time; a further loan from the same lender adds to the debt.
+/// The plan belongs to the borrower (state and operation identifier). The
+/// host has to make sure that both sides agreed: the lender gives money
+/// away, the borrower takes on a debt that is repaid from future claims. A
+/// borrower owes one lender at a time; a further loan from the same lender
+/// adds to the debt.
 pub fn plan_lend(
     borrower: &AccountState,
     lender: &AccountState,
@@ -139,7 +162,16 @@ pub fn plan_lend(
     now: Timestamp,
 ) -> Result<Plan, CoreError> {
     let mut next = begin(borrower, now)?;
-    transfer_checks(lender, lender_balance, borrower, amount, params, now)?;
+    let reserved = lender.start_grant_reserved;
+    transfer_checks(
+        lender,
+        lender_balance,
+        reserved,
+        borrower,
+        amount,
+        params,
+        now,
+    )?;
     if borrower.loan.lender.is_some_and(|l| l != lender.id) {
         return Err(CoreError::OtherLenderOutstanding);
     }
@@ -172,6 +204,10 @@ pub fn plan_lend(
 
 /// Plans a voluntary repayment of recorded debt, on top of what claims
 /// repay by themselves.
+///
+/// With demurrage switched on, the host settles the account of the lender
+/// up to `now` before it applies the plan (the core does not see that
+/// account here).
 pub fn plan_repay(
     borrower: &AccountState,
     balance: Balance,
@@ -194,7 +230,8 @@ pub fn plan_repay(
         .loan
         .lender
         .ok_or(CoreError::InvalidState("debt without a lender"))?;
-    balance.check_debit(amount, borrower.loan.credit_line)?;
+    let needed = amount.checked_add(borrower.start_grant_reserved)?;
+    balance.check_debit(needed, borrower.loan.credit_line)?;
     next.loan.outstanding = borrower.loan.outstanding.checked_sub(amount)?;
     if next.loan.outstanding.is_zero() {
         next.loan.lender = None;
@@ -224,11 +261,14 @@ pub fn plan_repay(
 fn transfer_checks(
     from: &AccountState,
     from_balance: Balance,
+    reserved: Amount,
     to: &AccountState,
     amount: Amount,
     params: &Params,
     now: Timestamp,
 ) -> Result<(), CoreError> {
+    require_clock(from, now)?;
+    require_clock(to, now)?;
     require_active(from)?;
     require_active(to)?;
     if from.id == to.id {
@@ -239,5 +279,6 @@ fn transfer_checks(
     }
     require_settled(from, params, now)?;
     require_settled(to, params, now)?;
-    from_balance.check_debit(amount, from.loan.credit_line)
+    let needed = amount.checked_add(reserved)?;
+    from_balance.check_debit(needed, from.loan.credit_line)
 }

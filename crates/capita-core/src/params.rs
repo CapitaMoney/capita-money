@@ -41,6 +41,16 @@ pub const MAX_DEMURRAGE_PERIOD_SECS: u64 = u64::MAX / 1_000_000;
 /// step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct LadderStep {
     /// Stable identifier of the step.
     pub id: TierId,
@@ -56,6 +66,16 @@ pub struct LadderStep {
 /// governance input (World Bank Atlas method, yearly), not an exchange rate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct CountryCap {
     /// The country.
     pub country: CountryCode,
@@ -72,6 +92,15 @@ pub struct CountryCap {
 /// Offene Frage: A2 target level and A3 final stage – values, not structure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
 pub struct CapParams {
     /// Period the caps refer to (normally [`Duration::MONTH`]).
     pub period: Duration,
@@ -91,6 +120,16 @@ pub struct CapParams {
 /// amount and term. The fields are hooks; none of them is decided here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct LoanParams {
     /// Highest credit line an account may be granted.
     pub max_credit_line: Amount,
@@ -106,6 +145,16 @@ pub struct LoanParams {
 /// destroyed; the host decides later).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum ClosedBalance {
     /// The balance stays on the ledger.
     #[default]
@@ -120,6 +169,16 @@ pub enum ClosedBalance {
 /// (`rate` zero).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct DemurrageParams {
     /// Share of the balance charged per `period`. Zero = off.
     pub rate: Share,
@@ -132,6 +191,15 @@ pub struct DemurrageParams {
 /// One complete, versioned set of rules.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
 pub struct Params {
     /// Version, strictly increasing.
     pub version: ParamsVersion,

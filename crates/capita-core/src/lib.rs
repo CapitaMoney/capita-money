@@ -42,9 +42,21 @@
 //! | [`demurrage`] | optional holding fee (off by default) |
 //! | [`totals`]    | public sums over the event record |
 //! | [`params`]    | versioned rules and their validation |
+//!
+//! ## Features
+//!
+//! - `serde`: serialization of all public data types (JSON for a service
+//!   host).
+//! - `scale`: SCALE encoding and type information (storage and calls inside
+//!   a Substrate runtime).
+//! - `std`: forwards `std` to those optional dependencies; the crate itself
+//!   never uses the standard library.
 
 #![no_std]
 #![forbid(unsafe_code)]
+// The SCALE derive writes enum indices with an `as u8` cast. Hand-written
+// code is still held to the lint: it is checked without the `scale` feature.
+#![cfg_attr(feature = "scale", allow(clippy::cast_possible_truncation))]
 
 extern crate alloc;
 

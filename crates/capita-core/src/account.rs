@@ -22,6 +22,16 @@ use crate::types::{AccountId, Amount, PersonId, Rate, TierId, Timestamp};
 /// Life cycle of an account.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum AccountStatus {
     /// Normal operation.
     #[default]
@@ -40,6 +50,16 @@ pub enum AccountStatus {
 /// rate changes, the segment is closed and a new one starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct IssuanceState {
     /// Start of the current segment.
     pub anchor: Timestamp,
@@ -66,6 +86,16 @@ pub struct IssuanceState {
 /// richer country restarts the ramp for the difference.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct CapRamp {
     /// Cap level the ramp starts from (amount per period, kept as a rate so
     /// that a later change of the cap period does not distort it).
@@ -77,6 +107,16 @@ pub struct CapRamp {
 /// Interest-free credit of one account (ADR 0006).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct LoanState {
     /// How far the balance may go below zero.
     pub credit_line: Amount,
@@ -90,6 +130,16 @@ pub struct LoanState {
 /// Everything the rules remember about one account.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub struct AccountState {
     /// The account.
     pub id: AccountId,
@@ -112,8 +162,10 @@ pub struct AccountState {
     pub residence: Option<Residence>,
     /// Seniority ramp of the cap.
     pub cap_ramp: CapRamp,
-    /// Whether the one-time start grant has been spent on verification.
-    pub start_grant_spent: bool,
+    /// Start grant received and not yet spent. Earmarked: it can be paid
+    /// only for the verification of the account itself, and no demurrage is
+    /// charged on it. Zero once spent.
+    pub start_grant_reserved: Amount,
     /// Lazy-issuance bookkeeping.
     pub issuance: IssuanceState,
     /// Credit line and outstanding debt.

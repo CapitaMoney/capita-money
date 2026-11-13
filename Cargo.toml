@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [workspace]
 resolver = "2"
-members = ["crates/capita-core"]
+members = ["crates/capita-core", "pallets/capita"]
+# Plain `cargo test` covers the core only; the pallet pulls in the whole
+# Polkadot SDK: `cargo test -p pallet-capita`.
+default-members = ["crates/capita-core"]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,3 +30,8 @@ indexing_slicing = "deny"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+
+# Dependencies without debug information: the Polkadot SDK builds faster and
+# smaller. The crates of this workspace keep theirs.
+[profile.dev.package."*"]
+debug = false

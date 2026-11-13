@@ -341,10 +341,83 @@ fn a_new_account_gets_the_start_grant_once_and_spends_it_on_verification() {
     world.apply(plan);
     assert_eq!(world.balance(1), Balance::ZERO);
     assert_eq!(world.balance(9), Balance::from_cents(200));
-    assert!(world.state(1).start_grant_spent);
+    assert!(world.state(1).start_grant_reserved.is_zero());
     assert_eq!(
         plan_spend_start_grant(world.state(1), world.balance(1), &service, &p, ts(20)),
         Err(CoreError::StartGrantAlreadySpent)
+    );
+}
+
+#[test]
+fn the_start_grant_can_be_spent_on_nothing_but_verification() {
+    let mut p = with_demurrage(params());
+    p.demurrage.free_allowance = Amount::ZERO;
+    let list = [p.clone()];
+    let mut world = World::default();
+    for n in [1, 2, 9] {
+        world.apply(plan_open(id(n), &p, ts(0)).unwrap());
+    }
+    let (other, service) = (world.state(2).clone(), world.state(9).clone());
+    let (a, grant) = (world.state(1).clone(), world.balance(1));
+    assert_eq!(a.start_grant_reserved, cents(100));
+    // Not as a payment, not as a loan, not even one cent of it.
+    assert_eq!(
+        plan_payment(&a, grant, &other, cents(1), &p, ts(0)),
+        Err(CoreError::InsufficientFunds)
+    );
+    assert_eq!(
+        plan_lend(&other, &a, grant, cents(1), &p, ts(0)),
+        Err(CoreError::InsufficientFunds)
+    );
+    // Money on top of the grant is free; a credit line does not unlock it.
+    let more = Balance::from_cents(150);
+    assert!(plan_payment(&a, more, &other, cents(50), &p, ts(0)).is_ok());
+    assert_eq!(
+        plan_payment(&a, more, &other, cents(51), &p, ts(0)),
+        Err(CoreError::InsufficientFunds)
+    );
+    let mut with_line = a.clone();
+    with_line.loan.credit_line = cents(30);
+    assert!(plan_payment(&with_line, grant, &other, cents(30), &p, ts(0)).is_ok());
+    assert_eq!(
+        plan_payment(&with_line, grant, &other, cents(31), &p, ts(0)),
+        Err(CoreError::InsufficientFunds)
+    );
+    // Demurrage leaves it alone.
+    let later = ts(12 * MONTH);
+    let year = plan_demurrage(&a, grant, &list, later).unwrap();
+    assert!(year.ops.is_empty());
+    // It still buys the verification, in full.
+    let service = plan_demurrage(&service, world.balance(9), &list, later)
+        .unwrap()
+        .state;
+    let spent = plan_spend_start_grant(&year.state, grant, &service, &p, later).unwrap();
+    assert!(matches!(spent.ops[0], LedgerOp::Transfer { amount, .. } if amount == cents(100)));
+    // A later change of the grant in the rules does not change what was
+    // granted.
+    let mut dearer = p.clone();
+    dearer.start_grant = cents(500);
+    let spent = plan_spend_start_grant(&year.state, grant, &service, &dearer, later).unwrap();
+    assert!(matches!(spent.ops[0], LedgerOp::Transfer { amount, .. } if amount == cents(100)));
+}
+
+#[test]
+fn time_may_not_go_backwards_for_the_other_side_of_a_transfer() {
+    let p = params();
+    let a = open_verified(1, 1, &p, ts(0));
+    let late = open_verified(2, 1, &p, ts(500));
+    let rich = Balance::from_cents(1_000);
+    let refused = CoreError::ClockWentBackwards {
+        last: ts(500),
+        now: ts(100),
+    };
+    assert_eq!(
+        plan_payment(&a, rich, &late, cents(1), &p, ts(100)),
+        Err(refused)
+    );
+    assert_eq!(
+        plan_lend(&a, &late, rich, cents(1), &p, ts(100)),
+        Err(refused)
     );
 }
 
@@ -499,6 +572,15 @@ fn a_payment_may_draw_the_credit_line_but_not_more() {
     world.apply(plan_open(id(1), &p, ts(0)).unwrap());
     world.apply(plan_open(id(2), &p, ts(0)).unwrap());
     let payee = world.state(2).clone();
+    // Both have spent their start grant on verification; account 1 then
+    // bought 100 cents.
+    for n in [1, 2] {
+        world.bank.balances.insert(id(n), 0);
+        world.accounts.get_mut(&id(n)).unwrap().start_grant_reserved = Amount::ZERO;
+    }
+    world.bank.minted = 0;
+    world.totals.start_grants = 0;
+    world.apply(plan_purchase(world.state(1), &p, cents(100), ts(1)).unwrap());
     assert_eq!(
         plan_payment(
             world.state(1),
@@ -684,7 +766,7 @@ fn with_demurrage(mut p: Params) -> Params {
 #[test]
 fn demurrage_is_off_by_default() {
     let p = [params()];
-    let a = open(1, &p[0], ts(0));
+    let a = open_verified(1, 1, &p[0], ts(0));
     let plan = plan_demurrage(&a, Balance::from_cents(1_000_000), &p, ts(12 * MONTH)).unwrap();
     assert!(plan.ops.is_empty());
     assert_eq!(plan.state.demurrage_settled_at, ts(12 * MONTH));
@@ -693,7 +775,7 @@ fn demurrage_is_off_by_default() {
 #[test]
 fn demurrage_charges_the_balance_above_the_free_allowance() {
     let p = [with_demurrage(params())];
-    let a = open(1, &p[0], ts(0));
+    let a = open_verified(1, 1, &p[0], ts(0));
     let plan = plan_demurrage(&a, Balance::from_cents(101_000), &p, ts(MONTH)).unwrap();
     assert!(matches!(
         plan.ops[0],
@@ -712,7 +794,7 @@ fn demurrage_charges_the_balance_above_the_free_allowance() {
 #[test]
 fn frequent_settling_does_not_round_demurrage_away() {
     let p = [with_demurrage(params())];
-    let mut a = open(1, &p[0], ts(0));
+    let mut a = open_verified(1, 1, &p[0], ts(0));
     let mut balance: i64 = 101_000;
     for hour in 1..=(MONTH / HOUR) {
         let plan = plan_demurrage(&a, Balance::from_cents(balance), &p, ts(hour * HOUR)).unwrap();
@@ -749,7 +831,7 @@ fn switching_demurrage_on_never_reaches_back() {
     let v1 = params();
     let v2 = with_demurrage(successor(&v1, ts(10 * MONTH)));
     let list = [v1, v2];
-    let a = open(1, &list[0], ts(0));
+    let a = open_verified(1, 1, &list[0], ts(0));
     let plan = plan_demurrage(&a, Balance::from_cents(101_000), &list, ts(11 * MONTH)).unwrap();
     assert!(matches!(plan.ops[0], LedgerOp::Burn { amount, .. } if amount == cents(1_000)));
 }

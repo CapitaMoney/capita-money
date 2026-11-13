@@ -14,10 +14,18 @@ workspace = true
 
 [features]
 default = []
+# Forwards `std` to the optional dependencies. The crate itself never uses
+# the standard library.
+std = ["codec?/std", "scale-info?/std", "serde?/std"]
 # Serialization of all public data types (JSON for the Taler service, etc.).
 serde = ["dep:serde"]
+# SCALE encoding and type information of all public data types, for storage
+# and calls inside a Substrate runtime.
+scale = ["dep:codec", "dep:scale-info"]
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false, features = ["derive", "max-encoded-len"], optional = true }
+scale-info = { version = "2.11", default-features = false, features = ["derive"], optional = true }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [dev-dependencies]

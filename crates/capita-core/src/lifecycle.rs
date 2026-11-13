@@ -50,7 +50,7 @@ pub fn plan_open(id: AccountId, params: &Params, now: Timestamp) -> Result<Plan,
             from: Rate::new(params.caps.global_cap, params.caps.period)?,
             since: now,
         },
-        start_grant_spent: false,
+        start_grant_reserved: params.start_grant,
         issuance: IssuanceState {
             anchor: now,
             rate: Rate::ZERO,
@@ -247,6 +247,7 @@ pub fn plan_set_status(
         AccountStatus::Frozen => {}
         AccountStatus::Closed => {
             next.issuance.carried = Amount::ZERO;
+            next.start_grant_reserved = Amount::ZERO;
             let rest = balance.positive_part();
             if params.closed_balance == ClosedBalance::Burn && !rest.is_zero() {
                 require_settled(state, params, now)?;

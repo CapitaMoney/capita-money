@@ -46,6 +46,16 @@ use crate::types::{AccountId, Amount, Balance, OpId, ParamsVersion, PersonId, Ti
 /// How new money comes into being.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum MintKind {
     /// Per-capita issuance (the basic income).
     Issued,
@@ -57,6 +67,16 @@ pub enum MintKind {
 /// Why money leaves circulation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum BurnReason {
     /// Demurrage charge.
     Demurrage,
@@ -67,6 +87,16 @@ pub enum BurnReason {
 /// Why money moves between two accounts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum TransferPurpose {
     /// Payment for goods or services, or a gift.
     Payment,
@@ -80,6 +110,16 @@ pub enum TransferPurpose {
 /// a balance directly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum LedgerOp {
     /// Create money on an account (from the `centralbank` account).
     Mint {
@@ -250,6 +290,16 @@ pub trait Governance {
 /// Totals (money issued, purchased, burnt, lent) are sums over events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
 pub enum Event {
     /// An account was opened.
     AccountOpened {

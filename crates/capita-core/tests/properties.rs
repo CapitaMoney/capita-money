@@ -30,7 +30,9 @@ use capita_core::demurrage::{charge, plan_demurrage};
 use capita_core::errors::CoreError;
 use capita_core::issuance::{cap_at, effective_rate, plan_claim, plan_purchase};
 use capita_core::lifecycle::{plan_attest, plan_set_status, plan_set_tier};
-use capita_core::loans::{plan_lend, plan_payment, plan_repay, plan_set_credit_line};
+use capita_core::loans::{
+    plan_lend, plan_payment, plan_repay, plan_set_credit_line, plan_spend_start_grant,
+};
 use capita_core::params::{CountryCap, DemurrageParams, Params};
 use capita_core::plan::Plan;
 use capita_core::ports::{Event, Ledger, LedgerOp, NoGate, TransferPurpose};
@@ -264,6 +266,7 @@ enum Action {
     Tier(u8, u16),
     Status(u8, u8),
     Verify(u8, u8),
+    SpendGrant(u8, u8),
 }
 
 fn action() -> impl Strategy<Value = Action> {
@@ -277,7 +280,8 @@ fn action() -> impl Strategy<Value = Action> {
         1 => (who.clone(), 1u64..5_000).prop_map(|(a, c)| Action::Purchase(a, c)),
         1 => (who.clone(), 0u16..4).prop_map(|(a, t)| Action::Tier(a, t)),
         1 => (who.clone(), 0u8..3).prop_map(|(a, s)| Action::Status(a, s)),
-        1 => (who, 0u8..3).prop_map(|(a, l)| Action::Verify(a, l)),
+        1 => (who.clone(), 0u8..3).prop_map(|(a, l)| Action::Verify(a, l)),
+        1 => (who, 1u8..=3).prop_map(|(a, b)| Action::SpendGrant(a, b)),
     ]
 }
 
@@ -325,7 +329,8 @@ proptest! {
     /// - the supply equals minted minus burnt, on the ledger and in the
     ///   public totals;
     /// - recorded debt equals lent minus repaid;
-    /// - frozen and closed accounts receive no issuance and no payments.
+    /// - frozen and closed accounts receive no issuance and no payments;
+    /// - a start grant not yet spent on verification is never touched.
     #[test]
     fn random_histories_keep_every_invariant(
         demurrage in proptest::option::of(1u32..200_000),
@@ -381,6 +386,9 @@ proptest! {
                     ][usize::from(s)];
                     plan_set_status(w.state(a), w.balance(a), &list, to, now)
                 }
+                Action::SpendGrant(a, b) => {
+                    plan_spend_start_grant(w.state(a), w.balance(a), w.state(b), &p, now)
+                }
                 Action::Verify(a, l) => {
                     let att = attestation(a, l, None, now, None);
                     plan_attest(w.state(a), &list, Some(&att), None, now)
@@ -404,6 +412,10 @@ proptest! {
                     world.bank.lines.get(&s.id).copied().unwrap_or(0),
                     s.loan.credit_line.cents()
                 );
+                // An unspent start grant is still there.
+                let free = i128::from(world.bank.balance_of(&s.id).cents())
+                    + i128::from(s.loan.credit_line.cents());
+                prop_assert!(free >= i128::from(s.start_grant_reserved.cents()));
             }
             for n in 1..=3u8 {
                 let i = usize::from(n - 1);
