@@ -70,7 +70,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          grep -aE "^\s*(error|thread .* panicked)" -A 2 --group-separator=@@@@ build.log | tr '\n' ' ' | sed 's/@@@@/\n/g' | head -n 10 | cut -c 1-400 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -aE "^\s*(error|thread .* panicked)|rust-lld: error" -A 2 --group-separator=@@@@ build.log | tr '\n' ' ' | sed 's/@@@@/\n/g' | head -n 10 | cut -c 1-400 | while IFS= read -r line; do echo "::error::$line"; done
       - name: the chain produces blocks
         run: |
           ./target/release/capita-node --dev --tmp > node.log 2>&1 &

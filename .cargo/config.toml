@@ -1,0 +1,6 @@
+# Recent Rust compilers no longer let the WebAssembly linker accept undefined
+# symbols by default. The runtime imports the functions of its host exactly
+# that way, and the SDK line in use (docs/adr/0010) declares them no other
+# way. The variable reaches the WebAssembly build of the runtime only.
+[env]
+WASM_BUILD_RUSTFLAGS = "-C link-arg=--allow-undefined"
