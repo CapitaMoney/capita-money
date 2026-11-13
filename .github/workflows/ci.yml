@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt --target thumbv7em-none-eabi
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p capita-core --all-targets --all-features -- -D warnings
+      - run: cargo clippy -p capita-core --all-targets -- -D warnings
+      - run: cargo test -p capita-core --all-features
+      - run: cargo test -p capita-core
+      # no_std: build for a target without an operating system
+      - run: cargo build -p capita-core --target thumbv7em-none-eabi
+      - run: cargo build -p capita-core --features serde,scale --target thumbv7em-none-eabi
+  pallet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal --component clippy --target wasm32v1-none
+      - run: cargo clippy -p pallet-capita --all-targets -- -D warnings
+      - run: cargo test -p pallet-capita
+      - run: cargo check -p pallet-capita --features try-runtime
+      # the form the pallet takes inside a runtime: WebAssembly, no std
+      - run: cargo check -p pallet-capita --no-default-features --target wasm32v1-none
