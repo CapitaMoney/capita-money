@@ -105,6 +105,9 @@ pub struct Checks {
     /// GNU Taler Challenger: a code sent by letter, e-mail or text message.
     #[serde(default)]
     pub challenger: Option<ChallengerConfig>,
+    /// The document check: chip of a passport or ID card + face (ADR 0021).
+    #[serde(default)]
+    pub document: Option<crate::document::DocumentConfig>,
 }
 
 /// How verifications are paid for.

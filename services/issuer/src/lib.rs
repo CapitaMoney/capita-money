@@ -36,6 +36,7 @@
 
 pub mod checks;
 pub mod config;
+pub mod document;
 pub mod http;
 pub mod issue;
 pub mod store;
