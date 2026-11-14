@@ -154,10 +154,13 @@ pub fn add_ed(new: u8, account: &AccountId32) -> RuntimeCall {
 
 /// What the last action's call answered.
 pub fn last_result() -> Option<DispatchResult> {
-    System::events().into_iter().rev().find_map(|r| match r.event {
-        RuntimeEvent::Keys(crate::Event::Acted { result, .. }) => Some(result),
-        _ => None,
-    })
+    System::events()
+        .into_iter()
+        .rev()
+        .find_map(|r| match r.event {
+            RuntimeEvent::Keys(crate::Event::Acted { result, .. }) => Some(result),
+            _ => None,
+        })
 }
 
 // ---------------------------------------------------------------- passkeys

@@ -98,10 +98,7 @@ pub fn base64url(bytes: &[u8]) -> Vec<u8> {
         for k in 0..chars {
             let shift = 18u32.saturating_sub(k.saturating_mul(6));
             let index = n.wrapping_shr(shift) & 63;
-            if let Some(c) = usize::try_from(index)
-                .ok()
-                .and_then(|i| BASE64URL.get(i))
-            {
+            if let Some(c) = usize::try_from(index).ok().and_then(|i| BASE64URL.get(i)) {
                 out.push(*c);
             }
         }

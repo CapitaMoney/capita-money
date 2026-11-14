@@ -7,6 +7,7 @@ use capita_keys::types::{DeviceKey, Proof};
 use codec::Decode;
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionSource, ValidateUnsigned};
 use frame_support::{assert_noop, assert_ok};
+use sp_core::Pair;
 use sp_runtime::traits::Dispatchable;
 use sp_runtime::AccountId32;
 
@@ -190,7 +191,8 @@ fn a_key_acts_for_one_account() {
 fn key_changes_go_through_an_action() {
     new_test_ext().execute_with(|| {
         let account = open_ed(1);
-        let RuntimeCall::Keys(crate::Call::add_key { key, possession }) = add_ed(2, &account) else {
+        let RuntimeCall::Keys(crate::Call::add_key { key, possession }) = add_ed(2, &account)
+        else {
             panic!("add_key");
         };
         assert_noop!(
@@ -255,8 +257,16 @@ fn the_home_key_acting_withdraws_a_claim() {
     new_test_ext().execute_with(|| {
         let account = open_ed(1);
         assert_ok!(act_ed(1, &account, add_ed(2, &account)));
-        assert_ok!(act_ed(2, &account, RuntimeCall::Keys(crate::Call::claim_home {})));
-        assert_ok!(act_ed(1, &account, RuntimeCall::Keys(crate::Call::refuse_home {})));
+        assert_ok!(act_ed(
+            2,
+            &account,
+            RuntimeCall::Keys(crate::Call::claim_home {})
+        ));
+        assert_ok!(act_ed(
+            1,
+            &account,
+            RuntimeCall::Keys(crate::Call::refuse_home {})
+        ));
         assert_eq!(last_result(), Some(Ok(())));
         System::assert_has_event(
             Event::HomeRefused {
@@ -265,7 +275,11 @@ fn the_home_key_acting_withdraws_a_claim() {
             .into(),
         );
         advance(WEEK);
-        assert_ok!(act_ed(2, &account, RuntimeCall::Keys(crate::Call::take_home {})));
+        assert_ok!(act_ed(
+            2,
+            &account,
+            RuntimeCall::Keys(crate::Call::take_home {})
+        ));
         assert_eq!(last_result(), Some(Err(Error::<Test>::NoClaim.into())));
         assert_eq!(keys_of(&account), vec![ed_key(1), ed_key(2)]);
     });
@@ -279,7 +293,12 @@ fn a_passkey_opens_and_acts() {
         let account = AccountId32::from(account_of(&key));
         let first = remark(0);
         let proof = assertion(&p, &challenge(&account, 0, &first), ORIGIN);
-        assert_ok!(Keys::open(RuntimeOrigin::none(), key, Box::new(first), proof));
+        assert_ok!(Keys::open(
+            RuntimeOrigin::none(),
+            key,
+            Box::new(first),
+            proof
+        ));
         assert_eq!(keys_of(&account), vec![key]);
 
         let call = remark(1);
@@ -335,7 +354,10 @@ fn hex(s: &str) -> Vec<u8> {
 }
 
 fn vectors() -> serde_json::Value {
-    serde_json::from_str(include_str!("../../../crates/capita-keys/tests/vectors.json")).unwrap()
+    serde_json::from_str(include_str!(
+        "../../../crates/capita-keys/tests/vectors.json"
+    ))
+    .unwrap()
 }
 
 fn app_call(v: &serde_json::Value, kind: &str, name: &str) -> RuntimeCall {
@@ -346,7 +368,10 @@ fn app_call(v: &serde_json::Value, kind: &str, name: &str) -> RuntimeCall {
 #[test]
 fn the_test_chain_has_the_audience_of_the_vectors() {
     new_test_ext().execute_with(|| {
-        assert_eq!(hex(vectors()["audience"].as_str().unwrap()), Keys::audience().0.to_vec());
+        assert_eq!(
+            hex(vectors()["audience"].as_str().unwrap()),
+            Keys::audience().0.to_vec()
+        );
     });
 }
 
@@ -361,15 +386,27 @@ fn transactions_the_app_made_run() {
                 assert_ok!(call.dispatch(RuntimeOrigin::none()));
                 assert_eq!(last_result(), Some(Ok(())), "{kind} {name}");
             }
-            let account = AccountId32::new(hex(v[kind]["account"].as_str().unwrap()).try_into().unwrap());
+            let account = AccountId32::new(
+                hex(v[kind]["account"].as_str().unwrap())
+                    .try_into()
+                    .unwrap(),
+            );
             assert_eq!(Nonce::<Test>::get(&account), 2, "{kind}");
         }
         let add = app_call(&v, "ed25519", "add_act_call");
         assert_eq!(validate(&add), Ok(()));
         assert_ok!(add.dispatch(RuntimeOrigin::none()));
         assert_eq!(last_result(), Some(Ok(())));
-        let added = DeviceKey::Ed25519(hex(v["ed25519"]["add_public"].as_str().unwrap()).try_into().unwrap());
-        let account = AccountId32::new(hex(v["ed25519"]["account"].as_str().unwrap()).try_into().unwrap());
+        let added = DeviceKey::Ed25519(
+            hex(v["ed25519"]["add_public"].as_str().unwrap())
+                .try_into()
+                .unwrap(),
+        );
+        let account = AccountId32::new(
+            hex(v["ed25519"]["account"].as_str().unwrap())
+                .try_into()
+                .unwrap(),
+        );
         assert_eq!(KeyOwner::<Test>::get(added), Some(account));
     });
 }

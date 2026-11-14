@@ -15,7 +15,9 @@
 )]
 
 use capita_keys::check::{verify_proof, Verify};
-use capita_keys::encoding::{account_of, act_challenge, add_challenge, base64url, blake2_256, sha256};
+use capita_keys::encoding::{
+    account_of, act_challenge, add_challenge, base64url, blake2_256, sha256,
+};
 use capita_keys::types::{Audience, DeviceKey, KeyError, PasskeyProof, Proof};
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
@@ -109,7 +111,10 @@ fn a_new_key_proves_it_is_held() {
     let account: [u8; 32] = arr(text(&v, &["ed25519", "account"]));
     let added = DeviceKey::Ed25519(arr(text(&v, &["ed25519", "add_public"])));
     let challenge = add_challenge(&audience, &account, &added);
-    assert_eq!(challenge.to_vec(), hex(text(&v, &["ed25519", "add_challenge"])));
+    assert_eq!(
+        challenge.to_vec(),
+        hex(text(&v, &["ed25519", "add_challenge"]))
+    );
     let possession = Proof::Ed25519(arr(text(&v, &["ed25519", "add_possession", "signature"])));
     assert_eq!(check(&added, &challenge, &possession), Ok(()));
     let call = hex(text(&v, &["ed25519", "add_key_call"]));
@@ -142,7 +147,10 @@ fn passkeys_sign_what_the_app_signs() {
         check(&key, &act, &Proof::Passkey(proof)),
         Err(KeyError::WrongChallenge)
     );
-    assert_eq!(check(&key, &act, &Proof::Passkey(from_app(&v, "act"))), Ok(()));
+    assert_eq!(
+        check(&key, &act, &Proof::Passkey(from_app(&v, "act"))),
+        Ok(())
+    );
 }
 
 struct Phone {
@@ -195,10 +203,16 @@ fn passkey_assertions_that_do_not_count() {
     assert_eq!(check(&key, &challenge, &proof), Ok(()));
 
     let other_site = phone.assert(&challenge, "evil.example", 0x05, &good);
-    assert_eq!(check(&key, &challenge, &other_site), Err(KeyError::WrongRelyingParty));
+    assert_eq!(
+        check(&key, &challenge, &other_site),
+        Err(KeyError::WrongRelyingParty)
+    );
 
     let not_verified = phone.assert(&challenge, RP, 0x01, &good);
-    assert_eq!(check(&key, &challenge, &not_verified), Err(KeyError::NotVerified));
+    assert_eq!(
+        check(&key, &challenge, &not_verified),
+        Err(KeyError::NotVerified)
+    );
 
     let create = client("webauthn.create", &challenge, ORIGIN, false);
     let made = phone.assert(&challenge, RP, 0x05, &create);
@@ -206,11 +220,17 @@ fn passkey_assertions_that_do_not_count() {
 
     let phishing = client("webauthn.get", &challenge, "https://evil.example", false);
     let phished = phone.assert(&challenge, RP, 0x05, &phishing);
-    assert_eq!(check(&key, &challenge, &phished), Err(KeyError::WrongOrigin));
+    assert_eq!(
+        check(&key, &challenge, &phished),
+        Err(KeyError::WrongOrigin)
+    );
 
     let framed = client("webauthn.get", &challenge, ORIGIN, true);
     let in_frame = phone.assert(&challenge, RP, 0x05, &framed);
-    assert_eq!(check(&key, &challenge, &in_frame), Err(KeyError::CrossOrigin));
+    assert_eq!(
+        check(&key, &challenge, &in_frame),
+        Err(KeyError::CrossOrigin)
+    );
 
     let escaped = good.replace("\"origin\"", "\"o\\u0072igin\"");
     let tricky = phone.assert(&challenge, RP, 0x05, &escaped);
@@ -229,7 +249,10 @@ fn passkey_assertions_that_do_not_count() {
         panic!("a passkey proof");
     };
     short.authenticator_data.truncate(36);
-    assert_eq!(check(&key, &challenge, &Proof::Passkey(short)), Err(KeyError::Malformed));
+    assert_eq!(
+        check(&key, &challenge, &Proof::Passkey(short)),
+        Err(KeyError::Malformed)
+    );
 
     let ed = DeviceKey::Ed25519([1u8; 32]);
     assert_eq!(check(&ed, &challenge, &proof), Err(KeyError::KindMismatch));
@@ -242,7 +265,10 @@ fn passkey_assertions_that_do_not_count() {
             .try_into()
             .unwrap()
     });
-    assert_eq!(check(&someone_else, &challenge, &proof), Err(KeyError::BadSignature));
+    assert_eq!(
+        check(&someone_else, &challenge, &proof),
+        Err(KeyError::BadSignature)
+    );
 }
 
 #[test]

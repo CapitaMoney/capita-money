@@ -61,9 +61,13 @@ pub fn verify_proof<V: Verify>(
                 Err(KeyError::BadSignature)
             }
         }
-        (DeviceKey::Passkey(public), Proof::Passkey(assertion)) => {
-            verify_passkey(public, challenge, assertion, relying_parties, origin_allowed)
-        }
+        (DeviceKey::Passkey(public), Proof::Passkey(assertion)) => verify_passkey(
+            public,
+            challenge,
+            assertion,
+            relying_parties,
+            origin_allowed,
+        ),
         _ => Err(KeyError::KindMismatch),
     }
 }
@@ -129,7 +133,9 @@ fn json_value<'a>(json: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
     needle.push(b'"');
     let mut rest = json;
     loop {
-        let at = rest.windows(needle.len()).position(|w| w == needle.as_slice())?;
+        let at = rest
+            .windows(needle.len())
+            .position(|w| w == needle.as_slice())?;
         let after = rest.get(at.saturating_add(needle.len())..)?;
         let after = skip_spaces(after);
         if let Some(value) = after.strip_prefix(b":") {
@@ -164,7 +170,10 @@ mod tests {
         assert_eq!(json_string(json, b"type"), Some(b"webauthn.get".as_slice()));
         assert_eq!(json_string(json, b"challenge"), Some(b"abc".as_slice()));
         assert_eq!(json_string(json, b"origin"), Some(b"https://x".as_slice()));
-        assert_eq!(json_value(json, b"crossOrigin").map(|v| v.starts_with(b"false")), Some(true));
+        assert_eq!(
+            json_value(json, b"crossOrigin").map(|v| v.starts_with(b"false")),
+            Some(true)
+        );
         assert_eq!(json_string(json, b"topOrigin"), None);
     }
 

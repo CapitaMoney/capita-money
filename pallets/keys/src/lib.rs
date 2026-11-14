@@ -125,8 +125,13 @@ pub mod pallet {
 
     /// The keys of an account; the first is the home key.
     #[pallet::storage]
-    pub type Keys<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, BoundedVec<DeviceKey, T::MaxKeys>, ValueQuery>;
+    pub type Keys<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        T::AccountId,
+        BoundedVec<DeviceKey, T::MaxKeys>,
+        ValueQuery,
+    >;
 
     /// Which account a key acts for. A key acts for one account only.
     #[pallet::storage]
@@ -170,8 +175,13 @@ pub mod pallet {
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            let parties: Vec<Vec<u8>> = self.relying_parties.iter().map(|s| s.as_bytes().to_vec()).collect();
-            let origins: Vec<Vec<u8>> = self.origins.iter().map(|s| s.as_bytes().to_vec()).collect();
+            let parties: Vec<Vec<u8>> = self
+                .relying_parties
+                .iter()
+                .map(|s| s.as_bytes().to_vec())
+                .collect();
+            let origins: Vec<Vec<u8>> =
+                self.origins.iter().map(|s| s.as_bytes().to_vec()).collect();
             Pallet::<T>::store_policy(parties, origins).expect("a short list of sites");
         }
     }
@@ -374,7 +384,10 @@ pub mod pallet {
             let (account, acting) = Self::acting(origin)?;
             ensure!(!Self::is_home(&account, &acting), Error::<T>::AlreadyHome);
             HomeClaim::<T>::insert(&account, (acting, Self::now()));
-            Self::deposit_event(Event::HomeClaimed { account, key: acting });
+            Self::deposit_event(Event::HomeClaimed {
+                account,
+                key: acting,
+            });
             Ok(())
         }
 
@@ -391,10 +404,14 @@ pub mod pallet {
             );
             Keys::<T>::try_mutate(&account, |keys| {
                 keys.retain(|k| *k != acting);
-                keys.try_insert(0, acting).map_err(|_| Error::<T>::TooManyKeys)
+                keys.try_insert(0, acting)
+                    .map_err(|_| Error::<T>::TooManyKeys)
             })?;
             HomeClaim::<T>::remove(&account);
-            Self::deposit_event(Event::HomeChanged { account, key: acting });
+            Self::deposit_event(Event::HomeChanged {
+                account,
+                key: acting,
+            });
             Ok(())
         }
 
@@ -531,7 +548,12 @@ pub mod pallet {
             );
             ensure!(Nonce::<T>::get(account) == nonce, Error::<T>::BadNonce);
             let call_hash = sp_io::hashing::blake2_256(&call.encode());
-            let challenge = act_challenge(&Self::audience(), &account.clone().into(), nonce, &call_hash);
+            let challenge = act_challenge(
+                &Self::audience(),
+                &account.clone().into(),
+                nonce,
+                &call_hash,
+            );
             Self::verify(key, &challenge, proof)
         }
 
@@ -546,7 +568,10 @@ pub mod pallet {
             ensure!(!KeyOwner::<T>::contains_key(key), Error::<T>::KeyTaken);
             let raw = account_of(key);
             let account = T::AccountId::from(raw);
-            ensure!(!Keys::<T>::contains_key(&account), Error::<T>::AccountExists);
+            ensure!(
+                !Keys::<T>::contains_key(&account),
+                Error::<T>::AccountExists
+            );
             let call_hash = sp_io::hashing::blake2_256(&call.encode());
             let challenge = act_challenge(&Self::audience(), &raw, 0, &call_hash);
             Self::verify(key, &challenge, proof)?;
@@ -556,7 +581,12 @@ pub mod pallet {
         /// Runs a checked action. The call's failure is recorded in the
         /// event; the nonce is spent either way, so that the same action
         /// cannot fill blocks for free.
-        fn run(account: T::AccountId, key: DeviceKey, call: <T as Config>::RuntimeCall, nonce: u32) {
+        fn run(
+            account: T::AccountId,
+            key: DeviceKey,
+            call: <T as Config>::RuntimeCall,
+            nonce: u32,
+        ) {
             if Self::is_home(&account, &key) && HomeClaim::<T>::take(&account).is_some() {
                 Self::deposit_event(Event::HomeRefused {
                     account: account.clone(),
@@ -598,7 +628,8 @@ pub mod pallet {
             for origin in origins {
                 let origin: BoundedVec<u8, MaxOriginLength> =
                     origin.try_into().map_err(|_| Error::<T>::PolicyTooLong)?;
-                list.try_push(origin).map_err(|_| Error::<T>::PolicyTooLong)?;
+                list.try_push(origin)
+                    .map_err(|_| Error::<T>::PolicyTooLong)?;
             }
             RelyingParties::<T>::put(hashes);
             Origins::<T>::put(list);
