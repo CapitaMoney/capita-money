@@ -13,6 +13,7 @@ members = [
     "runtime",
     "node",
     "services/issuer",
+    "services/face",
 ]
 # Plain `cargo test` covers the crates without the Polkadot SDK only; the
 # pallets pull in all of it: `cargo test -p pallet-capita`,

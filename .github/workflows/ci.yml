@@ -43,6 +43,18 @@ jobs:
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
       - run: cargo clippy -p capita-issuer --all-targets -- -D warnings
       - run: cargo test -p capita-issuer
+  # The face check: detector + recogniser of OpenCV Zoo, liveness challenge.
+  face:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+      - run: cargo clippy -p capita-face --all-targets -- -D warnings
+      - run: services/face/fetch-models.sh "$RUNNER_TEMP/face-models"
+      - run: cargo test --release -p capita-face
+        env:
+          CAPITA_FACE_MODELS: ${{ runner.temp }}/face-models
   pallet:
     runs-on: ubuntu-latest
     steps:

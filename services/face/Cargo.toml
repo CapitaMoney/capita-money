@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-face"
+description = "Face check of Capita Money: selfie against the photo of an identity document, with an active liveness challenge. Runs in the identity service; keeps nothing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+# Not the workspace lints: image work is floating-point arithmetic and pixel
+# indexing throughout, which the workspace forbids for money code. Nothing in
+# this crate touches money.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[dependencies]
+getrandom = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tract-onnx = "0.23"
+
+[[bin]]
+name = "capita-face"
+path = "src/main.rs"
