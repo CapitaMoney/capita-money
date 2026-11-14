@@ -45,8 +45,8 @@ note = "One Capita for every new account. It can only pay the account's own veri
 
 [issuance.claim_window]
 value = "14 days"
-status = "example"
-source = "B4, ADR 0002"
+status = "decided"
+source = "owner 2026-11-14, B4"
 note = "How far back a claim reaches. Money not claimed within this time lapses."
 
 [issuance.ripening]
@@ -235,10 +235,17 @@ code = ["pallets/credential/src/lib.rs", "runtime/src/identity.rs"]
 
 [[register]]
 id = "no-key-change"
-rule = "An account stays with its key. A lost key is not replaced yet."
-status = "decided"
-source = "owner 2026-11-13, B5"
+rule = "An account stays with its key. Holds until key-recovery is built."
+status = "default"
+source = "B5"
 code = ["runtime/src/identity.rs"]
+
+[[register]]
+id = "key-recovery"
+rule = "A lost key is replaced by verifying again: the account moves to the new key. A key is stored nowhere but with its holder."
+status = "decided"
+source = "owner 2026-11-14, B5"
+planned = "identity service and core (M3b)"
 
 [[register]]
 id = "names-optional"
