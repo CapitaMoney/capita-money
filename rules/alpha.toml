@@ -1,0 +1,346 @@
+# Capita Money – rule set "alpha"
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The rules the software follows, in one place. Change a value here, build
+# again, and every program of this repository follows. No other file holds a
+# rule value (the tests use fixed numbers of their own, on purpose: a change
+# of rules must not break them).
+#
+# Human source: the owner's rules diary. This file is that diary in a form a
+# program can read; `diary` below names the version it mirrors.
+#
+# Every rule is a small table:
+#   value   the rule itself
+#   status  "decided"  owner decision
+#           "default"  working assumption until decided
+#           "example"  placeholder number, no decision behind it
+#   source  where it comes from: rule of the diary, question of the rules
+#           interview (A1 … F3), or a design decision (ADR) of this repository
+#   note    what the value means
+#
+# How values are written:
+#   money   "1.00"      Capita, at most two decimals; "_" may group digits
+#   time    "14 days"   second(s), minute(s), hour(s), day(s), week(s),
+#                       month(s), year(s); "off" = none.
+#                       1 month = 1/12 of 365.25 days; 1 year = 365.25 days
+#   share   "50 %"      at most four decimals; "off" = 0 %
+#
+# A wrong value stops the build with the name of the rule (docs/adr/0012).
+
+[set]
+name = "alpha"
+title = "Alpha rules"
+diary = "rules diary v0.2 (2026-11-13)"
+# Rises by one with every change of the monetary rules below that is to be
+# enacted on a running host.
+params_version = 1
+
+# ---------------------------------------------------------------- issuance
+
+[issuance.start_grant]
+value = "1.00"
+status = "decided"
+source = "diary 5"
+note = "One Capita for every new account. It can only pay the account's own verification."
+
+[issuance.claim_window]
+value = "14 days"
+status = "decided"
+source = "owner 2026-11-14, B4"
+note = "How far back a claim reaches. Money not claimed within this time lapses."
+
+[issuance.ripening]
+value = "off"
+status = "decided"
+source = "diary, reconsider later (A1d)"
+note = "Delay before issued Capita can be used. Off: usable at once."
+
+# The steps an account can stand on, lowest first. A new account stands on
+# the first step. The incentive ladder with many steps was dropped for now
+# (diary 2026-11-13); what remains is: not verified, verified.
+[[issuance.ladder]]
+step = 0
+name = "new account"
+min_level = 0
+amount = "0.00"
+per = "1 month"
+status = "decided"
+source = "diary 5, 9"
+note = "Without a valid verification an account receives nothing."
+
+[[issuance.ladder]]
+step = 1
+name = "verified person"
+min_level = 1
+amount = "10.00"
+per = "1 month"
+status = "example"
+source = "diary 4, 2discuss A"
+note = "The same amount for every verified person, worldwide. The amount itself is not decided."
+
+# -------------------------------------------------------------------- caps
+
+[caps.period]
+value = "1 month"
+status = "default"
+source = "ADR 0008"
+note = "The time span the caps below refer to."
+
+[caps.global_cap]
+value = "1_000_000.00"
+status = "default"
+source = "ADR 0008"
+note = "Most Capita an account can be issued per period. Far above the ladder: no cap in effect."
+
+[caps.ramp]
+value = "off"
+status = "decided"
+source = "diary, reconsider later"
+note = "Seniority ramp towards the cap of the country of residence. Off."
+
+# Caps per country were dropped for now (diary 2026-11-13). To use them, add
+# one table per country:
+#   [[caps.country]]
+#   country = "BI"
+#   gni_per_capita = "230.00"
+#   share = "20 %"
+#   status = "example"
+#   source = "A3"
+#   note = "…"
+
+# ----------------------------------------------------------------- lending
+
+[lending.max_credit_line]
+value = "500.00"
+status = "example"
+source = "C4"
+note = "Highest credit line an account may be granted."
+
+[lending.max_outstanding]
+value = "1000.00"
+status = "example"
+source = "C4"
+note = "Highest recorded debt an account may owe."
+
+[lending.repayment_share]
+value = "50 %"
+status = "example"
+source = "C3"
+note = "Part of each claim that goes to the lender while debt is outstanding."
+
+# --------------------------------------------------------------- demurrage
+
+[demurrage.rate]
+value = "off"
+status = "decided"
+source = "diary 11"
+note = "Holding fee per period. Off: Capita does not lose value."
+
+[demurrage.period]
+value = "1 month"
+status = "default"
+source = "ADR 0007"
+note = "Period of the holding fee. Without effect while the rate is off."
+
+[demurrage.free_allowance]
+value = "0.00"
+status = "default"
+source = "ADR 0007"
+note = "Part of a balance the holding fee never touches. Without effect while the rate is off."
+
+# ---------------------------------------------------------------- accounts
+
+[accounts.closed_balance]
+value = "keep"
+status = "default"
+source = "B5"
+note = "What happens to the balance of a closed account: \"keep\" or \"burn\"."
+
+# -------------------------------------------------------------- sponsoring
+
+[sponsoring.keys]
+value = []
+status = "default"
+source = "diary 6, A1c"
+note = "Numbers of the attributes sponsors may target. None defined yet."
+
+# ---------------------------------------------------------------- identity
+
+[identity.membership_period]
+value = "365 days"
+status = "decided"
+source = "diary 9"
+note = "How long a verification holds. After it the account receives nothing until verified again."
+
+[verification.price_eur]
+value = "1.00"
+status = "decided"
+source = "diary 6"
+note = "Euro price of one verification: 1 € = 1 verification. Read by identity services, not by the ledger."
+
+# ---------------------------------------------------------------- register
+#
+# Rules that are behaviour, not numbers. They live in code; this list says
+# where, so that a change starts at the right place. `code` names the files;
+# `planned` says which part will hold a rule that is not built yet.
+
+[[register]]
+id = "one-way"
+rule = "Capita can be bought with ordinary money. There is no way back: no function sells Capita."
+status = "decided"
+source = "diary 3"
+code = ["crates/capita-core/src/issuance.rs"]
+
+[[register]]
+id = "no-interest"
+rule = "Lending is free. A loan has no field for interest or fees."
+status = "decided"
+source = "diary 10, ADR 0006"
+code = ["crates/capita-core/src/loans.rs"]
+
+[[register]]
+id = "no-levies"
+rule = "The system takes nothing from a payment: no tax, no fee."
+status = "decided"
+source = "diary 12"
+code = ["crates/capita-core/src/loans.rs", "runtime/src/nonce.rs"]
+
+[[register]]
+id = "one-person-one-account"
+rule = "A person holds one account. A second account for the same person is refused."
+status = "decided"
+source = "diary 4"
+code = ["crates/capita-core/src/lifecycle.rs", "crates/capita-credential/src/check.rs"]
+
+[[register]]
+id = "verification-lapses"
+rule = "When a verification runs out, the account falls back to the highest step it still reaches, and returns by a new verification."
+status = "decided"
+source = "diary 9"
+code = ["crates/capita-core/src/issuance.rs", "pallets/credential/src/lib.rs"]
+
+[[register]]
+id = "renewal-by-holder"
+rule = "The holder renews a membership with the claim held, or presents a new claim."
+status = "decided"
+source = "owner 2026-11-13"
+code = ["pallets/credential/src/lib.rs", "runtime/src/identity.rs"]
+
+[[register]]
+id = "identity-revoked"
+rule = "An identity that is revoked freezes its account."
+status = "decided"
+source = "owner 2026-11-13"
+code = ["pallets/credential/src/lib.rs", "runtime/src/identity.rs"]
+
+[[register]]
+id = "no-key-change"
+rule = "An account stays with its key. Holds until key-recovery is built."
+status = "default"
+source = "B5"
+code = ["runtime/src/identity.rs"]
+
+[[register]]
+id = "key-recovery"
+rule = "A lost key is replaced by verifying again: the account moves to the new key. A key is stored nowhere but with its holder."
+status = "decided"
+source = "owner 2026-11-14, B5"
+planned = "identity service and core (M3b)"
+
+[[register]]
+id = "names-optional"
+rule = "The public name of an identity is optional; without one it is derived from the key."
+status = "decided"
+source = "owner 2026-11-13"
+code = ["runtime/src/identity.rs"]
+
+[[register]]
+id = "step-by-holder"
+rule = "After a verification the holder moves to the step by a call of their own; it does not happen by itself."
+status = "default"
+source = "ADR 0008"
+code = ["crates/capita-core/src/lifecycle.rs", "pallets/capita/src/lib.rs"]
+
+[[register]]
+id = "frozen-account"
+rule = "A frozen account receives nothing and cannot claim; what it was owed before stays. Nothing is destroyed."
+status = "default"
+source = "B5"
+code = ["crates/capita-core/src/lifecycle.rs"]
+
+[[register]]
+id = "closed-account-debt"
+rule = "Debt of a closed account stays on record; repayments still reach a lender whose account is frozen or closed."
+status = "default"
+source = "B5"
+code = ["crates/capita-core/src/lifecycle.rs", "crates/capita-core/src/loans.rs"]
+
+[[register]]
+id = "one-lender"
+rule = "A borrower owes one lender at a time."
+status = "default"
+source = "C4"
+code = ["crates/capita-core/src/loans.rs"]
+
+[[register]]
+id = "lend-from-credit"
+rule = "A lender may lend out of an own credit line."
+status = "default"
+source = "C1"
+code = ["crates/capita-core/src/loans.rs"]
+
+[[register]]
+id = "claim-not-automatic"
+rule = "Issued Capita arrives when the holder claims it, not by itself."
+status = "default"
+source = "B4, ADR 0002"
+code = ["crates/capita-core/src/issuance.rs"]
+
+[[register]]
+id = "authorities"
+rule = "Who changes the rules, who attests persons, who sells Capita and who grants credit lines: on the test chain one key (root)."
+status = "default"
+source = "E1, F3, C1"
+code = ["runtime/src/configs.rs"]
+
+[[register]]
+id = "experiment"
+rule = "Capita is presented as an experiment on the income effect, not as a parallel currency."
+status = "decided"
+source = "diary 1"
+planned = "texts of website and app"
+
+[[register]]
+id = "guide-value"
+rule = "1 Capita is about 1 euro or dollar – an orientation for prices, no promise."
+status = "decided"
+source = "diary 2"
+planned = "texts of website and app"
+
+[[register]]
+id = "sponsoring"
+rule = "Donors pay verifications, one per person. Sponsors are named; a target group only by provable, openly stated criteria."
+status = "decided"
+source = "diary 6"
+planned = "identity service (M3b), app (M5)"
+
+[[register]]
+id = "digital-goods-first"
+rule = "Step 1 of the market: only digital goods and services are sold for Capita."
+status = "decided"
+source = "diary 7"
+planned = "market (M5)"
+
+[[register]]
+id = "residence-proof"
+rule = "Residence is proven by a coded letter to the address, repeated every year."
+status = "decided"
+source = "diary 8"
+planned = "identity service (M3b)"
+
+[[register]]
+id = "banned-goods"
+rule = "Banned is what the law of the region or country bans."
+status = "decided"
+source = "diary 13"
+planned = "market (M5)"

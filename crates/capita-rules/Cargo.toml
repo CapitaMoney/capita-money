@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-rules"
+description = "The rule sets of Capita Money, compiled from the rules files of this repository: constants and parameters every host is built with."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Forwards `std` to the core. The crate itself never uses the standard
+# library.
+std = ["capita-core/std"]
+
+[dependencies]
+capita-core = { workspace = true }
+
+[build-dependencies]
+capita-rulefile = { workspace = true }

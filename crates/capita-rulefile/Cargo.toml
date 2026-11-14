@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-rulefile"
+description = "Reads and checks a rules file of Capita Money: every rule value in one file written for people."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+capita-core = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+toml = { version = "1.2", default-features = false, features = ["parse", "serde"] }

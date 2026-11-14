@@ -17,7 +17,9 @@
 
 use crate::{
     configs::MembershipPeriod,
-    genesis_config_presets::{self, dev_issuer, CREATOR_IDTY, DEV_ISSUER_KEY, DEV_ISSUER_SEED},
+    genesis_config_presets::{
+        self, dev_issuer, test_issuer, CREATOR_IDTY, DEV_ISSUER_KEY, DEV_ISSUER_SEED,
+    },
     identity::{creator, derived_name, CREATOR_NAME},
     nonce, AccountId, BlockNumber, Capita, Credential, Executive, Header, Identity, Membership,
     Nonce, Runtime, RuntimeCall, RuntimeGenesisConfig, RuntimeOrigin, Signature, SignedPayload,
@@ -252,9 +254,21 @@ fn charlie_is_verified() {
 
 #[test]
 fn every_preset_builds_a_consistent_state() {
-    for (preset, authors) in [
-        (sp_genesis_builder::DEV_RUNTIME_PRESET, 1),
-        (sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET, 2),
+    // each preset starts with a rule set of the rules files
+    use capita_rules::{alpha, dev_fast};
+    for (preset, authors, rules, top_level) in [
+        (
+            sp_genesis_builder::DEV_RUNTIME_PRESET,
+            1,
+            dev_fast::params(),
+            dev_fast::TOP_LEVEL,
+        ),
+        (
+            sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET,
+            2,
+            alpha::params(),
+            alpha::TOP_LEVEL,
+        ),
     ] {
         new_ext(preset).execute_with(|| {
             assert_eq!(
@@ -263,7 +277,9 @@ fn every_preset_builds_a_consistent_state() {
             );
             assert_eq!(pallet_aura::Authorities::<Runtime>::get().len(), authors);
             // the rules are in force from the first block
-            assert_eq!(pallet_capita::ParamsHistory::<Runtime>::get().len(), 1);
+            let history = pallet_capita::ParamsHistory::<Runtime>::get();
+            assert_eq!(history.len(), 1);
+            assert_eq!(history.first(), rules.as_ref());
             // one identity: the creator of identities, a member for good
             assert_eq!(Identity::identities_count(), 1);
             assert_eq!(Identity::identity_index_of(creator()), Some(CREATOR_IDTY));
@@ -279,7 +295,7 @@ fn every_preset_builds_a_consistent_state() {
             // one identity service: that of the test chain
             assert_eq!(
                 pallet_capita_credential::Issuers::<Runtime>::get(IssuerId(0)),
-                Some(dev_issuer())
+                Some(test_issuer(top_level))
             );
             assert_eq!(pallet_capita_credential::NextIssuer::<Runtime>::get(), 1);
             check();
@@ -329,6 +345,61 @@ fn a_new_key_sends_transactions_without_fee_and_each_runs_once() {
                 InvalidTransaction::BadProof
             ))
         );
+        end_block();
+    });
+}
+
+/// The rules themselves (`rules/alpha.toml`, preset `local_testnet`), with
+/// no number expected: whatever the file says, a verified person on the
+/// highest step is issued what that step gives over the time a claim
+/// reaches back, and an account without verification what the first step
+/// gives.
+#[test]
+fn the_alpha_rules_run_on_the_chain_whatever_their_numbers() {
+    let rules = capita_rules::alpha::params().expect("checked by the build");
+    let (first, top) = (rules.ladder[0], rules.ladder[rules.ladder.len() - 1]);
+    let elapsed = rules.caps.period.secs();
+    let counted = capita_core::types::Duration::from_secs(elapsed.min(rules.claim_window.secs()));
+    let due = |step: &capita_core::params::LadderStep| {
+        let cents = step.rate.accrued(counted).unwrap().cents();
+        i64::try_from(cents.min(rules.caps.global_cap.cents())).unwrap()
+    };
+    let grant = i64::try_from(rules.start_grant.cents()).unwrap();
+
+    new_ext(sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET).execute_with(|| {
+        start_block(1, 0);
+        assert_ok!(run(Bob, 0, pallet_capita::Call::open {}));
+        sudo(
+            0,
+            pallet_capita::Call::set_service_account {
+                account: Bob.to_account_id(),
+            },
+        );
+        // Charlie: verified at the highest level of the ladder, on its top step
+        assert_ok!(run(Charlie, 0, pallet_capita::Call::open {}));
+        assert_ok!(run(Charlie, 1, pallet_capita::Call::pay_verification {}));
+        let level = capita_rules::alpha::TOP_LEVEL.0;
+        assert_ok!(run(
+            Charlie,
+            2,
+            present(claim(Charlie, level, 1, 730), None)
+        ));
+        assert_ok!(run(
+            Charlie,
+            3,
+            pallet_capita::Call::set_tier { tier: top.id }
+        ));
+        // Dave: an account and nothing else
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        assert_eq!((balance(Charlie), balance(Dave)), (0, grant));
+        end_block();
+
+        // one cap period later
+        start_block(2, elapsed);
+        assert_ok!(run(Charlie, 4, pallet_capita::Call::claim {}));
+        assert_ok!(run(Dave, 1, pallet_capita::Call::claim {}));
+        assert_eq!(balance(Charlie), due(&top));
+        assert_eq!(balance(Dave), grant + due(&first));
         end_block();
     });
 }

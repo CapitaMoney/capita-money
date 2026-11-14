@@ -24,8 +24,11 @@ jobs:
       - run: cargo clippy -p capita-core -p capita-credential --all-targets -- -D warnings
       - run: cargo test -p capita-core -p capita-credential --all-features
       - run: cargo test -p capita-core -p capita-credential
+      # the rules files: read, checked, compiled, run through the core
+      - run: cargo clippy -p capita-rulefile -p capita-rules --all-targets --all-features -- -D warnings
+      - run: cargo test -p capita-rulefile -p capita-rules --all-features
       # no_std: build for a target without an operating system
-      - run: cargo build -p capita-core -p capita-credential --target thumbv7em-none-eabi
+      - run: cargo build -p capita-core -p capita-credential -p capita-rules --target thumbv7em-none-eabi
       - run: cargo build -p capita-core --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-credential --features serde,scale --target thumbv7em-none-eabi
   pallet:

@@ -15,7 +15,8 @@
 
 //! Configuration of every pallet of the runtime.
 //!
-//! Numbers here are those of a test chain, not decisions about Capita Money.
+//! Numbers here are technical ones of a test chain. Rule values come from
+//! the rules files, through `capita-rules` (`docs/adr/0012-rules-file.md`).
 
 use frame_support::{
     derive_impl,
@@ -36,6 +37,7 @@ use sp_runtime::{traits::Verify, Perbill};
 use sp_version::RuntimeVersion;
 
 use super::{
+    blocks,
     identity::{CapitaRules, CredentialLink, DuniterIdentities},
     AccountId, Aura, Block, BlockNumber, Hash, Identity, IdtyIndex, Nonce, PalletInfo, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeOrigin, RuntimeTask, Signature, Timestamp, DAYS,
@@ -133,8 +135,8 @@ impl pallet_capita_credential::Config for Runtime {
     type Rules = CapitaRules;
 }
 
-// Periods of Duniter's pallets, in blocks. Examples, like every number of
-// the test chain.
+// Periods of Duniter's pallets, in blocks. The one that is a rule comes from
+// the rules file; the others are never reached on this chain.
 parameter_types! {
     /// Not reached: the credential pallet creates and confirms an identity
     /// in one step.
@@ -153,8 +155,10 @@ parameter_types! {
     /// as many as claims are accepted.
     pub const IdtyCreationPeriod: BlockNumber = 0;
     /// How long a membership lasts before the holder renews it with the
-    /// claim held (`credential.renew`) or presents a new one.
-    pub const MembershipPeriod: BlockNumber = 365 * DAYS;
+    /// claim held (`credential.renew`) or presents a new one. A rule
+    /// (`identity.membership_period` of `rules/alpha.toml`), in blocks.
+    pub const MembershipPeriod: BlockNumber =
+        blocks(capita_rules::alpha::MEMBERSHIP_PERIOD.secs());
     /// Not used: Duniter's web of trust reads it, the pallets here do not.
     pub const MembershipRenewalPeriod: BlockNumber = 60 * DAYS;
 }
