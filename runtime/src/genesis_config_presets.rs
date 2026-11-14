@@ -29,8 +29,10 @@ use crate::{
 use alloc::{collections::BTreeMap, vec, vec::Vec};
 use capita_core::attributes::VerificationLevel;
 use capita_core::params::Params;
+use capita_core::types::Amount;
 use capita_credential::did::did_key;
 use capita_credential::types::{Issuer, IssuerStatus, PublicKey, Realm};
+use capita_door::types::{Door, DoorStatus};
 use frame_support::build_struct_json_patch;
 use pallet_identity::{GenesisIdty, IdtyName, IdtyStatus, IdtyValue};
 use serde_json::Value;
@@ -50,6 +52,31 @@ pub const DEV_ISSUER_KEY: PublicKey = PublicKey::Ed25519([
     0x9e, 0x59, 0x68, 0xb2, 0xe9, 0x5b, 0xa9, 0xb2, 0xd2, 0xef, 0x05, 0x4e, 0x05, 0x61, 0xe6, 0xc5,
     0x6e, 0x8b, 0x00, 0x3b, 0x8a, 0xbd, 0xf3, 0x5b, 0xb7, 0xeb, 0x25, 0x8e, 0x2f, 0xd7, 0xb3, 0xe4,
 ]);
+
+/// Secret key (Ed25519 seed) of the euro door of the test chains. Public on
+/// purpose, like [`DEV_ISSUER_SEED`]: anybody can sign vouchers for a test
+/// chain; a door service with this key mints demo money only there.
+pub const DEV_DOOR_SEED: [u8; 32] = *b"capita-money development door!!!";
+
+/// The public key that belongs to [`DEV_DOOR_SEED`].
+pub const DEV_DOOR_KEY: [u8; 32] = [
+    0xfc, 0x27, 0xbb, 0xec, 0xe3, 0xc0, 0xfc, 0xb0, 0x3d, 0xcf, 0x39, 0xa4, 0x0a, 0x17, 0x00, 0x18,
+    0xfa, 0x85, 0x49, 0x84, 0xcc, 0x61, 0x99, 0x63, 0x65, 0xd7, 0x46, 0xc7, 0x79, 0x2d, 0x16, 0xae,
+];
+
+/// Door 0 of a test chain: the published key, and at most what the largest
+/// payment the rules allow buys (`door.max_payment_eur` × `door.capita_per_euro`).
+pub fn test_door(max_payment_eur_cents: u64, capita_cents_per_euro: u64) -> Door {
+    let max = u128::from(max_payment_eur_cents)
+        .saturating_mul(u128::from(capita_cents_per_euro))
+        .checked_div(100)
+        .unwrap_or(0);
+    Door {
+        key: DEV_DOOR_KEY,
+        max_amount: Amount::from_cents(u64::try_from(max).unwrap_or(u64::MAX)),
+        status: DoorStatus::Active,
+    }
+}
 
 /// Issuer 0 of a test chain: named by its key (`did:key`), trusted up to
 /// `top_level` – the highest level the ladder of the chain asks for – and
@@ -87,6 +114,7 @@ fn testnet_genesis(
     root: AccountId,
     params: Option<Params>,
     top_level: VerificationLevel,
+    door: Door,
 ) -> Value {
     let identities = vec![GenesisIdty::<Runtime> {
         index: CREATOR_IDTY,
@@ -126,6 +154,7 @@ fn testnet_genesis(
         credential: pallet_capita_credential::GenesisConfig {
             issuers: vec![test_issuer(top_level)],
         },
+        door: pallet_capita_door::GenesisConfig { doors: vec![door] },
     })
 }
 
@@ -140,6 +169,10 @@ pub fn development_config_genesis() -> Value {
         Sr25519Keyring::Alice.to_account_id(),
         capita_rules::dev_fast::params(),
         capita_rules::dev_fast::TOP_LEVEL,
+        test_door(
+            capita_rules::dev_fast::DOOR_MAX_PAYMENT_EUR_CENTS,
+            capita_rules::dev_fast::DOOR_CAPITA_CENTS_PER_EURO,
+        ),
     )
 }
 
@@ -160,6 +193,10 @@ pub fn local_config_genesis() -> Value {
         Sr25519Keyring::Alice.to_account_id(),
         capita_rules::alpha::params(),
         capita_rules::alpha::TOP_LEVEL,
+        test_door(
+            capita_rules::alpha::DOOR_MAX_PAYMENT_EUR_CENTS,
+            capita_rules::alpha::DOOR_CAPITA_CENTS_PER_EURO,
+        ),
     )
 }
 

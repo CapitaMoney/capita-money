@@ -8,8 +8,10 @@ Rules still open are marked `Offene Frage:`; they are parameters or hooks, never
 All monetary rules live in one pure library, `capita-core`. It computes; it does not store, send or read a clock.
 Everything else is an adapter behind a port. Two hosts run the same core:
 
-- **Service host** (first): a small service next to a GNU Taler bank (libeufin-bank).
-- **Chain host**: a Substrate pallet on an own chain with Duniter pallets. A local test chain exists (ADR 0010).
+- **Chain host** (the ledger, ADR 0016): a Substrate pallet on an own chain with Duniter pallets. A local test chain exists (ADR 0010).
+- **Service host** (kept possible, not used): the same core next to a GNU Taler bank (ADR 0004, superseded).
+
+GNU Taler stays as the **euro door** only (ADR 0016, ADR 0018).
 
 Same rules, same tests, either host. Swapping ledger or identity provider touches one adapter, never the rules.
 
@@ -38,11 +40,11 @@ flowchart TB
 | Part | Role | Repository path |
 |---|---|---|
 | `capita-core` | rules, data model, ports | `crates/capita-core` |
-| service host + Taler adapters | claim/lend API, outbox, libeufin client | M4 |
 | `pallet-capita` | same core inside a runtime (ADR 0009) | `pallets/capita` |
 | runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
 | `capita-credential` | claims of identity services: format, signed bytes, check (ADR 0011) | `crates/capita-credential` |
 | `pallet-capita-credential` | list of trusted issuers and their claims on chain; steers Duniter's identity and membership | `pallets/credential`, wiring `runtime/src/identity.rs` |
+| `capita-door`, `pallet-capita-door`, door service | euro door: GNU Taler payment in, voucher (chain mints once) or tickets (identity service accepts once) out (ADR 0018) | `crates/capita-door`, `pallets/door`, `services/door` |
 | `rules/*.toml`, `capita-rulefile`, `capita-rules` | every rule value in one file; read, checked and compiled for the hosts (ADR 0012) | `rules`, `crates/capita-rulefile`, `crates/capita-rules` |
 | identity services (issuers) | verify people, sign claims | after M3 |
 | app, website | user interface | M5 |

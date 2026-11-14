@@ -38,7 +38,7 @@ use sp_version::RuntimeVersion;
 
 use super::{
     blocks,
-    identity::{CapitaRules, CredentialLink, DuniterIdentities},
+    identity::{CapitaPurchases, CapitaRules, CredentialLink, DuniterIdentities},
     AccountId, Aura, Block, BlockNumber, Hash, Identity, IdtyIndex, Nonce, PalletInfo, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeOrigin, RuntimeTask, Signature, Timestamp, DAYS,
     SLOT_DURATION, VERSION,
@@ -134,6 +134,19 @@ impl pallet_capita_credential::Config for Runtime {
     type Memberships = DuniterIdentities;
     type Rules = CapitaRules;
     type MoveDelay = KeyMoveDelay;
+}
+
+/// The euro door: the list of doors kept by root (who may sell Capita is not
+/// decided: E1, P04.3). A voucher mints through `pallet-capita`.
+impl pallet_capita_door::Config for Runtime {
+    type RegistryOrigin = EnsureRoot<AccountId>;
+    type Rules = CapitaPurchases;
+    type UnsignedPriority = DoorPriority;
+}
+
+parameter_types! {
+    /// Priority of a redeeming transaction (no signer, no fee) in the pool.
+    pub const DoorPriority: u64 = 1 << 20;
 }
 
 parameter_types! {

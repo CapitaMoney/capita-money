@@ -13,9 +13,11 @@ publish = false
 [dependencies]
 capita-core = { workspace = true }
 capita-credential = { workspace = true }
+capita-door = { workspace = true, features = ["scale", "serde"] }
 capita-rules = { workspace = true }
 pallet-capita = { workspace = true }
 pallet-capita-credential = { workspace = true }
+pallet-capita-door = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive", "serde"] }
 serde_json = { workspace = true, features = ["alloc"] }
@@ -60,6 +62,7 @@ default = ["std"]
 std = [
     "capita-core/std",
     "capita-credential/std",
+    "capita-door/std",
     "capita-rules/std",
     "codec/std",
     "duniter-primitives/std",
@@ -70,6 +73,7 @@ std = [
     "frame-try-runtime?/std",
     "pallet-aura/std",
     "pallet-capita-credential/std",
+    "pallet-capita-door/std",
     "pallet-capita/std",
     "pallet-grandpa/std",
     "pallet-identity/std",
@@ -101,6 +105,7 @@ try-runtime = [
     "frame-try-runtime/try-runtime",
     "pallet-aura/try-runtime",
     "pallet-capita-credential/try-runtime",
+    "pallet-capita-door/try-runtime",
     "pallet-capita/try-runtime",
     "pallet-grandpa/try-runtime",
     "pallet-identity/try-runtime",

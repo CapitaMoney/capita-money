@@ -442,7 +442,10 @@ fn rules_from_the_rules_file_decide_basis_and_age() {
 fn a_ticket_pays_one_verification() {
     let tickets: BTreeSet<String> = ["T-1", "T-2"].into_iter().map(String::from).collect();
     let mut service = service(Settings {
-        payment: Payment::Tickets(tickets),
+        payment: Payment::Tickets {
+            codes: tickets,
+            doors: vec![],
+        },
         ..settings(Basis::NameBirthdate)
     });
     let with = |account, ticket: Option<&str>| Request {
@@ -461,6 +464,54 @@ fn a_ticket_pays_one_verification() {
         Err(Refusal::NotPaid)
     );
     assert!(service.issue(with(1, Some("T-2")), NOW + YEAR).is_ok());
+}
+
+#[test]
+fn a_ticket_of_a_euro_door_pays_one_verification() {
+    use capita_door::encoding::{ticket_bytes, ticket_text};
+    use capita_door::types::{Audience as Host, DoorId, DoorSignature, Ticket, TicketSerial};
+    use ed25519_dalek::Signer as _;
+    let door = ed25519_dalek::SigningKey::from_bytes(b"capita-money development door!!!");
+    let ticket = |serial: u8, key: &ed25519_dalek::SigningKey, host: [u8; 32]| {
+        let t = Ticket {
+            door: DoorId(0),
+            serial: TicketSerial([serial; 16]),
+        };
+        let s = DoorSignature(key.sign(&ticket_bytes(&Host(host), &t)).to_bytes());
+        ticket_text(&t, &s)
+    };
+    let mut service = service(Settings {
+        payment: Payment::Tickets {
+            codes: BTreeSet::new(),
+            doors: vec![(DoorId(0), door.verifying_key().to_bytes())],
+        },
+        ..settings(Basis::NameBirthdate)
+    });
+    let with = |account, ticket: &str| Request {
+        ticket: Some(ticket.to_owned()),
+        ..request(account, person("Kim", "Min", "1980-01-01"))
+    };
+    let good = ticket(1, &door, AUDIENCE.0);
+    // for another chain, or signed by another key: no payment
+    let other_chain = ticket(2, &door, [8; 32]);
+    assert_eq!(
+        service.issue(with(1, &other_chain), NOW),
+        Err(Refusal::NotPaid)
+    );
+    let stranger = ed25519_dalek::SigningKey::from_bytes(&[3; 32]);
+    assert_eq!(
+        service.issue(with(1, &ticket(3, &stranger, AUDIENCE.0)), NOW),
+        Err(Refusal::NotPaid)
+    );
+    // once, in whatever letters
+    assert!(service.issue(with(1, &good.to_uppercase()), NOW).is_ok());
+    assert_eq!(
+        service.issue(with(1, &good), NOW + YEAR),
+        Err(Refusal::NotPaid)
+    );
+    assert!(service
+        .issue(with(1, &ticket(4, &door, AUDIENCE.0)), NOW + YEAR)
+        .is_ok());
 }
 
 #[test]

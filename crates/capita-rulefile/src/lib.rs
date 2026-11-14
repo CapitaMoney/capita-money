@@ -281,6 +281,17 @@ pub struct Verification {
     pub price_eur: Rule<Money>,
 }
 
+/// The euro door: buying Capita with euro (diary 3), read by door services
+/// (`services/door`) and by the genesis of a chain, not by the core.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DoorRules {
+    /// Capita one euro buys.
+    pub capita_per_euro: Rule<Money>,
+    /// Most euro one payment may bring in.
+    pub max_payment_eur: Rule<Money>,
+}
+
 /// A rule that is behaviour, with the place it lives in.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -323,6 +334,8 @@ pub struct RuleSet {
     pub identity: Identity,
     /// The verification of a person.
     pub verification: Verification,
+    /// Buying Capita with euro.
+    pub door: DoorRules,
     /// Rules that are behaviour and live in code.
     #[serde(default)]
     pub register: Vec<RegisterEntry>,
@@ -461,6 +474,15 @@ impl RuleSet {
             return Err(Error::at(
                 "issuance.ladder",
                 "the first step must have min_level 0: a new account stands on it",
+            ));
+        }
+        if self.door.capita_per_euro.value.0.is_zero() {
+            return Err(Error::at("door.capita_per_euro", "must be above zero"));
+        }
+        if self.door.max_payment_eur.value.0.is_zero() {
+            return Err(Error::at(
+                "door.max_payment_eur",
+                "must be above zero; to close the door, run no door service",
             ));
         }
         if self.identity.membership_period.value.0.is_zero() {
@@ -608,6 +630,10 @@ impl RuleSet {
             price,
             price.value.to_string(),
         ));
+        let rate = &self.door.capita_per_euro;
+        lines.push(value("door.capita_per_euro", rate, rate.value.to_string()));
+        let max = &self.door.max_payment_eur;
+        lines.push(value("door.max_payment_eur", max, max.value.to_string()));
         lines.extend(self.register.iter().map(|e| Line {
             path: format!("register {}", e.id),
             value: e.rule.clone(),

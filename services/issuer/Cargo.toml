@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 capita-core = { workspace = true, features = ["std"] }
 capita-credential = { workspace = true, features = ["std"] }
+capita-door = { workspace = true, features = ["std"] }
 capita-person-key = { workspace = true, features = ["local"] }
 capita-rulefile = { workspace = true }
 ed25519-dalek = "2.2.0"

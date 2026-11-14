@@ -27,6 +27,8 @@
 //! - **time**: the block timestamp, never a device clock;
 //! - **authority**: who may change rules, attest persons, grant credit
 //!   lines and mint purchased money – each an origin chosen by the runtime;
+//!   bought money also arrives through the euro door (`pallet-capita-door`,
+//!   [`Pallet::do_purchase`]);
 //! - **consent**: a loan needs an offer of the lender and the acceptance of
 //!   the borrower.
 //!
@@ -60,7 +62,7 @@ pub mod pallet {
     use capita_core::errors::{ArithmeticError, CoreError};
     use capita_core::params::{in_force_at, Params};
     use capita_core::plan::Plan;
-    use capita_core::ports::{Event as RuleEvent, LedgerOp, TierGate};
+    use capita_core::ports::{Event as RuleEvent, LedgerOp, MintKind, TierGate};
     use capita_core::totals::Totals;
     use capita_core::types::{AccountId as CoreId, Amount, Balance, PersonId, TierId, Timestamp};
     use capita_core::{demurrage, issuance, lifecycle, loans, recovery};
@@ -140,6 +142,15 @@ pub mod pallet {
     /// grant can be paid to.
     #[pallet::storage]
     pub type ServiceAccount<T: Config> = StorageValue<_, CoreId>;
+
+    /// Capita bought with ordinary money that reached each account, in
+    /// total: a record, not a second kind of money. Spent or not, bought
+    /// Capita is Capita like any other; the record keeps open a later rule
+    /// on how sellers could redeem bought Capita (rules diary, 2discuss D).
+    /// Never shown to anybody (diary 16). Follows an account that moves to
+    /// a new key.
+    #[pallet::storage]
+    pub type Backed<T: Config> = StorageMap<_, Blake2_128Concat, CoreId, Amount, ValueQuery>;
 
     /// Loans offered and not yet accepted: lender, borrower, amount.
     #[pallet::storage]
@@ -511,13 +522,7 @@ pub mod pallet {
             amount: Amount,
         ) -> DispatchResult {
             T::PurchaseOrigin::ensure_origin(origin)?;
-            let account = Self::id(account);
-            let (now, list) = Self::context()?;
-            let params = in_force_at(&list, now).map_err(Self::rule)?;
-            Self::settle(&account, &list, now)?;
-            let state = Self::account(&account)?;
-            let plan = issuance::plan_purchase(&state, params, amount, now);
-            Self::apply(plan.map_err(Self::rule)?)
+            Self::do_purchase(Self::id(account), amount)
         }
 
         /// Record what the identity provider states about the holder of an
@@ -593,6 +598,26 @@ pub mod pallet {
             Timestamp::from_secs(T::Time::now().as_secs())
         }
 
+        /// Mints money bought with ordinary money, after the payment has
+        /// been confirmed: for the euro door of the same runtime, which
+        /// checks the voucher of a door service; the call `purchase` does
+        /// the same for an origin.
+        pub fn do_purchase(account: CoreId, amount: Amount) -> DispatchResult {
+            let (now, list) = Self::context()?;
+            let params = in_force_at(&list, now).map_err(Self::rule)?;
+            Self::settle(&account, &list, now)?;
+            let state = Self::account(&account)?;
+            let plan = issuance::plan_purchase(&state, params, amount, now);
+            Self::apply(plan.map_err(Self::rule)?)
+        }
+
+        /// Whether `account` can receive bought money now: opened and
+        /// active. Lets a transaction that would fail be refused before it
+        /// reaches a block.
+        pub fn can_buy(account: &CoreId) -> bool {
+            Accounts::<T>::get(account).is_some_and(|state| state.status == AccountStatus::Active)
+        }
+
         /// Records a statement of the identity provider. For identity
         /// pallets of the same runtime; the call `attest` does the same for
         /// an origin.
@@ -664,6 +689,13 @@ pub mod pallet {
             Accounts::<T>::insert(to, &plan.to);
             PersonAccount::<T>::insert(attestation.person, to);
             MovedTo::<T>::insert(from, to);
+            let backed = Backed::<T>::take(from);
+            if !backed.is_zero() {
+                let sum = Backed::<T>::get(to)
+                    .checked_add(backed)
+                    .map_err(|e| Self::rule(e.into()))?;
+                Backed::<T>::insert(to, sum);
+            }
             for event in plan.events {
                 Self::deposit_event(Event::Rule(event));
             }
@@ -739,8 +771,17 @@ pub mod pallet {
 
         fn apply_op(op: &LedgerOp) -> DispatchResult {
             match *op {
-                LedgerOp::Mint { to, amount, .. } => {
+                LedgerOp::Mint {
+                    to, amount, kind, ..
+                } => {
                     Self::credit(&to, amount)?;
+                    if kind == MintKind::Purchased {
+                        let to = Self::resolve(to);
+                        let sum = Backed::<T>::get(to)
+                            .checked_add(amount)
+                            .map_err(|e| Self::rule(e.into()))?;
+                        Backed::<T>::insert(to, sum);
+                    }
                     let supply = TotalSupply::<T>::get()
                         .checked_add(u128::from(amount.cents()))
                         .ok_or(Error::<T>::Overflow)?;
@@ -831,6 +872,18 @@ pub mod pallet {
                         return Err("person not registered for the account");
                     }
                 }
+            }
+            let mut backed: u128 = 0;
+            for (id, amount) in Backed::<T>::iter() {
+                if !Accounts::<T>::contains_key(id) || MovedTo::<T>::contains_key(id) {
+                    return Err("bought money recorded for an account that is gone");
+                }
+                backed = backed
+                    .checked_add(u128::from(amount.cents()))
+                    .ok_or("overflow")?;
+            }
+            if backed != totals.purchased {
+                return Err("bought money recorded per account differs from the public totals");
             }
             if totals.outstanding() != Ok(debt) {
                 return Err("recorded debt differs from the public totals");

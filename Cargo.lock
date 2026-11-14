@@ -990,12 +990,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "capita-door"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "ed25519-dalek",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+]
+
+[[package]]
+name = "capita-door-service"
+version = "0.1.0"
+dependencies = [
+ "blake2 0.10.6",
+ "capita-core",
+ "capita-door",
+ "capita-rulefile",
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tiny_http",
+ "toml 1.2.1+spec-1.1.0",
+ "ureq",
+]
+
+[[package]]
 name = "capita-issuer"
 version = "0.1.0"
 dependencies = [
  "blake2 0.10.6",
  "capita-core",
  "capita-credential",
+ "capita-door",
  "capita-person-key",
  "capita-rulefile",
  "ed25519-dalek",
@@ -1072,6 +1101,7 @@ version = "0.1.0"
 dependencies = [
  "capita-core",
  "capita-credential",
+ "capita-door",
  "capita-rules",
  "duniter-primitives",
  "frame-executive",
@@ -1082,6 +1112,7 @@ dependencies = [
  "pallet-aura",
  "pallet-capita",
  "pallet-capita-credential",
+ "pallet-capita-door",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-membership",
@@ -5500,6 +5531,21 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-capita-door"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "capita-door",
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

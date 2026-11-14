@@ -199,6 +199,20 @@ status = "decided"
 source = "diary 6"
 note = "Euro price of one verification: 1 € = 1 verification. Read by identity services, not by the ledger."
 
+# -------------------------------------------------------------------- door
+
+[door.capita_per_euro]
+value = "1.00"
+status = "default"
+source = "diary 2, 3"
+note = "Capita one euro buys at the euro door. 1.00: one Capita for one euro, the guide value."
+
+[door.max_payment_eur]
+value = "100.00"
+status = "default"
+source = "owner 2026-11-14 (Claude's default), ADR 0018"
+note = "Most euro one payment at the euro door may bring in. A brake, not a judgement: buying again is possible."
+
 # ---------------------------------------------------------------- register
 #
 # Rules that are behaviour, not numbers. They live in code; this list says
@@ -210,7 +224,28 @@ id = "one-way"
 rule = "Capita can be bought with ordinary money. There is no way back: no function sells Capita."
 status = "decided"
 source = "diary 3"
-code = ["crates/capita-core/src/issuance.rs"]
+code = ["crates/capita-core/src/issuance.rs", "pallets/door/src/lib.rs", "services/door/src/door.rs"]
+
+[[register]]
+id = "euro-door"
+rule = "Capita is bought at a euro door: the payment service confirms the payment, the door signs a voucher for the receiving account, the chain mints it once. A payment given back, or not of the amount ordered, buys nothing; the door asks for no refund window."
+status = "default"
+source = "diary 3, 2discuss N, ADR 0018"
+code = ["crates/capita-door/src/check.rs", "pallets/door/src/lib.rs", "services/door/src/door.rs", "services/door/src/merchant.rs"]
+
+[[register]]
+id = "verification-ticket"
+rule = "A verification can be paid in euro at the door: one ticket per verification, accepted once by an identity service. A sponsor buys tickets and passes them on."
+status = "decided"
+source = "diary 6, owner 2026-11-14"
+code = ["services/door/src/door.rs", "services/issuer/src/issue.rs"]
+
+[[register]]
+id = "backed-record"
+rule = "Bought Capita is Capita like any other. How much bought money reached an account is recorded, out of sight, for a later rule on sellers (2discuss D)."
+status = "default"
+source = "owner 2026-11-14, 2discuss D"
+code = ["pallets/capita/src/lib.rs"]
 
 [[register]]
 id = "no-debt"
@@ -347,7 +382,7 @@ code = ["crates/capita-core/src/issuance.rs"]
 
 [[register]]
 id = "authorities"
-rule = "Who changes the rules, who attests persons, who sells Capita and who grants credit lines: on the test chain one key (root)."
+rule = "Who changes the rules, who attests persons, who sells Capita (the list of euro doors) and who grants credit lines: on the test chain one key (root)."
 status = "default"
 source = "E1, F3, C1"
 code = ["runtime/src/configs.rs"]

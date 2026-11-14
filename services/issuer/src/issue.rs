@@ -35,6 +35,9 @@ use capita_core::attributes::VerificationLevel;
 use capita_core::types::{AccountId, Timestamp};
 use capita_credential::encoding::{claim_bytes, revocation_bytes};
 use capita_credential::types::{Audience, Claim, IssuerId, Revocation, Serial, SubjectRef};
+use capita_door::check::{check_ticket, Verify};
+use capita_door::encoding::canonical_ticket;
+use capita_door::types::{Audience as DoorAudience, DoorId};
 use capita_person_key::canonical::{self, Basis, DataError, Date, Name};
 use capita_person_key::{namesake_tag, person_key, KeyError, KeyService};
 use capita_rulefile::RuleSet;
@@ -42,6 +45,18 @@ use ed25519_dalek::{Signer, SigningKey};
 
 use crate::store::{Record, Store};
 use crate::{hex, unhex_n};
+
+/// The signature check for tickets of a euro door.
+struct Dalek;
+
+impl Verify for Dalek {
+    fn ed25519(key: &[u8; 32], message: &[u8], signature: &[u8; 64]) -> bool {
+        ed25519_dalek::VerifyingKey::from_bytes(key).is_ok_and(|key| {
+            key.verify_strict(message, &ed25519_dalek::Signature::from_bytes(signature))
+                .is_ok()
+        })
+    }
+}
 
 /// Most people with the same canonical data the service tells apart.
 pub const MAX_NAMESAKES: u8 = 4;
@@ -186,8 +201,15 @@ impl Rules {
 pub enum Payment {
     /// Not checked by the service (test chains; or checked elsewhere).
     Off,
-    /// By a ticket a sponsor paid for: each of these codes, once.
-    Tickets(BTreeSet<String>),
+    /// By a ticket a sponsor paid for, each once: one of `codes`, or a
+    /// ticket signed by one of `doors` – number and public key of a euro
+    /// door (`capita-door`), whose payment bought it.
+    Tickets {
+        /// Codes handed out by hand.
+        codes: BTreeSet<String>,
+        /// Doors whose tickets count.
+        doors: Vec<(DoorId, [u8; 32])>,
+    },
 }
 
 /// What the service is set up with.
@@ -427,11 +449,20 @@ impl<K: KeyService, S: Store> Service<K, S> {
         };
         let ticket = match &self.settings.payment {
             Payment::Off => None,
-            Payment::Tickets(valid) => Some(
-                ticket
-                    .filter(|t| valid.contains(t) && !self.store.ticket_used(t))
-                    .ok_or(Refusal::NotPaid)?,
-            ),
+            Payment::Tickets { codes, doors } => {
+                let ticket = ticket.ok_or(Refusal::NotPaid)?;
+                let ticket = if codes.contains(&ticket) {
+                    ticket
+                } else {
+                    let door = DoorAudience(self.settings.audience.0);
+                    check_ticket::<Dalek>(&door, doors, &ticket).map_err(|_| Refusal::NotPaid)?;
+                    canonical_ticket(&ticket).ok_or(Refusal::NotPaid)?
+                };
+                if self.store.ticket_used(&ticket) {
+                    return Err(Refusal::NotPaid);
+                }
+                Some(ticket)
+            }
         };
         let mut serial = [0u8; 16];
         getrandom::fill(&mut serial).map_err(|_| Refusal::System("no random numbers"))?;
