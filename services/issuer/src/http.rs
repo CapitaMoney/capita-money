@@ -458,6 +458,19 @@ pub fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+/// Headers that let the app call the service from its own origin.
+fn cors() -> Vec<tiny_http::Header> {
+    [
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+        ("Access-Control-Allow-Headers", "content-type"),
+        ("Access-Control-Max-Age", "600"),
+    ]
+    .iter()
+    .filter_map(|(k, v)| tiny_http::Header::from_bytes(k.as_bytes(), v.as_bytes()).ok())
+    .collect()
+}
+
 /// Listens on `listen` and answers requests until the process ends.
 pub fn serve<K, S>(app: &App<K, S>, listen: &str) -> Result<(), String>
 where
@@ -480,6 +493,17 @@ where
                         .as_reader()
                         .take(limit.saturating_add(1))
                         .read_to_end(&mut body);
+                    // The app runs on another origin (app.capitamoney.com, the
+                    // Android shell): it may call the service; no cookies,
+                    // no credentials, so any origin.
+                    if request.method() == &tiny_http::Method::Options {
+                        let mut response = tiny_http::Response::empty(204);
+                        for header in cors() {
+                            response.add_header(header);
+                        }
+                        let _ = request.respond(response);
+                        continue;
+                    }
                     let (status, answer) = match read {
                         Ok(_) if body.len() as u64 > limit => {
                             refuse(413, "request", "request too long")
@@ -499,6 +523,9 @@ where
                         &b"Content-Type"[..],
                         &b"application/json; charset=utf-8"[..],
                     ) {
+                        response.add_header(header);
+                    }
+                    for header in cors() {
                         response.add_header(header);
                     }
                     let _ = request.respond(response);
