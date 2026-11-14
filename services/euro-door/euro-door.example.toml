@@ -1,0 +1,24 @@
+# capita-euro-door – example configuration (demo money).
+# Run: capita-euro-door euro-door.example.toml
+
+# Behind a web server that speaks TLS.
+listen = "127.0.0.1:8788"
+# The price of one ticket = the price of one verification (verification.price_eur).
+rules = "../../rules/alpha.toml"
+# What the door remembers: orders and tickets of paid orders. Keep it safe.
+store = "euro-door-store.jsonl"
+# The SAME file as `[payment] tickets_file` of the identity service.
+tickets_file = "tickets.txt"
+# Most tickets in one order (a sponsor paying many verifications).
+max_count = 100
+# summary = "Capita Money – verification tickets"
+# fulfillment_message = "Thank you. Your tickets are ready in the Capita app."
+
+[merchant]
+# Address of the merchant instance, ending in "/".
+# The public demo backend of GNU Taler; its token is "secret-token:sandbox" (docs.taler.net tutorial).
+url = "https://backend.demo.taler.net/instances/sandbox/"
+# File holding the access token ("secret-token:…").
+token_file = "merchant-token.txt"
+# EUR for real euros (needs a euro Taler exchange and a legal owner); KUDOS = demo money.
+currency = "KUDOS"

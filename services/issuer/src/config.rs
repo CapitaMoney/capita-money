@@ -116,6 +116,17 @@ pub struct PaymentConfig {
     pub tickets_file: Option<PathBuf>,
 }
 
+/// The ticket codes of a tickets file: one per line; empty lines and lines
+/// starting with `#` are skipped.
+#[must_use]
+pub fn ticket_codes(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_owned)
+        .collect()
+}
+
 fn read(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
 }
@@ -152,14 +163,7 @@ impl Config {
             .collect::<Result<Vec<_>, _>>()?;
         let payment = match &self.payment.tickets_file {
             None => Payment::Off,
-            Some(path) => Payment::Tickets(
-                read(path)?
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                    .map(str::to_owned)
-                    .collect::<BTreeSet<_>>(),
-            ),
+            Some(path) => Payment::Tickets(ticket_codes(&read(path)?)),
         };
         let settings = Settings {
             audience: Audience(audience),
