@@ -7,6 +7,7 @@ members = [
     "crates/capita-credential",
     "crates/capita-door",
     "crates/capita-keys",
+    "crates/capita-mrtd",
     "crates/capita-person-key",
     "crates/capita-rulefile",
     "crates/capita-rules",
@@ -28,6 +29,7 @@ default-members = [
     "crates/capita-credential",
     "crates/capita-door",
     "crates/capita-keys",
+    "crates/capita-mrtd",
     "crates/capita-person-key",
     "crates/capita-rulefile",
     "crates/capita-rules",
@@ -47,6 +49,7 @@ capita-core = { path = "crates/capita-core", default-features = false }
 capita-credential = { path = "crates/capita-credential", default-features = false }
 capita-door = { path = "crates/capita-door", default-features = false }
 capita-keys = { path = "crates/capita-keys", default-features = false }
+capita-mrtd = { path = "crates/capita-mrtd" }
 capita-person-key = { path = "crates/capita-person-key", default-features = false }
 capita-rulefile = { path = "crates/capita-rulefile" }
 capita-rules = { path = "crates/capita-rules", default-features = false }
