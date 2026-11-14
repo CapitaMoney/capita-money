@@ -64,6 +64,9 @@ jobs:
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
       - run: cargo clippy -p capita-issuer --all-targets -- -D warnings
       - run: cargo test -p capita-issuer
+      # The chip check: passive authentication with OpenSSL (libssl-dev).
+      - run: cargo clippy -p capita-mrtd --all-targets -- -D warnings
+      - run: cargo test -p capita-mrtd
   # The euro door: orders, vouchers, tickets, GNU Taler client, node client.
   door:
     runs-on: ubuntu-latest
