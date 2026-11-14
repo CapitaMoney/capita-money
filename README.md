@@ -6,7 +6,7 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Next: an identity service that issues such claims, and the connection to GNU Taler (M4). Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Lost key (M3b): a person verifies again and the account moves to the new key. Person key (M3b): `capita-person-key` – one identifier per person, without personal data. Identity service (M3b): `capita-issuer` checks a person and signs the claim. Next: a check of identity documents, and the connection to GNU Taler (M4). Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
@@ -15,6 +15,8 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`rules/`](rules) – the rules as values: `alpha.toml` (the rules), `dev-fast.toml` (fast numbers for developers)
 - [`crates/capita-core`](crates/capita-core) – the rules library (Rust, `no_std`)
 - [`crates/capita-credential`](crates/capita-credential) – claims of identity services: format, signed bytes, check (Rust, `no_std`)
+- [`crates/capita-person-key`](crates/capita-person-key) – the person key: canonical form of checked data, keyed function (Rust, `no_std`)
+- [`services/issuer`](services/issuer) – the identity service: checks a person, signs the claim, forgets the data
 - [`crates/capita-rulefile`](crates/capita-rulefile) – reads and checks a rules file
 - [`crates/capita-rules`](crates/capita-rules) – the rules files compiled: what every host is built with (Rust, `no_std`)
 - [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
@@ -25,7 +27,8 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 ## The core
 `capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
 - **Issuance:** every account accrues Capita by the second at the rate of its step on the incentive ladder, limited by a cap (global, later per country and seniority). Nothing is created until claimed; a claim reaches back a limited time.
-- **Lending:** interest-free credit lines and loans; a share of each claim repays the lender. The data model has no interest field.
+- **No debt:** the alpha rules grant no credit line and record no loan; no balance goes below zero. (The core knows interest-free credit lines and loans; the rules file switches them off. The data model has no interest field.)
+- **Lost key:** after a new verification an account moves to a new key – person, balance, what was accrued.
 - **One way in:** Capita can be bought with ordinary money; there is no function for the way back.
 - **Optional:** demurrage (a holding fee) and ripening (delayed availability) – both off by default.
 - **Transparency:** public totals are sums over the event record and must equal the ledger.
@@ -49,10 +52,20 @@ The tests use fixed numbers of their own, so a change of rules breaks none of th
 
 ## Identity
 Who is a person is not decided by the chain and not by a web of trust: identity services check people – an e-mail address, an identity document, a letter to the home address – and sign what they found. `capita-credential` defines that statement and checks it ([ADR 0011](docs/adr/0011-identity-by-credentials.md)):
-- **A claim** names an account, a person as a pseudonym, a verification level, optionally a country of residence, and how long it holds. No name, no document, no date of birth.
+- **A claim** names an account, a person as a person key, a verification level, optionally a country of residence, and how long it holds. No name, no document, no date of birth.
+- **The person key** is a keyed function of what a check established – by default name and date of birth – computed by the identity services ([ADR 0013](docs/adr/0013-person-key.md)). Without their secret nobody can tell whose key it is.
 - **A public list** holds the trusted services: a decentralised identifier (DID), keys, and what each may state at most.
 - **A claim counts** for one host, one account, once; a later one replaces it; its issuer can take it back.
-- **One person, one account:** the rules refuse a second account for the same pseudonym.
+- **One person, one account:** the rules refuse a second account for the same person key.
+- **A lost key:** the person verifies again with a new account and asks for the move (`credential.requestMove`). The move waits – seven days by default – and the old key can stop it; then the old account is closed and everything is on the new one.
+
+### The identity service
+[`services/issuer`](services/issuer) is the service that issues claims ([ADR 0014](docs/adr/0014-identity-service.md)). It takes its rules from the rules file and its checks are exchangeable: a test check for test chains, a code by letter through GNU Taler Challenger; a check of identity documents is not built yet. After signing it keeps the person key, the account, the day and the kind of proof – nothing else.
+```
+cargo test -p capita-issuer
+cargo run -p capita-issuer -- services/issuer/issuer.example.toml        # after filling in host and secrets
+cargo run -p capita-issuer -- services/issuer/issuer.example.toml key    # the key the chain lists for the service
+```
 
 On chain, `pallet-capita-credential` accepts a claim from the account it is made out to and makes that account a member identity (Duniter's pallets, unchanged) with the verification level stated.
 

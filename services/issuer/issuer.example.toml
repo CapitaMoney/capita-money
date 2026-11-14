@@ -1,0 +1,46 @@
+# Capita Money – identity service, example configuration
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Rule values (what a person key is made from, minimum age, how long a claim
+# holds) are not set here: the service reads them from the rules file.
+
+listen = "127.0.0.1:8787"
+rules = "rules/alpha.toml"
+# One line per claim issued: person key, account, day, kind of proof.
+store = "issuer-store.jsonl"
+
+[host]
+# Hash of the first block of the chain the claims are for.
+audience = "0x0000000000000000000000000000000000000000000000000000000000000000"
+# Number of this service on the list of the chain (credential.issuers).
+issuer = 0
+
+[keys]
+# Files with hexadecimal text. Make them with: openssl rand -hex 32
+signing_seed_file = "secrets/signing-seed.hex"
+person_key_secret_file = "secrets/person-key-secret.hex"
+# Secrets used before, newest first: people verified under them keep their
+# account.
+previous_person_key_secret_files = []
+
+[policy]
+# The verification level the claims state.
+level = 1
+# Whether a person may state a former name to keep the account.
+allow_name_change = true
+
+[checks]
+# The test check believes whatever it is told. Test chains only.
+test = false
+
+# A code by letter, through a GNU Taler Challenger service.
+# [checks.challenger]
+# url = "https://challenger.example.org"
+# client_id = "1"
+# client_secret_file = "secrets/challenger-client-secret"
+# redirect_uri = "https://id.example.org/v1/challenger/callback"
+
+[payment]
+# One ticket code per line; each pays one verification. Without this line
+# the service does not check payment.
+# tickets_file = "tickets.txt"

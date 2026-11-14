@@ -151,7 +151,8 @@ Personal data never enters the core, the events or the ledger subjects: the core
 | `centralbank` credentials stolen | debit limit caps the damage; separate from `admin`; totals vs. events alarm | Ledger adapter | total supply = issued − burnt |
 | Hidden sponsor criteria | filters only over keys published in `Params::sponsor_keys` | core | filter with unknown key rejected |
 | Debt beyond the credit line | ledger refuses; core checks in plan | core + Ledger | balance never below −credit line |
-| Lost device | account bound to verified person, not to a key alone; re-verification restores access – not built: a claim is bound to a key, and identities do not move (ADR 0011) | Identity adapter | – |
+| Lost device | account bound to verified person, not to a key alone: after a new verification the account moves to the new key, with a waiting time in which the old key can object (ADR 0011, "A lost key") | core `recovery` + identity pallet | old account closed and empty, person on one account, supply unchanged |
+| Cheated or broken identity service moves accounts | waiting time of a move; the old key stops it (2discuss M) | identity pallet | – |
 
 Out of scope for the core: denial of service, network security, operator key management (M4), legal classification (P04.3).
 

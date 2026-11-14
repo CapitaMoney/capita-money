@@ -12,6 +12,7 @@ members = [
     "pallets/credential",
     "runtime",
     "node",
+    "services/issuer",
 ]
 # Plain `cargo test` covers the crates without the Polkadot SDK only; the
 # pallets pull in all of it: `cargo test -p pallet-capita`,

@@ -1,6 +1,6 @@
 # ADR 0006 – Interest-free credit: credit line and recorded loan
 
-Status: accepted as technical frame (M1, 2026-11-13). The rules of lending themselves are open (C1–C4).
+Status: accepted as technical frame (M1, 2026-11-13). Switched off by the rules since 2026-11-14 (diary 10, no debt): `lending.max_credit_line` and `lending.max_outstanding` are zero in `rules/alpha.toml`, so no credit line can be granted, no loan recorded and no balance goes below zero. The code stays, dormant: switching lending on again is two values. With it on, the move of an account (ADR 0011, "A lost key") has to be thought through for debts first – an account with a credit line or debt does not move.
 
 ## Context
 Decided: lending is interest-free; repayment is deducted from issuance at each claim, the share is a parameter. Open: who lends (C1), fees (C2), default (C3), maximum amount and term (C4).

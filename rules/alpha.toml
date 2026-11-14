@@ -294,7 +294,7 @@ id = "service-forgets"
 rule = "An identity service keeps no name, no document and no address: only the person key, the account, the day and the kind of proof."
 status = "default"
 source = "2discuss K, ADR 0013"
-planned = "identity service (M3b)"
+code = ["services/issuer/src/store.rs", "services/issuer/src/issue.rs"]
 
 [[register]]
 id = "names-optional"
@@ -365,6 +365,13 @@ rule = "1 Capita is about 1 euro or dollar – an orientation for prices, no pro
 status = "decided"
 source = "diary 2"
 planned = "texts of website and app"
+
+[[register]]
+id = "person-key"
+rule = "A person is known to the ledger by a person key: a keyed function of what a check established. Namesakes born the same day are told apart by a further fact, where a document states one."
+status = "default"
+source = "2discuss K, ADR 0013"
+code = ["crates/capita-person-key/src/canonical.rs", "crates/capita-person-key/src/key.rs", "services/issuer/src/issue.rs"]
 
 [[register]]
 id = "sponsoring"
