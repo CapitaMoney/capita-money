@@ -105,16 +105,20 @@ pub fn dev_issuer() -> Issuer {
 pub const CREATOR_IDTY: IdtyIndex = 1;
 
 /// Relying party ids whose passkeys count on the test chains: the app's
-/// address, and `localhost` for an app run on the developer's computer.
-pub const PASSKEY_SITES: [&str; 2] = ["app.capitamoney.com", "localhost"];
+/// address, its GitHub Pages address until the DNS entry exists, and
+/// `localhost` for an app run on the developer's computer.
+pub const PASSKEY_SITES: [&str; 3] = ["app.capitamoney.com", "capitamoney.github.io", "localhost"];
 
-/// Origins passkey assertions may come from on the test chains. The
-/// Android shell's origin (`android:apk-key-hash:…`) is added by root once
-/// its signing key exists (`keys.set_policy`).
-pub const PASSKEY_ORIGINS: [&str; 3] = [
+/// Origins passkey assertions may come from on the test chains. The last
+/// is the Android shell signed with the public development key
+/// (`app/android/dev-signing.jks`, SHA-256 of its certificate, base64url);
+/// a release key replaces it before real use (ADR 0023).
+pub const PASSKEY_ORIGINS: [&str; 5] = [
     "https://app.capitamoney.com",
+    "https://capitamoney.github.io",
     "http://localhost:8000",
     "http://localhost:8787",
+    "android:apk-key-hash:tBJj4apsvlOD17ABfX121JoOTV102WbBwb8DU1HhcO4",
 ];
 
 /// Genesis of a test network: `initial_authorities` produce and finalise
