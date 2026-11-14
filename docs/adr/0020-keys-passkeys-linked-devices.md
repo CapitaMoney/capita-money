@@ -12,16 +12,16 @@ A new pallet, `pallet-capita-keys`, keeps for an account up to `keys.max_keys` k
 - `Ed25519(public key)` – a key the app makes itself (WebCrypto, not extractable) where no passkey is possible;
 - `Passkey(P-256 public key, compressed, 33 bytes)` – a WebAuthn credential.
 
-The account of a person who starts in the app is **derived from the first key**: `BLAKE2b-256("capita/account/v1" ‖ SCALE(key))`. Nobody holds a private key of that account id; only its listed keys act for it. Ordinary Substrate accounts keep working unchanged (tests, Polkadot-JS, services).
+The account of a person who starts in the app is **derived from the first key**: `BLAKE2b-256("capita/account/v1" ‖ key)`, key = `0 ‖ Ed25519 key` or `1 ‖ compressed P-256 key`. Nobody holds a private key of that account id; only its listed keys act for it. Ordinary Substrate accounts keep working unchanged (tests, Polkadot-JS, services).
 
 ### Acting for an account
 `keys.act(account, key, nonce, call, proof)` is a transaction **without signer and without fee**, like `door.redeem` (ADR 0018): the pool takes it only if the proof is a valid signature of a listed key over the challenge, and the nonce is the account's next one. The pallet then dispatches `call` with origin `Signed(account)` – so every call that works for a signed account works through `act`, and no other pallet changes.
 
-Challenge = `BLAKE2b-256(SCALE("capita/act/v1", audience, account, nonce, BLAKE2b-256(call)))`, audience = hash of block 0 (one chain only). Proof:
+Challenge = `BLAKE2b-256("capita/act/v1" ‖ audience ‖ account ‖ nonce ‖ BLAKE2b-256(call))` – bytes laid out by hand in `capita_keys::encoding`, nonce as 4 bytes little-endian; audience = hash of block 0 (one chain only). Proof:
 - Ed25519: the 64-byte signature over the challenge.
 - Passkey: `authenticatorData`, `clientDataJSON`, the signature as 64 bytes `r ‖ s`. Checked: `rpIdHash` = SHA-256 of an allowed relying party id (alpha: `app.capitamoney.com`); flags *user present* and *user verified* set; `type` = `webauthn.get`; `challenge` = base64url of the challenge; `origin` in the list of allowed origins (alpha: `https://app.capitamoney.com`, the Android shell's `android:apk-key-hash:…`); no `crossOrigin: true`; signature valid (high `s` accepted, normalised). The signature counter is not checked (synced passkeys report 0).
 
-`keys.open(key, nonce 0, call, proof)` registers the first key of a new derived account and acts once in the same transaction – the app's first payment-free step (`capita.open`) is confirmed with the same fingerprint that unlocks the gift. A sign-up therefore asks twice: making the passkey, then the first confirmation.
+`keys.open(key, call, proof)` (nonce 0) registers the first key of a new derived account and acts once in the same transaction – the app's first payment-free step (`capita.open`) is confirmed with the same fingerprint that unlocks the gift. A sign-up therefore asks twice: making the passkey, then the first confirmation.
 
 ### Devices
 - `add_key(key, possession)` – by an acting key of the account; `possession` = signature of the new key over `"capita/add/v1" ‖ audience ‖ account ‖ key`, so nobody can link a key they do not hold (the laptop signs, shows key + signature as a QR code, the phone scans and sends). A key belongs to one account only.
