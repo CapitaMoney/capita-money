@@ -43,7 +43,7 @@ flowchart TB
 | runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
 | `capita-credential` | claims of identity services: format, signed bytes, check (ADR 0011) | `crates/capita-credential` |
 | `pallet-capita-credential` | list of trusted issuers and their claims on chain; steers Duniter's identity and membership | `pallets/credential`, wiring `runtime/src/identity.rs` |
-| `capita-door`, `pallet-capita-door`, door service | euro door: GNU Taler payment in, voucher (chain mints once) or tickets (identity service accepts once) out (ADR 0015) | `crates/capita-door`, `pallets/door`, `services/door` |
+| `capita-door`, `pallet-capita-door`, door service | euro door: GNU Taler payment in, voucher (chain mints once) or tickets (identity service accepts once) out (ADR 0018) | `crates/capita-door`, `pallets/door`, `services/door` |
 | `rules/*.toml`, `capita-rulefile`, `capita-rules` | every rule value in one file; read, checked and compiled for the hosts (ADR 0012) | `rules`, `crates/capita-rulefile`, `crates/capita-rules` |
 | identity services (issuers) | verify people, sign claims | after M3 |
 | app, website | user interface | M5 |

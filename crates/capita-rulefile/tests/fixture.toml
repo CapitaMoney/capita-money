@@ -184,7 +184,7 @@ note = "Capita one euro buys at the euro door. 1.00: one Capita for one euro, th
 [door.max_payment_eur]
 value = "100.00"
 status = "default"
-source = "owner 2026-11-14 (Claude's default), ADR 0015"
+source = "owner 2026-11-14 (Claude's default), ADR 0018"
 note = "Most euro one payment at the euro door may bring in. A brake, not a judgement: buying again is possible."
 
 # ---------------------------------------------------------------- register

@@ -74,7 +74,7 @@ cargo run -p capita-issuer -- services/issuer/issuer.example.toml key    # the k
 On chain, `pallet-capita-credential` accepts a claim from the account it is made out to and makes that account a member identity (Duniter's pallets, unchanged) with the verification level stated.
 
 ## The euro door
-Euros → Capita, never back (diary 3). A door takes a payment through GNU Taler and signs; the chain decides ([ADR 0015](docs/adr/0015-euro-door.md)):
+Euros → Capita, never back (diary 3). A door takes a payment through GNU Taler and signs; the chain decides ([ADR 0018](docs/adr/0018-euro-door-chain-mints.md)):
 - **Bought Capita:** the door signs a voucher – payment, account, amount. Anybody brings it to the chain as a transaction without signer and without fee (`door.redeem`); each payment mints once. Bought Capita is Capita like any other; how much reached an account is recorded out of sight (`capita.backed`).
 - **Verifications:** the door signs one ticket per verification (1 € each); an identity service accepts each once. Sponsors buy tickets and pass them on.
 - **Limits** come from the rules file: `door.capita_per_euro`, `door.max_payment_eur`, `verification.price_eur`.

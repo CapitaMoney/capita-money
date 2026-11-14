@@ -16,7 +16,7 @@
 //! The euro door of [Capita Money](https://capitamoney.com): the one way
 //! from ordinary money into Capita (diary 3: euros → Capita, never back).
 //! A door service takes a payment – through GNU Taler – and signs one of
-//! two short statements about it. Design: `docs/adr/0015-euro-door.md`.
+//! two short statements about it. Design: `docs/adr/0018-euro-door-chain-mints.md`.
 //!
 //! - A [`types::Voucher`]: "this payment bought this much Capita for this
 //!   account". The chain mints the amount once per payment

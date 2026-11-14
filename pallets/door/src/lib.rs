@@ -14,7 +14,7 @@
 //! # pallet-capita-door
 //!
 //! The euro door, on chain: the one way from ordinary money into Capita
-//! (diary 3). Design: `docs/adr/0015-euro-door.md`.
+//! (diary 3). Design: `docs/adr/0018-euro-door-chain-mints.md`.
 //!
 //! A door service takes a payment in euro (through GNU Taler) and signs a
 //! voucher: this payment bought this much Capita for this account. Anybody

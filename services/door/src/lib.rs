@@ -15,7 +15,7 @@
 //!
 //! The euro door of [Capita Money](https://capitamoney.com): a small
 //! service between a GNU Taler merchant backend and the chain. Design:
-//! `docs/adr/0015-euro-door.md`.
+//! `docs/adr/0018-euro-door-chain-mints.md`.
 //!
 //! A person (or a sponsor) asks to buy; the door opens an order at the
 //! merchant backend and answers with the payment link for the Taler

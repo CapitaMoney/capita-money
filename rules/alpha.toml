@@ -210,7 +210,7 @@ note = "Capita one euro buys at the euro door. 1.00: one Capita for one euro, th
 [door.max_payment_eur]
 value = "100.00"
 status = "default"
-source = "owner 2026-11-14 (Claude's default), ADR 0015"
+source = "owner 2026-11-14 (Claude's default), ADR 0018"
 note = "Most euro one payment at the euro door may bring in. A brake, not a judgement: buying again is possible."
 
 # ---------------------------------------------------------------- register
@@ -230,7 +230,7 @@ code = ["crates/capita-core/src/issuance.rs", "pallets/door/src/lib.rs", "servic
 id = "euro-door"
 rule = "Capita is bought at a euro door: the payment service confirms the payment, the door signs a voucher for the receiving account, the chain mints it once. A payment given back, or not of the amount ordered, buys nothing; the door asks for no refund window."
 status = "default"
-source = "diary 3, 2discuss N, ADR 0015"
+source = "diary 3, 2discuss N, ADR 0018"
 code = ["crates/capita-door/src/check.rs", "pallets/door/src/lib.rs", "services/door/src/door.rs", "services/door/src/merchant.rs"]
 
 [[register]]
