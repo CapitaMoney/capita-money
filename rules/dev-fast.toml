@@ -156,3 +156,15 @@ value = "1.00"
 status = "example"
 source = "test chain"
 note = "Euro price of one verification."
+
+[door.capita_per_euro]
+value = "1.00"
+status = "example"
+source = "test chain"
+note = "Capita one euro buys."
+
+[door.max_payment_eur]
+value = "100.00"
+status = "example"
+source = "test chain"
+note = "Most euro one payment may bring in."

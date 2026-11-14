@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "pallet-capita-door"
+description = "FRAME pallet: the euro door – the list of door services, and the vouchers they sign after a payment in euro; each payment mints bought Capita once."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+capita-core = { workspace = true, features = ["scale", "serde"] }
+capita-door = { workspace = true, features = ["scale", "serde"] }
+codec = { workspace = true, features = ["derive", "max-encoded-len"] }
+scale-info = { workspace = true, features = ["derive"] }
+# Polkadot SDK: source and version are set once, in the workspace (docs/adr/0010).
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "capita-core/std",
+    "capita-door/std",
+    "codec/std",
+    "frame-support/std",
+    "frame-system/std",
+    "scale-info/std",
+    "sp-core/std",
+    "sp-io/std",
+    "sp-runtime/std",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "sp-runtime/try-runtime",
+]

@@ -170,6 +170,11 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20       capita_core::attributes::VerificationLevel({top_level});\n\
          \x20   /// Price of one verification in euro cents (`verification.price_eur`).\n\
          \x20   pub const VERIFICATION_PRICE_EUR_CENTS: u64 = {price};\n\
+         \x20   /// Capita cents one euro buys at the door (`door.capita_per_euro`).\n\
+         \x20   pub const DOOR_CAPITA_CENTS_PER_EURO: u64 = {rate};\n\
+         \x20   /// Most euro cents one payment at the door may bring in\n\
+         \x20   /// (`door.max_payment_eur`).\n\
+         \x20   pub const DOOR_MAX_PAYMENT_EUR_CENTS: u64 = {max_payment};\n\
          \n\
          \x20   /// The monetary rules as parameters of the core, in force from the\n\
          \x20   /// start of time. Checked when this crate was built: never `None`.\n\
@@ -188,6 +193,8 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
         delay = set.identity.key_move_delay.value.0.secs(),
         top_level = set.top_level(),
         price = set.verification.price_eur.value.0.cents(),
+        rate = set.door.capita_per_euro.value.0.cents(),
+        max_payment = set.door.max_payment_eur.value.0.cents(),
         params = params_source(&params),
     );
     written.map_err(|e| Error(e.to_string()))?;

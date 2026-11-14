@@ -25,6 +25,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use capita_credential::types::{Audience, IssuerId};
+use capita_door::types::DoorId;
 use capita_person_key::LocalKey;
 use capita_rulefile::RuleSet;
 use serde::Deserialize;
@@ -110,10 +111,24 @@ pub struct Checks {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PaymentConfig {
-    /// A file with one ticket code per line. Without it the service does
-    /// not check payment.
+    /// A file with one ticket code per line.
     #[serde(default)]
     pub tickets_file: Option<PathBuf>,
+    /// Euro doors whose tickets pay a verification (`services/door`).
+    /// Without these and without `tickets_file` the service does not check
+    /// payment.
+    #[serde(default)]
+    pub doors: Vec<DoorKey>,
+}
+
+/// A euro door whose tickets count.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DoorKey {
+    /// Its number on the list of the host.
+    pub id: u32,
+    /// Its Ed25519 public key, 32 bytes in hexadecimal.
+    pub key: String,
 }
 
 fn read(path: &Path) -> Result<String, String> {
@@ -150,16 +165,31 @@ impl Config {
             .iter()
             .map(key)
             .collect::<Result<Vec<_>, _>>()?;
-        let payment = match &self.payment.tickets_file {
-            None => Payment::Off,
-            Some(path) => Payment::Tickets(
-                read(path)?
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                    .map(str::to_owned)
-                    .collect::<BTreeSet<_>>(),
-            ),
+        let codes = match &self.payment.tickets_file {
+            None => BTreeSet::new(),
+            Some(path) => read(path)?
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>(),
+        };
+        let doors = self
+            .payment
+            .doors
+            .iter()
+            .map(|door| {
+                crate::unhex_n::<32>(&door.key)
+                    .map(|key| (DoorId(door.id), key))
+                    .ok_or_else(|| {
+                        format!("payment.doors {}: key of 32 bytes in hexadecimal", door.id)
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let payment = if self.payment.tickets_file.is_none() && doors.is_empty() {
+            Payment::Off
+        } else {
+            Payment::Tickets { codes, doors }
         };
         let settings = Settings {
             audience: Audience(audience),

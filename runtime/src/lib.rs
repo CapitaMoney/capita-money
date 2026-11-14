@@ -49,6 +49,7 @@ use sp_version::RuntimeVersion;
 pub use frame_system::Call as SystemCall;
 pub use pallet_capita::Call as CapitaCall;
 pub use pallet_capita_credential::Call as CredentialCall;
+pub use pallet_capita_door::Call as DoorCall;
 pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -92,7 +93,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("capita-test"),
     impl_name: alloc::borrow::Cow::Borrowed("capita-test"),
     authoring_version: 1,
-    spec_version: 3,
+    spec_version: 4,
     impl_version: 1,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -244,4 +245,10 @@ mod runtime {
     /// Who is a person: trusted identity services and their claims.
     #[runtime::pallet_index(22)]
     pub type Credential = pallet_capita_credential;
+
+    /// The euro door: doors that take payments in euro, and the vouchers
+    /// they sign. Its index is part of the form of the redeeming
+    /// transaction (`capita_door::encoding::redeem_call`).
+    #[runtime::pallet_index(23)]
+    pub type Door = pallet_capita_door;
 }

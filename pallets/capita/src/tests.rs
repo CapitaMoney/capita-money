@@ -26,8 +26,8 @@ use sp_runtime::DispatchError::BadOrigin;
 
 use crate::mock::*;
 use crate::{
-    Accounts, Call, Error, Event, LoanOffers, MovedTo, ParamsHistory, PersonAccount, PublicTotals,
-    ServiceAccount, TotalSupply,
+    Accounts, Backed, Call, Error, Event, LoanOffers, MovedTo, ParamsHistory, PersonAccount,
+    PublicTotals, ServiceAccount, TotalSupply,
 };
 
 fn open(n: u8) {
@@ -552,6 +552,10 @@ fn an_account_moves_to_a_new_key_and_payments_to_the_old_one_follow() {
         assert!(rule_events()
             .iter()
             .any(|e| matches!(e, RuleEvent::AccountMoved { .. })));
+        // The record of bought money moves along, out of sight.
+        assert_eq!(Backed::<Test>::get(cid(1)), cents(0));
+        assert_eq!(Backed::<Test>::get(cid(2)), cents(500));
+        assert_eq!(Backed::<Test>::get(cid(3)), cents(300));
         // What accrued under the old key is claimed with the new one: ten
         // days and an hour at a cent a minute, and the cent account 2
         // accrued in its hour on the first step.
@@ -585,6 +589,43 @@ fn an_account_moves_to_a_new_key_and_payments_to_the_old_one_follow() {
         assert_eq!(Capita::resolve(cid(1)), cid(4));
         assert_ok!(transfer(3, 1, 100));
         assert_eq!(balance(4), 800 + accrued + 100 + 100);
+        assert_eq!(Backed::<Test>::get(cid(4)), cents(500));
+        check();
+    });
+}
+
+#[test]
+fn bought_money_is_recorded_apart_and_spends_like_any_other() {
+    new_test_ext(params()).execute_with(|| {
+        service();
+        member(1, 1);
+        member(2, 1);
+        assert!(Capita::can_buy(&cid(1)) && !Capita::can_buy(&cid(8)));
+        assert_ok!(Capita::do_purchase(cid(1), cents(700)));
+        purchase(1, 300);
+        assert_noop!(
+            Capita::do_purchase(cid(8), cents(1)),
+            Error::<Test>::NoAccount
+        );
+        assert_noop!(
+            Capita::do_purchase(cid(1), cents(0)),
+            Error::<Test>::ZeroAmount
+        );
+        assert_eq!(Backed::<Test>::get(cid(1)), cents(1_000));
+        assert_eq!(PublicTotals::<Test>::get().purchased, 1_000);
+        // Paid on: plain Capita for the receiver, the record stays where
+        // the money was bought.
+        assert_ok!(transfer(1, 2, 400));
+        assert_eq!((balance(1), balance(2)), (600, 400));
+        assert_eq!(Backed::<Test>::get(cid(2)), cents(0));
+        assert_ok!(call(
+            root(),
+            Call::set_status {
+                account: acct(2),
+                status: AccountStatus::Frozen
+            }
+        ));
+        assert!(!Capita::can_buy(&cid(2)));
         check();
     });
 }

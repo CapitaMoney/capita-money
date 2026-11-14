@@ -1,0 +1,42 @@
+# Capita Money – configuration of a euro door (capita-door)
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Rule values (what one euro buys, the most one payment may bring in, the
+# price of a verification) are not set here: they come from the rules file.
+# Paths count from the folder of this file. Secrets stand in files, never
+# here.
+
+# Where the door listens. Put a web server that speaks TLS in front of it.
+listen = "127.0.0.1:8790"
+rules = "../../rules/alpha.toml"
+# One JSON object per line: each order, and what was signed for it. Keep it:
+# it is the memory of what was paid.
+store = "door-orders.jsonl"
+# A page at / to try the door out. Test chains only.
+demo_page = false
+
+[host]
+# The chain: hash of its first block (`chain_getBlockHash(0)`).
+audience = "0x0000000000000000000000000000000000000000000000000000000000000000"
+# The number of this door on the list of the chain (`door.registerDoor`).
+door = 0
+
+[keys]
+# Ed25519 secret, 32 bytes in hexadecimal. `capita-door <this file> key`
+# prints the public key the chain and the identity services list.
+signing_seed_file = "door-seed.hex"
+
+[merchant]
+# A GNU Taler merchant instance. The demo system of GNU Taler:
+#   https://backend.demo.taler.net/instances/sandbox/   currency KUDOS
+# Real euros need a merchant instance at a Taler exchange for EUR, run for
+# a legal owner with a bank account (rules diary, 2discuss N).
+base_url = "https://backend.demo.taler.net/instances/sandbox/"
+# The value of the Authorization header, for example
+# "Bearer secret-token:sandbox".
+authorization_file = "merchant-authorization.txt"
+currency = "KUDOS"
+
+# A node the door brings vouchers to itself. Without it the app does.
+# [chain]
+# rpc_url = "http://127.0.0.1:9944"
