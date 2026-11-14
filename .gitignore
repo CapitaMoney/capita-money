@@ -23,3 +23,6 @@ rustc-ice-*.txt
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 app/node_modules/
+
+# face models (services/face/fetch-models.sh)
+services/face/models/

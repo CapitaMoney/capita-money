@@ -21,6 +21,7 @@
 //! | test check | whatever it is told | any – test chains only |
 //! | Challenger, postal | a name can be reached at an address | `name-address` |
 //! | document check (not built) | name, date of birth, document | `name-birthdate`, `document` |
+//! | face check (`capita-face`, not wired in yet) | the person filmed is the person of the document photo | adds to the document check |
 //!
 //! [`Challenger`] speaks to a GNU Taler Challenger service: the person is
 //! sent there, types an address, receives a code by letter (or e-mail, or
