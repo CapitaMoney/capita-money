@@ -16,7 +16,7 @@
 //! The euro door of [Capita Money](https://capitamoney.com): people and
 //! sponsors pay euros through GNU Taler and get **verification tickets** –
 //! one code pays one verification at an identity service (`capita-issuer`,
-//! payment by tickets). Design: `docs/adr/0015-chain-ledger-taler-euro-door.md`.
+//! payment by tickets). Design: `docs/adr/0016-chain-ledger-taler-euro-door.md`.
 //!
 //! Capita is not sold here and never paid out: the chain creates and holds
 //! Capita; the door only turns euros into tickets. Buying Capita with euros

@@ -1,4 +1,4 @@
-# ADR 0015 – The chain is the ledger; GNU Taler is only the euro door
+# ADR 0016 – The chain is the ledger; GNU Taler is only the euro door
 
 Status: accepted (owner 2026-11-14: "1A"); supersedes ADR 0004 for the ledger. Revisit with E1 (governance) and O (independent node operators).
 
