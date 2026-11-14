@@ -6,7 +6,7 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Lost key (M3b): a person verifies again and the account moves to the new key. Person key (M3b): `capita-person-key` – one identifier per person, without personal data. Identity service (M3b): `capita-issuer` checks a person and signs the claim. Next: a check of identity documents, and the connection to GNU Taler (M4). Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Lost key (M3b): a person verifies again and the account moves to the new key. Person key (M3b): `capita-person-key` – one identifier per person, without personal data. Identity service (M3b): `capita-issuer` checks a person and signs the claim. Euro door: GNU Taler takes euros, the chain mints bought Capita (`capita-door`, `pallet-capita-door`, `services/door`). Next: a check of identity documents, the app. Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
@@ -17,10 +17,13 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`crates/capita-credential`](crates/capita-credential) – claims of identity services: format, signed bytes, check (Rust, `no_std`)
 - [`crates/capita-person-key`](crates/capita-person-key) – the person key: canonical form of checked data, keyed function (Rust, `no_std`)
 - [`services/issuer`](services/issuer) – the identity service: checks a person, signs the claim, forgets the data
+- [`crates/capita-door`](crates/capita-door) – the euro door: vouchers and tickets, signed bytes, check (Rust, `no_std`)
+- [`services/door`](services/door) – the euro door service: GNU Taler payment in, voucher or tickets out
 - [`crates/capita-rulefile`](crates/capita-rulefile) – reads and checks a rules file
 - [`crates/capita-rules`](crates/capita-rules) – the rules files compiled: what every host is built with (Rust, `no_std`)
 - [`pallets/capita`](pallets/capita) – the rules inside a Substrate runtime (FRAME pallet)
 - [`pallets/credential`](pallets/credential) – trusted identity services and their claims on chain (FRAME pallet)
+- [`pallets/door`](pallets/door) – the euro doors and the vouchers they sign, on chain (FRAME pallet)
 - [`runtime`](runtime) – runtime of the test chain: the pallets, Duniter's identity and membership, consensus
 - [`node`](node) – node of the test chain
 - [`app`](app) – the app, a clickable prototype ([concept](docs/app-concept.md))
@@ -70,6 +73,19 @@ cargo run -p capita-issuer -- services/issuer/issuer.example.toml key    # the k
 
 On chain, `pallet-capita-credential` accepts a claim from the account it is made out to and makes that account a member identity (Duniter's pallets, unchanged) with the verification level stated.
 
+## The euro door
+Euros → Capita, never back (diary 3). A door takes a payment through GNU Taler and signs; the chain decides ([ADR 0015](docs/adr/0015-euro-door.md)):
+- **Bought Capita:** the door signs a voucher – payment, account, amount. Anybody brings it to the chain as a transaction without signer and without fee (`door.redeem`); each payment mints once. Bought Capita is Capita like any other; how much reached an account is recorded out of sight (`capita.backed`).
+- **Verifications:** the door signs one ticket per verification (1 € each); an identity service accepts each once. Sponsors buy tickets and pass them on.
+- **Limits** come from the rules file: `door.capita_per_euro`, `door.max_payment_eur`, `verification.price_eur`.
+```
+cargo test -p capita-door -p capita-door-service
+cargo test -p pallet-capita-door
+services/door/demo/run-demo.sh                 # test chain + door + GNU Taler demo money (KUDOS)
+MERCHANT=mock services/door/demo/run-demo.sh   # the same without a wallet: orders count as paid
+```
+Real euros need a Taler exchange for EUR, a merchant instance and a legal owner (P04.3).
+
 ## Build and test
 ```
 # the crates without the Polkadot SDK (default members of the workspace)
@@ -77,8 +93,8 @@ cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --all --check
 # the pallets (build the Polkadot SDK, take longer)
-cargo test -p pallet-capita -p pallet-capita-credential
-cargo clippy -p pallet-capita -p pallet-capita-credential --all-targets -- -D warnings
+cargo test -p pallet-capita -p pallet-capita-credential -p pallet-capita-door
+cargo clippy -p pallet-capita -p pallet-capita-credential -p pallet-capita-door --all-targets -- -D warnings
 # no_std check on a target without an operating system
 rustup target add thumbv7em-none-eabi
 cargo build -p capita-core -p capita-credential --all-features --target thumbv7em-none-eabi
@@ -112,7 +128,7 @@ The node listens on `ws://127.0.0.1:9944`; [Polkadot-JS Apps](https://polkadot.j
 4. The key sends what the tool printed: `credential.present`. It is now a member identity with verification level 1.
 5. The key chooses its step (`capita.setTier`) and claims (`capita.claim`).
 
-Root can still attest by hand (`sudo` → `capita.attest`), and keeps the list of identity services (`credential.registerIssuer`, `credential.updateIssuer`).
+Root can still attest by hand (`sudo` → `capita.attest`), and keeps the list of identity services (`credential.registerIssuer`, `credential.updateIssuer`) and of euro doors (`door.registerDoor`, `door.updateDoor`). Door 0 of the test chains has a public secret, like the identity service: `services/door/demo/run-demo.sh` runs it.
 
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.

@@ -952,7 +952,10 @@ fn a_payment_in_euro_mints_bought_capita_once_by_a_transaction_without_signer() 
         );
         // (the node writes format version 5 itself; it reads version 4)
         assert_eq!(decoded.function, expected.function);
-        assert!(matches!(decoded.preamble, sp_runtime::generic::Preamble::Bare(4)));
+        assert!(matches!(
+            decoded.preamble,
+            sp_runtime::generic::Preamble::Bare(4)
+        ));
         // the pool takes it, the block runs it: no signer, no fee
         let source = sp_runtime::transaction_validity::TransactionSource::External;
         assert!(

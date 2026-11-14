@@ -99,7 +99,10 @@ fn the_list_of_doors_is_kept_by_its_origin() {
             CapitaDoor::register_door(RawOrigin::Signed(acct(5)).into(), door(2, 100)),
             BadOrigin
         );
-        assert_ok!(CapitaDoor::register_door(RawOrigin::Root.into(), door(2, 100)));
+        assert_ok!(CapitaDoor::register_door(
+            RawOrigin::Root.into(),
+            door(2, 100)
+        ));
         assert_eq!(Doors::<Test>::get(DoorId(1)), Some(door(2, 100)));
         let v = voucher(1, 3, 5, 100);
         let s = sign(2, &v);

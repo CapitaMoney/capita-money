@@ -44,3 +44,7 @@ test = false
 # One ticket code per line; each pays one verification. Without this line
 # the service does not check payment.
 # tickets_file = "tickets.txt"
+# Euro doors whose tickets pay a verification: number on the list of the
+# chain and public key (`capita-door <configuration> key` prints it). The key
+# below is the door of the test chains; its secret is public.
+# doors = [{ id = 0, key = "fc27bbece3c0fcb03dcf39a40a170018fa854984cc61996365d746c7792d16ae" }]

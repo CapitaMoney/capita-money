@@ -27,7 +27,7 @@ A check ends with what it established (`Person`). Built:
 Not built: a document check (by a provider, by the chip of the document, by an EUDI wallet) – it yields name and date of birth and fits the default basis. Offene Frage: 2discuss F.
 
 ### Payment
-Not enforced by the chain (ADR 0011). The service knows two ways: none, or tickets – codes a sponsor paid for, each good for one verification (diary 6). Open: reading the payment of the start grant from the chain; euro through GNU Taler (2discuss N).
+Not enforced by the chain (ADR 0011). The service knows two ways: none, or tickets – codes a sponsor paid for, each good for one verification (diary 6). Built since: tickets signed by a euro door (ADR 0015), accepted from the doors the configuration names. Open: reading the payment of the start grant from the chain.
 
 ### Interface
 JSON over HTTP, behind a web server that speaks TLS: `GET /v1/info`, `POST /v1/test-check`, `POST /v1/challenger/start`, `GET /v1/challenger/callback`. A claim comes as the call the app sends; the person sees none of it (diary 16). The log holds no personal data. A revocation is signed on the command line (`capita-issuer <configuration> revoke 0x<serial>`).

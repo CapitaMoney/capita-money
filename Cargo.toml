@@ -12,10 +12,9 @@ members = [
     "pallets/capita",
     "pallets/credential",
     "pallets/door",
-
     "runtime",
     "node",
-
+    "services/door",
     "services/issuer",
 ]
 # Plain `cargo test` covers the crates without the Polkadot SDK only; the

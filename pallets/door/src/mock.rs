@@ -9,7 +9,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use capita_core::types::{AccountId as CoreId, Amount};
 use capita_door::encoding::voucher_bytes;
-use capita_door::types::{Door as DoorEntry, DoorId, DoorSignature, DoorStatus, PaymentRef, Voucher};
+use capita_door::types::{
+    Door as DoorEntry, DoorId, DoorSignature, DoorStatus, PaymentRef, Voucher,
+};
 use frame_support::derive_impl;
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::EnsureRoot;
