@@ -35,3 +35,5 @@ The same files, wrapped by Capacitor (`android/`), plus the chip reader (`Capita
 Signed with a **public development key** (`android/dev-signing.jks`, password `capita-development`): anybody can sign an APK the site trusts – test money only. Its fingerprint stands in `well-known/assetlinks.json` (served as `/.well-known/assetlinks.json`) and as origin `android:apk-key-hash:tBJj4apsvlOD17ABfX121JoOTV102WbBwb8DU1HhcO4` on the test chains. A release key replaces both before real use.
 
 `npm run web` copies what the app ships into `www/` – for the shell and for GitHub Pages (`.github/workflows/pages.yml`).
+
+Alpha only: the shell allows plain-http requests (`android.allowMixedContent`), so that the app reaches the test chain and the identity service on a computer in the same network (creationHub). Before real use: both behind TLS, the setting off.
