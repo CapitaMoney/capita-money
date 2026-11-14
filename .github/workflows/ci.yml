@@ -12,6 +12,17 @@ env:
   # fixes them, not on an unrelated day.
   RUSTUP_TOOLCHAIN: "1.97.0"
 jobs:
+  # The app prototype: syntax of every module, tests of the rules it shows.
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: for f in app/*.js app/vendor/*.mjs; do node --check "$f"; done
+      - run: npm test
+        working-directory: app
   core:
     runs-on: ubuntu-latest
     steps:

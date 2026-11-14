@@ -1,0 +1,164 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06180e">
+<meta name="description" content="Capita – money everyone receives, equally. Prototype.">
+<title>Capita</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="app" aria-live="polite">
+
+  <!-- 0–10 s: one sentence, one button -->
+  <section class="screen center" data-screen="welcome">
+    <div class="mark" aria-hidden="true">C</div>
+    <h1 class="glow">Capita</h1>
+    <p class="lead">Money everyone receives, equally.</p>
+    <div class="grow"></div>
+    <button class="btn primary" data-go="name">Start</button>
+    <p class="fine">An experiment. No sign-up, no e-mail, no password.</p>
+  </section>
+
+  <!-- 10–25 s: the only thing we ask -->
+  <section class="screen" data-screen="name">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">What is your name?</h2>
+    <p>People see it when you pay them.</p>
+    <form id="name-form" autocomplete="off">
+      <input id="name-input" class="field" name="name" maxlength="40" placeholder="Your name" autocapitalize="words" enterkeyhint="done" required>
+      <div class="grow"></div>
+      <button class="btn primary" type="submit">Continue</button>
+    </form>
+  </section>
+
+  <!-- 25–40 s: the moment -->
+  <section class="screen center" data-screen="gift">
+    <p class="kicker" id="gift-hello">Welcome</p>
+    <div class="amount huge glow" aria-label="1.00 Capita"><span>1.00</span><small>Capita</small></div>
+    <p class="lead">Your first Capita. A gift – everyone gets one.</p>
+    <p>It pays for your verification. After that, Capita arrives every month.</p>
+    <div class="grow"></div>
+    <button class="btn primary" data-go="home">Open Capita</button>
+  </section>
+
+  <!-- 40–60 s and every day after -->
+  <section class="screen" data-screen="home">
+    <header class="top">
+      <span class="brand">Capita</span>
+      <button class="icon" data-go="settings" aria-label="Settings">⚙</button>
+    </header>
+    <div class="balance">
+      <div class="amount big glow"><span id="balance">0.00</span><small>Capita</small></div>
+      <p class="sub" id="balance-sub"></p>
+    </div>
+    <div class="card next" id="next-card"></div>
+    <div class="row">
+      <button class="btn" data-go="receive">Receive</button>
+      <button class="btn" data-go="send">Send</button>
+    </div>
+    <h3 class="section">Recent</h3>
+    <ul class="list" id="recent"></ul>
+    <button class="link" data-go="history">See all</button>
+  </section>
+
+  <section class="screen" data-screen="verify">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Verify once</h2>
+    <p>We check that you are a real person with only one account. Then the check forgets you: no copy of your documents is kept.</p>
+    <div class="card">
+      <p class="label">You receive</p>
+      <p class="amount mid"><span id="verify-rate">10.00</span><small>Capita a month</small></p>
+      <p class="label">It costs</p>
+      <p>Your welcome gift. Nothing else.</p>
+    </div>
+    <div class="card muted">
+      <p class="label">How</p>
+      <p>Your identity card or a letter to your address – about two minutes. <em>Not built yet: this prototype verifies at the tap of a button.</em></p>
+    </div>
+    <div class="grow"></div>
+    <button class="btn primary" id="verify-go">Verify (demo)</button>
+    <button class="link" data-back>Not now</button>
+  </section>
+
+  <section class="screen center" data-screen="receive">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Receive</h2>
+    <p>Show this to the person paying you.</p>
+    <div class="qr" id="qr" role="img" aria-label="Your payment code"></div>
+    <p class="who" id="receive-name"></p>
+    <label class="label" for="receive-amount">Ask for an amount (optional)</label>
+    <input id="receive-amount" class="field small" inputmode="decimal" placeholder="0.00">
+  </section>
+
+  <section class="screen" data-screen="send">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Send to</h2>
+    <button class="btn" id="scan">Scan their code</button>
+    <h3 class="section">People</h3>
+    <ul class="list pick" id="people"></ul>
+  </section>
+
+  <section class="screen" data-screen="amount">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow" id="amount-to">To</h2>
+    <div class="amount big entry"><span id="amount-show">0</span><small>Capita</small></div>
+    <p class="sub" id="amount-hint"></p>
+    <div class="keys" id="keys">
+      <button>1</button><button>2</button><button>3</button>
+      <button>4</button><button>5</button><button>6</button>
+      <button>7</button><button>8</button><button>9</button>
+      <button>.</button><button>0</button><button aria-label="Delete">⌫</button>
+    </div>
+    <button class="btn primary" id="send-go" disabled>Send</button>
+  </section>
+
+  <section class="screen center" data-screen="sent">
+    <div class="tick" aria-hidden="true">✓</div>
+    <h2 class="glow" id="sent-text">Sent</h2>
+    <div class="grow"></div>
+    <button class="btn primary" data-go="home">Done</button>
+  </section>
+
+  <section class="screen" data-screen="history">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">History</h2>
+    <ul class="list" id="all"></ul>
+  </section>
+
+  <section class="screen" data-screen="settings">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Settings</h2>
+    <div class="card">
+      <label class="label" for="rename">Your name</label>
+      <input id="rename" class="field small" maxlength="40">
+    </div>
+    <div class="card">
+      <p class="label">Lost your phone?</p>
+      <p>Install Capita on the new one and verify again. Your Capita move over after a week – no passwords or secret words to keep.</p>
+    </div>
+    <div class="card">
+      <p class="label">About Capita</p>
+      <p>An experiment: what happens when every person receives the same small income? Capita cannot be borrowed and cannot be sold for euros. It is spent among people.</p>
+      <p class="fine" id="verified-until"></p>
+    </div>
+    <div class="card demo">
+      <p class="label">Demo</p>
+      <div class="row wrap">
+        <button class="btn small" id="demo-pay">A friend pays you 2.00</button>
+        <button class="btn small" id="demo-week">One week later</button>
+        <button class="btn small" id="demo-reset">Start again</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

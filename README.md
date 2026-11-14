@@ -23,6 +23,7 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`pallets/credential`](pallets/credential) – trusted identity services and their claims on chain (FRAME pallet)
 - [`runtime`](runtime) – runtime of the test chain: the pallets, Duniter's identity and membership, consensus
 - [`node`](node) – node of the test chain
+- [`app`](app) – the app, a clickable prototype ([concept](docs/app-concept.md))
 
 ## The core
 `capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
