@@ -2,10 +2,10 @@
 
 Status: accepted for the alpha (2026-11-14). Built and tested: `capita-door` (vouchers, tickets, signed bytes, check), `pallet-capita-door` (list of doors, redemption), the record of bought money in `pallet-capita` (`Backed`), tickets in `capita-issuer`, the door service `services/door` with a GNU Taler merchant client. Tested against a stand-in for the merchant backend and – in CI – against a running test chain; with GNU Taler demo money (KUDOS) by `services/door/demo/run-demo.sh` on a computer that reaches the demo system. Not built: a door for real euros (needs an operator, below).
 
-Offene Frage: built in parallel to PR 4 (ADR 0016, `services/euro-door`: tickets as codes in the tickets file of the identity service, no buying of Capita). Both answer 2discuss N; ADR 0016 decides chain = ledger, which this ADR assumes. One door to keep, or ticket codes of ADR 0016 together with vouchers of this one – owner decision before either is merged.
+Decided (owner 2026-11-14): this door is kept; the parallel first build (PR 4, `services/euro-door`, ticket codes in a file of the identity service) is not taken. Its decision chain = ledger stands as ADR 0016.
 
 ## Context
-The rules diary allows one way only: euros → Capita (buying), never Capita → euros (diary 3). Euros pay two things: Capita bought by anybody who wants more (diary 2, FAQ "winners") and verifications, 1 € each, often paid by sponsors (diary 6). ADR 0004 started on GNU Taler as the ledger; the chain (M2, M3) was built since, and the owner wants no central controller (2discuss H). 2discuss N named a third way: GNU Taler as the way to pay euros, the chain as the ledger that creates Capita. This ADR builds that way. ADR 0004 is not withdrawn: its question – chain first or Taler first – stays open for the ledger; the door works for both, because it only signs.
+The rules diary allows one way only: euros → Capita (buying), never Capita → euros (diary 3). Euros pay two things: Capita bought by anybody who wants more (diary 2, FAQ "winners") and verifications, 1 € each, often paid by sponsors (diary 6). ADR 0004 started on GNU Taler as the ledger; the chain (M2, M3) was built since, and the owner wants no central controller (2discuss H). 2discuss N named a third way: GNU Taler as the way to pay euros, the chain as the ledger that creates Capita. This ADR builds that way. ADR 0016 settled the ledger: the chain. The door would work on a Taler-first ledger too, because it only signs.
 
 ## Decision
 
