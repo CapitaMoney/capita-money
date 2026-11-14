@@ -26,7 +26,7 @@ use sp_runtime::DispatchError::BadOrigin;
 
 use crate::mock::*;
 use crate::{
-    Accounts, Call, Error, Event, LoanOffers, ParamsHistory, PersonAccount, PublicTotals,
+    Accounts, Call, Error, Event, LoanOffers, MovedTo, ParamsHistory, PersonAccount, PublicTotals,
     ServiceAccount, TotalSupply,
 };
 
@@ -465,6 +465,126 @@ fn one_person_holds_one_account() {
             call(signed(1), Call::set_tier { tier: TierId(1) }),
             Error::<Test>::LevelTooLow
         );
+        check();
+    });
+}
+
+#[test]
+fn a_person_known_under_a_new_identifier_keeps_the_account_and_the_old_one_stays_taken() {
+    new_test_ext(params()).execute_with(|| {
+        open(1);
+        open(2);
+        let attest = |n: u8, attestation| {
+            call(
+                root(),
+                Call::attest {
+                    account: acct(n),
+                    attestation,
+                },
+            )
+        };
+        assert_ok!(attest(1, Some(attestation(7, 1))));
+        // A new name, a new secret of the identity services: person 8 is
+        // stated to be who was known as person 7.
+        let mut renamed = attestation(8, 1);
+        renamed.replaces = Some(PersonId([7; 32]));
+        assert_ok!(attest(1, Some(renamed.clone())));
+        assert_eq!(
+            Accounts::<Test>::get(cid(1)).unwrap().person,
+            Some(PersonId([8; 32]))
+        );
+        // Both identifiers name account 1: nobody opens a second account
+        // under the old one, or under the new one.
+        assert_eq!(Capita::holder_of(&PersonId([7; 32])), Some(cid(1)));
+        assert_eq!(Capita::holder_of(&PersonId([8; 32])), Some(cid(1)));
+        assert_noop!(
+            attest(2, Some(attestation(7, 1))),
+            Error::<Test>::DuplicatePerson
+        );
+        assert_noop!(
+            attest(2, Some(attestation(8, 1))),
+            Error::<Test>::DuplicatePerson
+        );
+        // The same statement again changes nothing.
+        assert_ok!(attest(1, Some(renamed)));
+        check();
+    });
+}
+
+#[test]
+fn an_account_moves_to_a_new_key_and_payments_to_the_old_one_follow() {
+    new_test_ext(params()).execute_with(|| {
+        service();
+        member(1, 1);
+        open(3);
+        purchase(1, 500);
+        purchase(3, 300);
+        set_time(10 * DAY);
+        // The key of account 1 is lost. Its person opens account 2 with a
+        // new key and is verified again.
+        open(2);
+        set_time(10 * DAY + HOUR);
+        let supply = TotalSupply::<Test>::get();
+        // Not for somebody else, and not onto the account of somebody.
+        assert_noop!(
+            Capita::do_move(cid(1), cid(2), &attestation(4, 1)),
+            Error::<Test>::NotAccountOfPerson
+        );
+        assert_noop!(
+            Capita::do_move(cid(3), cid(2), &attestation(1, 1)),
+            Error::<Test>::DuplicatePerson
+        );
+        assert_ok!(Capita::do_move(cid(1), cid(2), &attestation(1, 1)));
+        assert_eq!(MovedTo::<Test>::get(cid(1)), Some(cid(2)));
+        assert_eq!(Capita::holder_of(&PersonId([1; 32])), Some(cid(2)));
+        let (old, new) = (
+            Accounts::<Test>::get(cid(1)).unwrap(),
+            Accounts::<Test>::get(cid(2)).unwrap(),
+        );
+        assert_eq!(old.status, AccountStatus::Closed);
+        assert_eq!(old.person, None);
+        assert_eq!(new.person, Some(PersonId([1; 32])));
+        assert_eq!(new.tier, TierId(1));
+        // 500 bought, and the start grant of the new account.
+        assert_eq!(balance(1), 0);
+        assert_eq!(balance(2), 600);
+        assert_eq!(TotalSupply::<Test>::get(), supply);
+        assert!(rule_events()
+            .iter()
+            .any(|e| matches!(e, RuleEvent::AccountMoved { .. })));
+        // What accrued under the old key is claimed with the new one: ten
+        // days and an hour at a cent a minute, and the cent account 2
+        // accrued in its hour on the first step.
+        assert_ok!(call(signed(2), Call::claim {}));
+        let accrued = i64::try_from((10 * DAY + HOUR) / MINUTE).unwrap() + 1;
+        assert_eq!(balance(2), 600 + accrued);
+        // The old key moves nothing any more; a payment to the old account
+        // reaches the new one.
+        assert_noop!(transfer(1, 3, 1), Error::<Test>::AccountNotActive);
+        assert_noop!(
+            call(signed(1), Call::claim {}),
+            Error::<Test>::AccountNotActive
+        );
+        assert_ok!(transfer(3, 1, 200));
+        assert_eq!(balance(1), 0);
+        assert_eq!(balance(2), 800 + accrued);
+        // The person cannot be verified for a third account, and the new
+        // account moves on if its key is lost as well.
+        open(4);
+        assert_noop!(
+            call(
+                root(),
+                Call::attest {
+                    account: acct(4),
+                    attestation: Some(attestation(1, 1)),
+                }
+            ),
+            Error::<Test>::DuplicatePerson
+        );
+        assert_ok!(Capita::do_move(cid(2), cid(4), &attestation(1, 1)));
+        assert_eq!(Capita::resolve(cid(1)), cid(4));
+        assert_ok!(transfer(3, 1, 100));
+        assert_eq!(balance(4), 800 + accrued + 100 + 100);
         check();
     });
 }

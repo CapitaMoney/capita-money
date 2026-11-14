@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.2 (2026-11-13)"
+diary = "rules diary v0.4 (2026-11-14)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -110,23 +110,26 @@ note = "Seniority ramp towards the cap of the country of residence. Off."
 
 # ----------------------------------------------------------------- lending
 
+# No debt (diary 10): the system creates none. With both limits at zero no
+# credit line can be granted and no loan recorded; no balance goes below
+# zero. Help between people is a plain payment.
 [lending.max_credit_line]
-value = "500.00"
-status = "example"
-source = "C4"
-note = "Highest credit line an account may be granted."
+value = "0.00"
+status = "decided"
+source = "diary 10"
+note = "Highest credit line an account may be granted. Zero: no credit lines, no balance below zero."
 
 [lending.max_outstanding]
-value = "1000.00"
-status = "example"
-source = "C4"
-note = "Highest recorded debt an account may owe."
+value = "0.00"
+status = "decided"
+source = "diary 10"
+note = "Highest recorded debt an account may owe. Zero: no recorded loans."
 
 [lending.repayment_share]
-value = "50 %"
-status = "example"
-source = "C3"
-note = "Part of each claim that goes to the lender while debt is outstanding."
+value = "off"
+status = "decided"
+source = "diary 10"
+note = "Part of each claim that goes to a lender while debt is outstanding. Without effect: there is no debt."
 
 # --------------------------------------------------------------- demurrage
 
@@ -172,6 +175,24 @@ status = "decided"
 source = "diary 9"
 note = "How long a verification holds. After it the account receives nothing until verified again."
 
+[identity.person_key_basis]
+value = "name-birthdate"
+status = "default"
+source = "2discuss K 1, ADR 0013"
+note = "What makes a person one person for the identity services: \"name-birthdate\" (name and date of birth from an identity document), \"name-address\" (name and postal address, proven by a letter) or \"document\" (country, kind and number of a document)."
+
+[identity.minimum_age]
+value = 0
+status = "default"
+source = "diary 2026-11-13, 2discuss C, K 5"
+note = "Youngest age in years at which a person is verified. 0: no minimum age."
+
+[identity.key_move_delay]
+value = "7 days"
+status = "default"
+source = "diary 15, 2discuss M"
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
+
 [verification.price_eur]
 value = "1.00"
 status = "decided"
@@ -192,8 +213,15 @@ source = "diary 3"
 code = ["crates/capita-core/src/issuance.rs"]
 
 [[register]]
+id = "no-debt"
+rule = "The system creates no debt: no credit line, no recorded loan, no balance below zero. Whoever helps somebody sends Capita, as a plain payment."
+status = "decided"
+source = "diary 10"
+code = ["rules/alpha.toml", "crates/capita-core/src/loans.rs"]
+
+[[register]]
 id = "no-interest"
-rule = "Lending is free. A loan has no field for interest or fees."
+rule = "No interest, anywhere: the data model has no field for interest or fees."
 status = "decided"
 source = "diary 10, ADR 0006"
 code = ["crates/capita-core/src/loans.rs"]
@@ -234,18 +262,39 @@ source = "owner 2026-11-13"
 code = ["pallets/credential/src/lib.rs", "runtime/src/identity.rs"]
 
 [[register]]
-id = "no-key-change"
-rule = "An account stays with its key. Holds until key-recovery is built."
-status = "default"
-source = "B5"
-code = ["runtime/src/identity.rs"]
+id = "key-recovery"
+rule = "A lost key is replaced by verifying again: the account moves to the new key – person, balance, what was accrued, step and seniority. The old account is closed; what is paid to it afterwards reaches the new one. A key is stored nowhere but with its holder."
+status = "decided"
+source = "diary 15"
+code = ["crates/capita-core/src/recovery.rs", "pallets/credential/src/lib.rs", "pallets/capita/src/lib.rs", "runtime/src/identity.rs"]
 
 [[register]]
-id = "key-recovery"
-rule = "A lost key is replaced by verifying again: the account moves to the new key. A key is stored nowhere but with its holder."
-status = "decided"
-source = "owner 2026-11-14, B5"
-planned = "identity service and core (M3b)"
+id = "key-move-stop"
+rule = "While a move waits, the old key can stop it, and whoever asked can withdraw it."
+status = "default"
+source = "2discuss M"
+code = ["pallets/credential/src/lib.rs"]
+
+[[register]]
+id = "move-without-debt"
+rule = "A frozen account, or one with a credit line or recorded debt, does not move."
+status = "default"
+source = "B5, C1"
+code = ["crates/capita-core/src/recovery.rs"]
+
+[[register]]
+id = "person-key-rebind"
+rule = "When the data a person key is made from changes – a new name, a new secret of the identity services – the account is bound to the new key; the old key stays taken."
+status = "default"
+source = "2discuss K, ADR 0013"
+code = ["crates/capita-core/src/lifecycle.rs", "crates/capita-credential/src/check.rs", "pallets/capita/src/lib.rs"]
+
+[[register]]
+id = "service-forgets"
+rule = "An identity service keeps no name, no document and no address: only the person key, the account, the day and the kind of proof."
+status = "default"
+source = "2discuss K, ADR 0013"
+planned = "identity service (M3b)"
 
 [[register]]
 id = "names-optional"
@@ -270,7 +319,7 @@ code = ["crates/capita-core/src/lifecycle.rs"]
 
 [[register]]
 id = "closed-account-debt"
-rule = "Debt of a closed account stays on record; repayments still reach a lender whose account is frozen or closed."
+rule = "Debt of a closed account stays on record; repayments still reach a lender whose account is frozen or closed. Without effect while there is no debt."
 status = "default"
 source = "B5"
 code = ["crates/capita-core/src/lifecycle.rs", "crates/capita-core/src/loans.rs"]

@@ -35,8 +35,16 @@
 //! claim, until the claim expires, the issuer takes it back
 //! ([`Pallet::revoke`]) or the issuer itself is struck off the list.
 //!
-//! No personal data reaches the chain: a claim holds a pseudonym, a level, a
-//! country and numbered attributes.
+//! A lost key: the person verifies again with a new account under a new
+//! key and asks for the move ([`Pallet::request_move`]). The move waits
+//! (`Config::MoveDelay`, a rule value); meanwhile the old key can stop it
+//! ([`Pallet::stop_move`]). Then anybody completes it
+//! ([`Pallet::complete_move`]): person, money and membership go to the new
+//! account, the old one is closed (`capita_core::recovery`).
+//!
+//! No personal data reaches the chain: a claim holds a person key (a keyed
+//! hash, `docs/adr/0013-person-key.md`), a level, a country and numbered
+//! attributes.
 //!
 //! Open: weights are placeholders (no benchmarks yet).
 
@@ -56,6 +64,7 @@ mod mock;
 mod tests;
 
 use capita_core::attributes::Attestation;
+use capita_core::types::PersonId;
 use capita_credential::check::Crypto;
 use capita_credential::types::{PublicKey, Signature};
 use frame_support::pallet_prelude::DispatchResult;
@@ -71,6 +80,9 @@ pub trait Memberships<AccountId> {
     fn grant(who: &AccountId, name: Option<&[u8]>) -> DispatchResult;
     /// Ends the membership of `who`, if there is one.
     fn withdraw(who: &AccountId);
+    /// Ends the identity of `who` for good, without blame: its person
+    /// moved to another account. Nothing follows for the account itself.
+    fn retire(who: &AccountId);
 }
 
 /// The monetary rules, as far as this pallet needs them: `pallet-capita`.
@@ -80,6 +92,13 @@ pub trait Rules<AccountId> {
     fn attest(who: &AccountId, attestation: Option<Attestation>) -> DispatchResult;
     /// Suspends the account: its identity was revoked.
     fn freeze(who: &AccountId) -> DispatchResult;
+    /// The account `person` holds, if any.
+    fn holder(person: &PersonId) -> Option<AccountId>;
+    /// Moves the account `from` to the account `to`, which the same person
+    /// opened with a new key: person, money and everything accrued. `from`
+    /// is closed. `attestation` is what an identity service now states
+    /// about the holder of `to`.
+    fn move_account(from: &AccountId, to: &AccountId, attestation: &Attestation) -> DispatchResult;
 }
 
 /// Signature checks and hashing of the node the runtime runs on.
@@ -149,6 +168,52 @@ pub mod pallet {
         type Memberships: Memberships<Self::AccountId>;
         /// The monetary rules.
         type Rules: Rules<Self::AccountId>;
+        /// How long the move of an account to a new key waits, in seconds,
+        /// so that the old key can stop it (`identity.key_move_delay` of
+        /// the rules file). Zero: a move happens at once.
+        ///
+        /// Offene Frage: 2discuss M.
+        #[pallet::constant]
+        type MoveDelay: Get<u64>;
+    }
+
+    /// A move that waits: the account of a person is to go to another one,
+    /// under a new key.
+    #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+    pub struct PendingMove<AccountId> {
+        /// The account the person opened with the new key.
+        pub to: AccountId,
+        /// What an identity service states about the holder of `to`.
+        pub claim: Claim,
+        /// The name the new identity is to carry, if one was chosen.
+        pub name: Option<Vec<u8>>,
+        /// When the move was asked for.
+        pub requested_at: Timestamp,
+        /// From when it can be completed.
+        pub executable_at: Timestamp,
+    }
+
+    /// Why a move that waited did not happen.
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Encode,
+        Decode,
+        DecodeWithMemTracking,
+        MaxEncodedLen,
+        TypeInfo,
+    )]
+    pub enum StopReason {
+        /// The old key objected.
+        ByOldKey,
+        /// Whoever asked for it withdrew.
+        Withdrawn,
+        /// Its claim counts no longer: expired, taken back, or its issuer
+        /// struck off the list.
+        Lapsed,
     }
 
     /// What became of a claim number.
@@ -208,6 +273,16 @@ pub mod pallet {
         Serial,
         SerialState<T::AccountId>,
     >;
+
+    /// Moves that wait, by the account to be moved.
+    #[pallet::storage]
+    #[pallet::unbounded]
+    pub type Moves<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, PendingMove<T::AccountId>>;
+
+    /// The same moves, by the account to move to.
+    #[pallet::storage]
+    pub type MoveOf<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId>;
 
     /// The identity services the chain trusts from its first block.
     #[pallet::genesis_config]
@@ -278,6 +353,33 @@ pub mod pallet {
             /// Why.
             reason: DropReason,
         },
+        /// A person verified again with a new key and asks for the account
+        /// to move there. The old key can stop it until `executable_at`
+        /// and after, as long as the move is not completed.
+        MoveRequested {
+            /// The account to be moved.
+            from: T::AccountId,
+            /// The account under the new key.
+            to: T::AccountId,
+            /// From when the move can be completed.
+            executable_at: Timestamp,
+        },
+        /// A move that waited will not happen.
+        MoveStopped {
+            /// The account that was to be moved.
+            from: T::AccountId,
+            /// The account it was to move to.
+            to: T::AccountId,
+            /// Why.
+            reason: StopReason,
+        },
+        /// An account moved to a new key. The old account is closed.
+        Moved {
+            /// The old account.
+            from: T::AccountId,
+            /// The account of the person from now on.
+            to: T::AccountId,
+        },
     }
 
     /// Errors of the pallet itself, followed by the reasons for which a
@@ -309,6 +411,19 @@ pub mod pallet {
         StillCounts,
         /// The claim was taken back before.
         AlreadyRevoked,
+        /// The person of the claim holds no account that could move.
+        NothingToMove,
+        /// The person of the claim holds this very account: present the
+        /// claim instead.
+        AlreadyHolder,
+        /// A move of this account, or to this account, waits already.
+        MovePending,
+        /// No move waits for this account.
+        NoMove,
+        /// The waiting time of the move is not over.
+        MoveNotDue,
+        /// The account to move to holds a claim of its own.
+        TargetHoldsClaim,
         /// The issuer is suspended or revoked.
         IssuerNotActive,
         /// The claim names another issuer.
@@ -491,6 +606,14 @@ pub mod pallet {
                 if holds {
                     Self::drop_credential(&account, DropReason::Revoked);
                 }
+                // A move that waits on this claim will not happen.
+                if let Some(from) = MoveOf::<T>::get(&account) {
+                    let waits = Moves::<T>::get(&from)
+                        .is_some_and(|m| m.claim.issuer == id && m.claim.serial == serial);
+                    if waits {
+                        Self::drop_move(&from, StopReason::Lapsed);
+                    }
+                }
             }
             Ok(())
         }
@@ -508,6 +631,117 @@ pub mod pallet {
             ensure!(!counts, Error::<T>::StillCounts);
             Self::drop_credential(&account, DropReason::Invalid);
             Ok(())
+        }
+
+        /// A lost key: ask for the account of the person a claim names to
+        /// move to the caller, the account the claim is made out to. The
+        /// caller opened it with a new key (`capita.open`) and was verified
+        /// again by an identity service.
+        ///
+        /// The move waits for the time the rules name; until it is
+        /// completed the old key can stop it (`stop_move`). With a waiting
+        /// time of zero it happens at once. `name`: see `present`.
+        #[pallet::call_index(4)]
+        #[pallet::weight(weight_of::<T>(300_000_000, 20, 20))]
+        pub fn request_move(
+            origin: OriginFor<T>,
+            claim: Claim,
+            signature: Signature,
+            name: Option<Vec<u8>>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+            ensure!(
+                who.clone().into() == claim.subject.0,
+                Error::<T>::NotSubject
+            );
+            let issuer = Issuers::<T>::get(claim.issuer).ok_or(Error::<T>::UnknownIssuer)?;
+            match Serials::<T>::get(claim.issuer, claim.serial) {
+                Some(SerialState::Presented(_)) => return Err(Error::<T>::AlreadyPresented.into()),
+                Some(SerialState::Revoked) => return Err(Error::<T>::ClaimRevoked.into()),
+                None => {}
+            }
+            let now = Self::now();
+            let stated = check_claim::<HostCrypto>(
+                &claim,
+                &signature,
+                claim.issuer,
+                &issuer,
+                &Self::audience(),
+                now,
+            )
+            .map_err(Self::refused)?;
+            let from = T::Rules::holder(&stated.person)
+                .or_else(|| stated.replaces.as_ref().and_then(T::Rules::holder))
+                .ok_or(Error::<T>::NothingToMove)?;
+            ensure!(from != who, Error::<T>::AlreadyHolder);
+            ensure!(
+                !Credentials::<T>::contains_key(&who),
+                Error::<T>::TargetHoldsClaim
+            );
+            ensure!(
+                !Moves::<T>::contains_key(&from) && !MoveOf::<T>::contains_key(&who),
+                Error::<T>::MovePending
+            );
+            Serials::<T>::insert(
+                claim.issuer,
+                claim.serial,
+                SerialState::Presented(who.clone()),
+            );
+            let delay = capita_core::types::Duration::from_secs(T::MoveDelay::get());
+            let executable_at = now.checked_add(delay).map_err(|_| Error::<T>::MoveNotDue)?;
+            let pending = PendingMove {
+                to: who.clone(),
+                claim,
+                name,
+                requested_at: now,
+                executable_at,
+            };
+            Self::deposit_event(Event::MoveRequested {
+                from: from.clone(),
+                to: who.clone(),
+                executable_at,
+            });
+            if delay.is_zero() {
+                return Self::execute_move(&from, pending);
+            }
+            MoveOf::<T>::insert(&who, &from);
+            Moves::<T>::insert(from, pending);
+            Ok(())
+        }
+
+        /// Stop a move that waits: as the holder of the account that is to
+        /// be moved (the old key – "this was not me"), or as the one who
+        /// asked for the move.
+        #[pallet::call_index(5)]
+        #[pallet::weight(weight_of::<T>(50_000_000, 3, 3))]
+        pub fn stop_move(origin: OriginFor<T>) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+            let (from, reason) = if Moves::<T>::contains_key(&who) {
+                (who, StopReason::ByOldKey)
+            } else {
+                let from = MoveOf::<T>::get(&who).ok_or(Error::<T>::NoMove)?;
+                (from, StopReason::Withdrawn)
+            };
+            Self::drop_move(&from, reason);
+            Ok(())
+        }
+
+        /// Complete the move of `from` once its waiting time is over.
+        /// Anybody may call this. If the claim behind the move counts no
+        /// longer, the move is cleared away instead.
+        #[pallet::call_index(6)]
+        #[pallet::weight(weight_of::<T>(200_000_000, 30, 30))]
+        pub fn complete_move(origin: OriginFor<T>, from: T::AccountId) -> DispatchResult {
+            ensure_signed(origin)?;
+            let pending = Moves::<T>::get(&from).ok_or(Error::<T>::NoMove)?;
+            ensure!(Self::now() >= pending.executable_at, Error::<T>::MoveNotDue);
+            let counts = Issuers::<T>::get(pending.claim.issuer)
+                .is_some_and(|issuer| still_counts(&pending.claim, &issuer, Self::now()));
+            if !counts {
+                Self::drop_move(&from, StopReason::Lapsed);
+                return Ok(());
+            }
+            Self::execute_move(&from, pending)
         }
 
         /// Put an identity service on the list. Its number is the next
@@ -582,6 +816,48 @@ pub mod pallet {
             let _ = with_storage_layer(|| T::Rules::freeze(who));
         }
 
+        /// Clears a waiting move away.
+        fn drop_move(from: &T::AccountId, reason: StopReason) {
+            if let Some(pending) = Moves::<T>::take(from) {
+                MoveOf::<T>::remove(&pending.to);
+                Self::deposit_event(Event::MoveStopped {
+                    from: from.clone(),
+                    to: pending.to,
+                    reason,
+                });
+            }
+        }
+
+        /// The move itself: the old account loses claim and identity, the
+        /// rules move person and money, the new account becomes a member
+        /// identity with the claim.
+        fn execute_move(from: &T::AccountId, pending: PendingMove<T::AccountId>) -> DispatchResult {
+            let PendingMove {
+                to, claim, name, ..
+            } = pending;
+            let issuer = Issuers::<T>::get(claim.issuer).ok_or(Error::<T>::UnknownIssuer)?;
+            let stated = attestation::<HostCrypto>(&claim, issuer.realm);
+            Moves::<T>::remove(from);
+            MoveOf::<T>::remove(&to);
+            Credentials::<T>::remove(from);
+            T::Memberships::retire(from);
+            T::Rules::move_account(from, &to, &stated)?;
+            T::Memberships::grant(&to, name.as_deref())?;
+            Self::deposit_event(Event::Presented {
+                account: to.clone(),
+                issuer: claim.issuer,
+                serial: claim.serial,
+                level: claim.level,
+                expires_at: claim.expires_at,
+            });
+            Self::deposit_event(Event::Moved {
+                from: from.clone(),
+                to: to.clone(),
+            });
+            Credentials::<T>::insert(to, claim);
+            Ok(())
+        }
+
         fn refused(error: CredentialError) -> DispatchError {
             Error::<T>::from(error).into()
         }
@@ -625,6 +901,24 @@ pub mod pallet {
                 {
                     return Err("claim held without its number being recorded");
                 }
+            }
+            let mut targets: u32 = 0;
+            for (from, pending) in Moves::<T>::iter() {
+                if MoveOf::<T>::get(&pending.to) != Some(from) {
+                    return Err("waiting move not indexed by its target");
+                }
+                if pending.to.clone().into() != pending.claim.subject.0 {
+                    return Err("waiting move to an account its claim is not made out to");
+                }
+                if Serials::<T>::get(pending.claim.issuer, pending.claim.serial)
+                    != Some(SerialState::Presented(pending.to))
+                {
+                    return Err("waiting move without its claim number being recorded");
+                }
+                targets = targets.saturating_add(1);
+            }
+            if MoveOf::<T>::iter().count() != targets as usize {
+                return Err("index of waiting moves out of step");
             }
             Ok(())
         }

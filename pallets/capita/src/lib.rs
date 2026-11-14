@@ -63,7 +63,7 @@ pub mod pallet {
     use capita_core::ports::{Event as RuleEvent, LedgerOp, TierGate};
     use capita_core::totals::Totals;
     use capita_core::types::{AccountId as CoreId, Amount, Balance, PersonId, TierId, Timestamp};
-    use capita_core::{demurrage, issuance, lifecycle, loans};
+    use capita_core::{demurrage, issuance, lifecycle, loans, recovery};
     use frame_support::pallet_prelude::*;
     use frame_support::traits::UnixTime;
     use frame_system::pallet_prelude::*;
@@ -125,6 +125,12 @@ pub mod pallet {
     /// The account each verified person holds: one person, one account.
     #[pallet::storage]
     pub type PersonAccount<T: Config> = StorageMap<_, Blake2_128Concat, PersonId, CoreId>;
+
+    /// Accounts that moved to a new key: the closed account, and the
+    /// account of its person now. What is paid to the first reaches the
+    /// second.
+    #[pallet::storage]
+    pub type MovedTo<T: Config> = StorageMap<_, Blake2_128Concat, CoreId, CoreId>;
 
     /// Public sums over all events (transparency).
     #[pallet::storage]
@@ -242,6 +248,12 @@ pub mod pallet {
         DuplicatePerson,
         /// The attestation is not valid at this time.
         AttestationNotValid,
+        /// The account to move is not the account of the person named.
+        NotAccountOfPerson,
+        /// The account to move to belongs to a person already.
+        MoveTargetBound,
+        /// An account with a credit line or recorded debt cannot move.
+        MoveWithDebt,
         /// The credit line exceeds the maximum.
         CreditLineTooHigh,
         /// The loan would exceed the maximum recorded debt.
@@ -280,6 +292,9 @@ pub mod pallet {
                 CoreError::PersonMismatch => Self::PersonMismatch,
                 CoreError::DuplicatePerson => Self::DuplicatePerson,
                 CoreError::AttestationNotValid => Self::AttestationNotValid,
+                CoreError::NotAccountOfPerson => Self::NotAccountOfPerson,
+                CoreError::MoveTargetBound => Self::MoveTargetBound,
+                CoreError::MoveWithDebt => Self::MoveWithDebt,
                 CoreError::CreditLineTooHigh => Self::CreditLineTooHigh,
                 CoreError::DebtLimitExceeded => Self::DebtLimitExceeded,
                 CoreError::OtherLenderOutstanding => Self::OtherLenderOutstanding,
@@ -290,6 +305,10 @@ pub mod pallet {
             }
         }
     }
+
+    /// Most keys one person can lose in a row before payments to the
+    /// oldest account stop being forwarded.
+    const MAX_MOVES: u32 = 64;
 
     /// Placeholder weight until the pallet is benchmarked: a fixed base plus
     /// the database accesses of the call.
@@ -343,11 +362,13 @@ pub mod pallet {
             Self::apply(issuance::plan_claim(&state, &list, now).map_err(Self::rule)?)
         }
 
-        /// Pay `amount` to another account.
+        /// Pay `amount` to another account. If that account moved to a new
+        /// key, the payment reaches the account it moved to.
         #[pallet::call_index(2)]
-        #[pallet::weight(weight_of::<T>(7, 7))]
+        #[pallet::weight(weight_of::<T>(9, 7))]
         pub fn transfer(origin: OriginFor<T>, to: T::AccountId, amount: Amount) -> DispatchResult {
-            let (who, to) = (Self::id(ensure_signed(origin)?), Self::id(to));
+            let who = Self::id(ensure_signed(origin)?);
+            let to = Self::resolve(Self::id(to));
             let (now, list) = Self::context()?;
             let params = in_force_at(&list, now).map_err(Self::rule)?;
             Self::settle(&who, &list, now)?;
@@ -579,13 +600,74 @@ pub mod pallet {
             let (now, list) = Self::context()?;
             let state = Self::account(&account)?;
             let attestation = attestation.as_ref();
-            let held = attestation.and_then(|a| PersonAccount::<T>::get(a.person));
+            let held = attestation.and_then(|a| Self::holder_of(&a.person));
             let plan = lifecycle::plan_attest(&state, &list, attestation, held, now);
             let plan = plan.map_err(Self::rule)?;
             if let Some(attestation) = attestation {
                 PersonAccount::<T>::insert(attestation.person, account);
             }
             Self::apply(plan)
+        }
+
+        /// The account a person holds, if any: one person, one account. An
+        /// identifier the person was known under before names the same
+        /// account.
+        pub fn holder_of(person: &PersonId) -> Option<CoreId> {
+            PersonAccount::<T>::get(person).map(Self::resolve)
+        }
+
+        /// Where an account is now: itself, or – if it moved to a new key,
+        /// perhaps more than once – the account at the end of that chain.
+        pub fn resolve(mut id: CoreId) -> CoreId {
+            // Bounded: one step per lost key of one person.
+            for _ in 0..MAX_MOVES {
+                match MovedTo::<T>::get(id) {
+                    Some(next) => id = next,
+                    None => break,
+                }
+            }
+            id
+        }
+
+        /// Moves the account `from` to the account `to`, which its person
+        /// opened with a new key, on the strength of a new statement of an
+        /// identity service (`capita_core::recovery`). For identity pallets
+        /// of the same runtime: they decide whether and when.
+        pub fn do_move(from: CoreId, to: CoreId, attestation: &Attestation) -> DispatchResult {
+            let (now, list) = Self::context()?;
+            Self::settle(&from, &list, now)?;
+            Self::settle(&to, &list, now)?;
+            let (old, new) = (Self::account(&from)?, Self::account(&to)?);
+            // One person, one account: whoever the statement names may
+            // hold no third account.
+            ensure!(
+                Self::holder_of(&attestation.person).is_none_or(|holder| holder == from),
+                Error::<T>::DuplicatePerson
+            );
+            let balance = Balances::<T>::get(from);
+            let plan = recovery::plan_move(&old, balance, &new, &list, attestation, now)
+                .map_err(Self::rule)?;
+            ensure!(
+                old.revision.checked_add(1) == Some(plan.from.revision)
+                    && new.revision.checked_add(1) == Some(plan.to.revision),
+                Error::<T>::InvalidState
+            );
+            for op in &plan.ops {
+                Self::apply_op(op)?;
+            }
+            let mut totals = PublicTotals::<T>::get();
+            for event in &plan.events {
+                totals.record(event).map_err(|e| Self::rule(e.into()))?;
+            }
+            PublicTotals::<T>::put(totals);
+            Accounts::<T>::insert(from, &plan.from);
+            Accounts::<T>::insert(to, &plan.to);
+            PersonAccount::<T>::insert(attestation.person, to);
+            MovedTo::<T>::insert(from, to);
+            for event in plan.events {
+                Self::deposit_event(Event::Rule(event));
+            }
+            Ok(())
         }
 
         /// Changes the life-cycle state of an account. For identity pallets
@@ -683,7 +765,10 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Money for an account that moved to a new key reaches the
+        /// account it moved to (a repayment to a lender, for example).
         fn credit(id: &CoreId, amount: Amount) -> DispatchResult {
+            let id = Self::resolve(*id);
             let balance = Balances::<T>::get(id).checked_credit(amount);
             Balances::<T>::insert(id, balance.map_err(|e| Self::rule(e.into()))?);
             Ok(())
@@ -742,13 +827,32 @@ pub mod pallet {
                     .checked_add(u128::from(state.loan.outstanding.cents()))
                     .ok_or("overflow")?;
                 if let Some(person) = state.person {
-                    if PersonAccount::<T>::get(person) != Some(id) {
+                    if Self::holder_of(&person) != Some(id) {
                         return Err("person not registered for the account");
                     }
                 }
             }
             if totals.outstanding() != Ok(debt) {
                 return Err("recorded debt differs from the public totals");
+            }
+            for (_person, account) in PersonAccount::<T>::iter() {
+                let holder = Self::resolve(account);
+                let state = Accounts::<T>::get(holder).ok_or("person registered for no account")?;
+                // An identifier a person had before points at the account
+                // too; the account names the present one.
+                if state.person.is_none() {
+                    return Err("person registered for an account that is nobody's");
+                }
+            }
+            for (from, to) in MovedTo::<T>::iter() {
+                let closed = Accounts::<T>::get(from)
+                    .is_some_and(|state| state.status == AccountStatus::Closed);
+                if !closed || !Accounts::<T>::contains_key(to) {
+                    return Err("an account that moved is not closed, or moved to nowhere");
+                }
+                if !Balances::<T>::get(from).positive_part().is_zero() {
+                    return Err("money left behind on an account that moved");
+                }
             }
             let list = ParamsHistory::<T>::get();
             if !list.is_empty() && capita_core::params::check_sequence(&list).is_err() {

@@ -159,6 +159,12 @@ fn a_file_becomes_the_parameters_of_the_core() {
     assert_eq!(set.top_level(), 1);
     assert_eq!(set.identity.membership_period.value.0.secs(), 365 * 86_400);
     assert_eq!(set.verification.price_eur.value.0.cents(), 100);
+    assert_eq!(
+        set.identity.person_key_basis.value,
+        capita_rulefile::PersonKeyBasis::NameBirthdate
+    );
+    assert_eq!(set.identity.minimum_age.value, 0);
+    assert_eq!(set.identity.key_move_delay.value.0.secs(), 7 * 86_400);
     assert_eq!(set.issuance.start_grant.status, Status::Decided);
 }
 
@@ -199,7 +205,7 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 16 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 19 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
@@ -257,6 +263,8 @@ fn the_source_of_a_rule_set_names_its_values() {
     assert!(source.contains("pub mod fixture {"));
     assert!(source.contains("Duration::from_secs(31536000)"));
     assert!(source.contains("VERIFICATION_PRICE_EUR_CENTS: u64 = 100"));
+    assert!(source.contains("PERSON_KEY_BASIS: &str = \"name-birthdate\""));
+    assert!(source.contains("Duration::from_secs(604800)"));
     let both = codegen::library(&[set.clone(), set]).unwrap_err();
     assert!(both.0.contains("two rule sets"), "{}", both.0);
 }

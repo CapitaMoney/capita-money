@@ -156,6 +156,15 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20   /// How long a verification holds (`identity.membership_period`).\n\
          \x20   pub const MEMBERSHIP_PERIOD: capita_core::types::Duration =\n\
          \x20       capita_core::types::Duration::from_secs({membership});\n\
+         \x20   /// What the person key is made from (`identity.person_key_basis`).\n\
+         \x20   pub const PERSON_KEY_BASIS: &str = {basis:?};\n\
+         \x20   /// Youngest age at which a person is verified, in years; 0 = none\n\
+         \x20   /// (`identity.minimum_age`).\n\
+         \x20   pub const MINIMUM_AGE_YEARS: u8 = {age};\n\
+         \x20   /// How long the move of an account to a new key waits\n\
+         \x20   /// (`identity.key_move_delay`).\n\
+         \x20   pub const KEY_MOVE_DELAY: capita_core::types::Duration =\n\
+         \x20       capita_core::types::Duration::from_secs({delay});\n\
          \x20   /// The highest verification level a step of the ladder asks for.\n\
          \x20   pub const TOP_LEVEL: capita_core::attributes::VerificationLevel =\n\
          \x20       capita_core::attributes::VerificationLevel({top_level});\n\
@@ -174,6 +183,9 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
         diary = set.set.diary,
         module = module_name(&set.set.name),
         membership = set.identity.membership_period.value.0.secs(),
+        basis = set.identity.person_key_basis.value.as_str(),
+        age = set.identity.minimum_age.value,
+        delay = set.identity.key_move_delay.value.0.secs(),
         top_level = set.top_level(),
         price = set.verification.price_eur.value.0.cents(),
         params = params_source(&params),

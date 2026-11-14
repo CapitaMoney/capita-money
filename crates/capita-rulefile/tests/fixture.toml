@@ -149,6 +149,24 @@ status = "decided"
 source = "diary 9"
 note = "How long a verification holds. After it the account receives nothing until verified again."
 
+[identity.person_key_basis]
+value = "name-birthdate"
+status = "default"
+source = "2discuss K 1, ADR 0013"
+note = "What makes a person one person for the identity services: \"name-birthdate\" (name and date of birth from an identity document), \"name-address\" (name and postal address, proven by a letter) or \"document\" (country, kind and number of a document)."
+
+[identity.minimum_age]
+value = 0
+status = "default"
+source = "diary 2026-11-13, 2discuss C, K 5"
+note = "Youngest age in years at which a person is verified. 0: no minimum age."
+
+[identity.key_move_delay]
+value = "7 days"
+status = "default"
+source = "diary 15, 2discuss M"
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
+
 [verification.price_eur]
 value = "1.00"
 status = "decided"
