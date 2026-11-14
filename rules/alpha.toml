@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.5 (2026-11-14)"
+diary = "rules diary v0.6 (2026-11-14)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -76,7 +76,7 @@ amount = "10.00"
 per = "1 month"
 status = "example"
 source = "diary 4, 2discuss A"
-note = "The same amount for every verified person, worldwide. The amount itself is not decided."
+note = "Placeholder (= age 30: 4 x 30 = 120 per year) until register rule issuance-by-age is built; then the amount follows from age and this step only marks verified."
 
 # -------------------------------------------------------------------- caps
 
@@ -183,15 +183,15 @@ note = "What makes a person one person for the identity services: \"name-birthda
 
 [identity.minimum_age]
 value = 0
-status = "default"
-source = "diary 2026-11-13, 2discuss C, K 5"
-note = "Youngest age in years at which a person is verified. 0: no minimum age."
+status = "decided"
+source = "owner 2026-11-14, diary 19, 2discuss C"
+note = "Youngest age in years at which a person is verified. 0: no minimum age; the amount grows with age (register issuance-by-age)."
 
 [identity.key_move_delay]
 value = "7 days"
-status = "default"
-source = "diary 15, 2discuss M"
-note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
+status = "decided"
+source = "owner 2026-11-14, diary 15, 2discuss M"
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. A stop freezes the account for both sides until a 2nd check decides (not built yet: today a stop only cancels). Off: at once."
 
 [verification.price_eur]
 value = "1.00"
@@ -270,10 +270,17 @@ code = ["crates/capita-core/src/recovery.rs", "pallets/credential/src/lib.rs", "
 
 [[register]]
 id = "key-move-stop"
-rule = "While a move waits, the old key can stop it, and whoever asked can withdraw it."
-status = "default"
-source = "2discuss M"
+rule = "While a move waits (7 days), the old key can stop it, and whoever asked can withdraw it. A stop freezes the account for both sides (nobody can spend) until a 2nd check decides: in alpha the Verein board after a video call and identity document, later a 2nd independent identity service. Not built: a stop now only cancels the move."
+status = "decided"
+source = "owner 2026-11-14, diary 15, 2discuss M"
 code = ["pallets/credential/src/lib.rs"]
+
+[[register]]
+id = "issuance-by-age"
+rule = "Capita per year = 4 x age in completed years, spread evenly over the year (daily, rounded down to the cent), leftover paid on the birthday over the year; the same worldwide; no minimum age; age 0 gets nothing. Not built: the ladder amount above is used until then."
+status = "decided"
+source = "owner 2026-11-14, diary 4, 19"
+planned = "pallets/credential (birth date in the claim), crates/capita-core issuance"
 
 [[register]]
 id = "move-without-debt"
