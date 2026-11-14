@@ -150,6 +150,19 @@ impl pallet_capita_credential::Rules<AccountId> for CapitaRules {
     }
 }
 
+/// The monetary rules for the euro door: `pallet-capita`.
+pub struct CapitaPurchases;
+
+impl pallet_capita_door::Rules<AccountId> for CapitaPurchases {
+    fn can_buy(who: &AccountId) -> bool {
+        Capita::can_buy(&Capita::id(who.clone()))
+    }
+
+    fn purchase(who: &AccountId, amount: capita_core::types::Amount) -> DispatchResult {
+        Capita::do_purchase(Capita::id(who.clone()), amount)
+    }
+}
+
 /// Stands where Duniter's runtime has its web of trust: keeps identity and
 /// membership of a person in step, and tells the credential pallet when a
 /// membership ends or an identity is revoked.

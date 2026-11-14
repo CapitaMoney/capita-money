@@ -18,12 +18,13 @@
 use crate::{
     configs::MembershipPeriod,
     genesis_config_presets::{
-        self, dev_issuer, test_issuer, CREATOR_IDTY, DEV_ISSUER_KEY, DEV_ISSUER_SEED,
+        self, dev_issuer, test_door, test_issuer, CREATOR_IDTY, DEV_DOOR_KEY, DEV_DOOR_SEED,
+        DEV_ISSUER_KEY, DEV_ISSUER_SEED,
     },
     identity::{creator, derived_name, CREATOR_NAME},
-    nonce, AccountId, BlockNumber, Capita, Credential, Executive, Header, Identity, Membership,
-    Nonce, Runtime, RuntimeCall, RuntimeGenesisConfig, RuntimeOrigin, Signature, SignedPayload,
-    System, TxExtension, UncheckedExtrinsic, SLOT_DURATION,
+    nonce, AccountId, BlockNumber, Capita, Credential, Door, Executive, Header, Identity,
+    Membership, Nonce, Runtime, RuntimeCall, RuntimeGenesisConfig, RuntimeOrigin, Signature,
+    SignedPayload, System, TxExtension, UncheckedExtrinsic, SLOT_DURATION,
 };
 use capita_core::account::AccountStatus;
 use capita_core::attributes::{Attestation, VerificationLevel};
@@ -32,7 +33,9 @@ use capita_credential::encoding::{claim_bytes, revocation_bytes};
 use capita_credential::types::{
     Claim, Issuer, IssuerId, IssuerStatus, PublicKey, Revocation, Serial, SubjectRef,
 };
-use codec::Encode;
+use capita_door::encoding::{bare_extrinsic, redeem_call, voucher_bytes};
+use capita_door::types::{DoorId, DoorSignature, PaymentRef, Voucher};
+use codec::{Decode, Encode};
 use frame_support::{assert_noop, assert_ok};
 use pallet_identity::{IdtyName, IdtyStatus};
 use serde_json::Value;
@@ -906,6 +909,87 @@ fn a_lost_key_is_replaced_by_verifying_again() {
             }
         ));
         assert_eq!((balance(Charlie), balance(Dave)), (0, before + 200));
+        end_block();
+    });
+}
+
+fn door_key() -> sp_core::ed25519::Pair {
+    sp_core::ed25519::Pair::from_seed(&DEV_DOOR_SEED)
+}
+
+fn voucher_for(who: Sr25519Keyring, payment: u8, cents: u64) -> (Voucher, DoorSignature) {
+    let voucher = Voucher {
+        door: DoorId(0),
+        payment: PaymentRef([payment; 32]),
+        account: core_id(who),
+        amount: capita_core::types::Amount::from_cents(cents),
+    };
+    let bytes = voucher_bytes(&Door::audience(), &voucher);
+    (voucher, DoorSignature(door_key().sign(&bytes).0))
+}
+
+#[test]
+fn the_key_of_the_test_door_is_the_published_one() {
+    assert_eq!(DEV_DOOR_KEY, door_key().public().0);
+    // the largest payment of the rules, in Capita
+    let door = test_door(10_000, 100);
+    assert_eq!(door.max_amount.cents(), 10_000);
+}
+
+#[test]
+fn a_payment_in_euro_mints_bought_capita_once_by_a_transaction_without_signer() {
+    dev().execute_with(|| {
+        start_block(1, 0);
+        assert_ok!(run(Bob, 0, pallet_capita::Call::open {}));
+        let before = balance(Bob);
+        let (voucher, signature) = voucher_for(Bob, 1, 2_500);
+        // the bytes a door service writes by hand are the transaction the
+        // runtime knows
+        let bytes = bare_extrinsic(&redeem_call(23, 0, &voucher, &signature)).unwrap();
+        let decoded = UncheckedExtrinsic::decode(&mut &bytes[..]).unwrap();
+        let expected = UncheckedExtrinsic::new_bare(
+            pallet_capita_door::Call::redeem { voucher, signature }.into(),
+        );
+        // (the node writes format version 5 itself; it reads version 4)
+        assert_eq!(decoded.function, expected.function);
+        assert!(matches!(decoded.preamble, sp_runtime::generic::Preamble::Bare(4)));
+        // the pool takes it, the block runs it: no signer, no fee
+        let source = sp_runtime::transaction_validity::TransactionSource::External;
+        assert!(
+            Executive::validate_transaction(source, decoded.clone(), System::parent_hash()).is_ok()
+        );
+        assert_ok!(Executive::apply_extrinsic(decoded.clone()).unwrap());
+        assert_eq!(balance(Bob), before + 2_500);
+        assert_eq!(
+            pallet_capita::Backed::<Runtime>::get(core_id(Bob)).cents(),
+            2_500
+        );
+        // the same payment again: refused before it reaches a block
+        assert_eq!(
+            Executive::validate_transaction(source, decoded, System::parent_hash()),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::Stale))
+        );
+        // a voucher for an account not opened yet waits outside the pool
+        let (voucher, signature) = voucher_for(Dave, 2, 100);
+        let waiting = UncheckedExtrinsic::new_bare(
+            pallet_capita_door::Call::redeem { voucher, signature }.into(),
+        );
+        assert_eq!(
+            Executive::validate_transaction(source, waiting, System::parent_hash()),
+            Err(TransactionValidityError::Invalid(
+                InvalidTransaction::Custom(1)
+            ))
+        );
+        // above the limit of the door
+        let (voucher, signature) = voucher_for(Bob, 3, 10_001);
+        assert_eq!(
+            Executive::apply_extrinsic(UncheckedExtrinsic::new_bare(
+                pallet_capita_door::Call::redeem { voucher, signature }.into(),
+            )),
+            Err(TransactionValidityError::Invalid(
+                InvalidTransaction::BadProof
+            ))
+        );
         end_block();
     });
 }

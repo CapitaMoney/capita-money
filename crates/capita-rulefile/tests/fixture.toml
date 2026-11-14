@@ -173,6 +173,20 @@ status = "decided"
 source = "diary 6"
 note = "Euro price of one verification: 1 € = 1 verification. Read by identity services, not by the ledger."
 
+# -------------------------------------------------------------------- door
+
+[door.capita_per_euro]
+value = "1.00"
+status = "default"
+source = "diary 2, 3"
+note = "Capita one euro buys at the euro door. 1.00: one Capita for one euro, the guide value."
+
+[door.max_payment_eur]
+value = "100.00"
+status = "default"
+source = "owner 2026-11-14 (Claude's default), ADR 0015"
+note = "Most euro one payment at the euro door may bring in. A brake, not a judgement: buying again is possible."
+
 # ---------------------------------------------------------------- register
 #
 # Rules that are behaviour, not numbers. They live in code; this list says

@@ -990,6 +990,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "capita-door"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "ed25519-dalek",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+]
+
+[[package]]
 name = "capita-issuer"
 version = "0.1.0"
 dependencies = [
@@ -1072,6 +1083,7 @@ version = "0.1.0"
 dependencies = [
  "capita-core",
  "capita-credential",
+ "capita-door",
  "capita-rules",
  "duniter-primitives",
  "frame-executive",
@@ -1082,6 +1094,7 @@ dependencies = [
  "pallet-aura",
  "pallet-capita",
  "pallet-capita-credential",
+ "pallet-capita-door",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-membership",
@@ -5500,6 +5513,21 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-capita-door"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "capita-door",
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

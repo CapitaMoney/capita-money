@@ -205,13 +205,14 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 19 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 21 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
     assert_eq!(line("issuance.claim_window").value, "2 weeks");
     assert_eq!(line("identity.membership_period").value, "365 days");
     assert_eq!(line("demurrage.rate").value, "off");
+    assert_eq!(line("door.max_payment_eur").value, "100.00");
     assert_eq!(line("lending.repayment_share").status, Status::Example);
 }
 

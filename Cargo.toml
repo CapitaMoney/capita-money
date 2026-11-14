@@ -5,13 +5,17 @@ resolver = "2"
 members = [
     "crates/capita-core",
     "crates/capita-credential",
+    "crates/capita-door",
     "crates/capita-person-key",
     "crates/capita-rulefile",
     "crates/capita-rules",
     "pallets/capita",
     "pallets/credential",
+    "pallets/door",
+
     "runtime",
     "node",
+
     "services/issuer",
 ]
 # Plain `cargo test` covers the crates without the Polkadot SDK only; the
@@ -20,6 +24,7 @@ members = [
 default-members = [
     "crates/capita-core",
     "crates/capita-credential",
+    "crates/capita-door",
     "crates/capita-person-key",
     "crates/capita-rulefile",
     "crates/capita-rules",
@@ -37,11 +42,13 @@ authors = ["Capita Money contributors"]
 [workspace.dependencies]
 capita-core = { path = "crates/capita-core", default-features = false }
 capita-credential = { path = "crates/capita-credential", default-features = false }
+capita-door = { path = "crates/capita-door", default-features = false }
 capita-person-key = { path = "crates/capita-person-key", default-features = false }
 capita-rulefile = { path = "crates/capita-rulefile" }
 capita-rules = { path = "crates/capita-rules", default-features = false }
 pallet-capita = { path = "pallets/capita", default-features = false }
 pallet-capita-credential = { path = "pallets/credential", default-features = false }
+pallet-capita-door = { path = "pallets/door", default-features = false }
 capita-runtime = { path = "runtime", default-features = false }
 
 clap = { version = "4.5" }
