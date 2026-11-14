@@ -1,4 +1,4 @@
-# ADR 0015 – The face check
+# ADR 0017 – The face check
 
 Status: accepted (task 1c, 2026-11-14). Built and tested: `services/face` (`capita-face`): face finding, cut-out, face print, comparison with the document photo, liveness by challenge. Not built: reading the document photo from the chip (task 1a; the photo comes in as a JPEG or PNG file until then), the HTTP interface in `capita-issuer`, the app side (filming).
 

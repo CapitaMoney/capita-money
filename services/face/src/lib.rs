@@ -25,7 +25,7 @@
 //!
 //! Runs in the identity service, never on the phone: a changed app could
 //! otherwise simply answer "same person". Nothing is kept: pictures and face
-//! prints live in memory for the length of one call (ADR 0015).
+//! prints live in memory for the length of one call (ADR 0017).
 
 pub mod align;
 pub mod detect;
@@ -74,7 +74,7 @@ pub const DETECTOR_FILE: &str = "face_detection_yunet_2023mar.onnx";
 /// See [`DETECTOR_FILE`].
 pub const RECOGNISER_FILE: &str = "face_recognition_sface_2021dec.onnx";
 
-/// Values of the check. Technical values (ADR 0015), not rules.
+/// Values of the check. Technical values (ADR 0017), not rules.
 #[derive(Clone, Debug)]
 pub struct Settings {
     /// Same person from this likeness (cosine) on. 0.363 = value published

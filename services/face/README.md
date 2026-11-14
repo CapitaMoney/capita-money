@@ -1,6 +1,6 @@
 # capita-face – the face check
 
-Is the person in front of the camera alive, and the person of the identity document? Runs in the identity service, keeps nothing. Decisions: [ADR 0015](../../docs/adr/0015-face-check.md).
+Is the person in front of the camera alive, and the person of the identity document? Runs in the identity service, keeps nothing. Decisions: [ADR 0017](../../docs/adr/0017-face-check.md).
 
 ```sh
 ./fetch-models.sh models                         # YuNet (MIT) + SFace (Apache 2.0), SHA-256 checked

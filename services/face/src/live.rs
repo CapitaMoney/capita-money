@@ -71,7 +71,7 @@ impl Pose {
 /// The movements that can be asked for.
 pub const MOVES: [Pose; 4] = [Pose::Left, Pose::Right, Pose::Up, Pose::Down];
 
-/// Limits of the challenge. Technical values (ADR 0015), not rules.
+/// Limits of the challenge. Technical values (ADR 0017), not rules.
 #[derive(Clone, Debug)]
 pub struct Limits {
     /// Turn counted as left/right from this many eye distances.
