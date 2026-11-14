@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.4 (2026-11-14)"
+diary = "rules diary v0.5 (2026-11-14)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -177,8 +177,8 @@ note = "How long a verification holds. After it the account receives nothing unt
 
 [identity.person_key_basis]
 value = "name-birthdate"
-status = "default"
-source = "2discuss K 1, ADR 0013"
+status = "decided"
+source = "diary 17, ADR 0013"
 note = "What makes a person one person for the identity services: \"name-birthdate\" (name and date of birth from an identity document), \"name-address\" (name and postal address, proven by a letter) or \"document\" (country, kind and number of a document)."
 
 [identity.minimum_age]
@@ -369,8 +369,8 @@ planned = "texts of website and app"
 [[register]]
 id = "person-key"
 rule = "A person is known to the ledger by a person key: a keyed function of what a check established. Namesakes born the same day are told apart by a further fact, where a document states one."
-status = "default"
-source = "2discuss K, ADR 0013"
+status = "decided"
+source = "diary 17, ADR 0013"
 code = ["crates/capita-person-key/src/canonical.rs", "crates/capita-person-key/src/key.rs", "services/issuer/src/issue.rs"]
 
 [[register]]
@@ -389,10 +389,17 @@ planned = "market (M5)"
 
 [[register]]
 id = "residence-proof"
-rule = "Residence is proven by a coded letter to the address, repeated every year."
+rule = "Residence is proven by a coded letter to the address only once a rule needs residence. No rule needs it now: no letter."
 status = "decided"
 source = "diary 8"
-planned = "identity service (M3b)"
+planned = "identity service, when a rule needs residence"
+
+[[register]]
+id = "document-check"
+rule = "The first document check reads the chip of the passport or identity card on the phone (NFC; the state's signature proves the document genuine) and compares a selfie with the chip photo. Further checks may be added beside it."
+status = "decided"
+source = "diary 18, 2discuss F"
+planned = "identity service + app (task 1c)"
 
 [[register]]
 id = "banned-goods"
