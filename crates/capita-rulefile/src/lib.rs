@@ -292,6 +292,17 @@ pub struct DoorRules {
     pub max_payment_eur: Rule<Money>,
 }
 
+/// The keys of an account's devices (ADR 0020), read by the genesis and
+/// the runtime of a chain (`pallet-capita-keys`), not by the core.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeysRules {
+    /// Most keys of one account.
+    pub max_keys: Rule<u8>,
+    /// How long a linked device waits before it becomes the home device.
+    pub home_delay: Rule<Span>,
+}
+
 /// A rule that is behaviour, with the place it lives in.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -336,6 +347,8 @@ pub struct RuleSet {
     pub verification: Verification,
     /// Buying Capita with euro.
     pub door: DoorRules,
+    /// The keys of an account's devices.
+    pub keys: KeysRules,
     /// Rules that are behaviour and live in code.
     #[serde(default)]
     pub register: Vec<RegisterEntry>,
@@ -484,6 +497,9 @@ impl RuleSet {
                 "door.max_payment_eur",
                 "must be above zero; to close the door, run no door service",
             ));
+        }
+        if !(1..=8).contains(&self.keys.max_keys.value) {
+            return Err(Error::at("keys.max_keys", "between 1 and 8"));
         }
         if self.identity.membership_period.value.0.is_zero() {
             return Err(Error::at(
@@ -634,6 +650,10 @@ impl RuleSet {
         lines.push(value("door.capita_per_euro", rate, rate.value.to_string()));
         let max = &self.door.max_payment_eur;
         lines.push(value("door.max_payment_eur", max, max.value.to_string()));
+        let keys = &self.keys.max_keys;
+        lines.push(value("keys.max_keys", keys, keys.value.to_string()));
+        let home = &self.keys.home_delay;
+        lines.push(value("keys.home_delay", home, home.value.to_string()));
         lines.extend(self.register.iter().map(|e| Line {
             path: format!("register {}", e.id),
             value: e.rule.clone(),

@@ -104,6 +104,19 @@ pub fn dev_issuer() -> Issuer {
 /// identities (`identity.rs`).
 pub const CREATOR_IDTY: IdtyIndex = 1;
 
+/// Relying party ids whose passkeys count on the test chains: the app's
+/// address, and `localhost` for an app run on the developer's computer.
+pub const PASSKEY_SITES: [&str; 2] = ["app.capitamoney.com", "localhost"];
+
+/// Origins passkey assertions may come from on the test chains. The
+/// Android shell's origin (`android:apk-key-hash:…`) is added by root once
+/// its signing key exists (`keys.set_policy`).
+pub const PASSKEY_ORIGINS: [&str; 3] = [
+    "https://app.capitamoney.com",
+    "http://localhost:8000",
+    "http://localhost:8787",
+];
+
 /// Genesis of a test network: `initial_authorities` produce and finalise
 /// blocks, `root` holds the sudo key, `params` are the monetary rules and
 /// `top_level` the highest verification level they ask for. No person is a
@@ -155,6 +168,10 @@ fn testnet_genesis(
             issuers: vec![test_issuer(top_level)],
         },
         door: pallet_capita_door::GenesisConfig { doors: vec![door] },
+        keys: pallet_capita_keys::GenesisConfig {
+            relying_parties: PASSKEY_SITES.iter().map(|s| (*s).into()).collect(),
+            origins: PASSKEY_ORIGINS.iter().map(|s| (*s).into()).collect(),
+        },
     })
 }
 

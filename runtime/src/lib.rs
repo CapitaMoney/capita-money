@@ -93,7 +93,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("capita-test"),
     impl_name: alloc::borrow::Cow::Borrowed("capita-test"),
     authoring_version: 1,
-    spec_version: 4,
+    spec_version: 5,
     impl_version: 1,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -251,4 +251,11 @@ mod runtime {
     /// transaction (`capita_door::encoding::redeem_call`).
     #[runtime::pallet_index(23)]
     pub type Door = pallet_capita_door;
+
+    /// The keys of a person's devices: passkeys and device keys, up to
+    /// `keys.max_keys` per account, actions without signer and fee
+    /// (ADR 0020). Its index is part of the bytes the app writes
+    /// (`app/chain/keys.js`, `KEYS.pallet`).
+    #[runtime::pallet_index(24)]
+    pub type Keys = pallet_capita_keys;
 }

@@ -149,6 +149,25 @@ parameter_types! {
     pub const DoorPriority: u64 = 1 << 20;
 }
 
+impl pallet_capita_keys::Config for Runtime {
+    type RuntimeCall = RuntimeCall;
+    type PolicyOrigin = EnsureRoot<AccountId>;
+    type Time = Timestamp;
+    type MaxKeys = ConstU32<{ capita_rules::alpha::KEYS_MAX_KEYS }>;
+    type HomeDelay = HomeDelay;
+    type UnsignedPriority = KeysPriority;
+}
+
+parameter_types! {
+    /// Priority of an action of a key (no signer, no fee) in the pool.
+    pub const KeysPriority: u64 = 1 << 20;
+    /// How long a linked device waits before it becomes the home device, in
+    /// seconds. A rule (`keys.home_delay` of `rules/alpha.toml`). Kept in
+    /// storage like `KeyMoveDelay`, so that root can shorten it on a test
+    /// chain (`system.setStorage`, key `:HomeDelay:` hashed with twox_128).
+    pub storage HomeDelay: u64 = capita_rules::alpha::KEYS_HOME_DELAY.secs();
+}
+
 parameter_types! {
     /// How long the move of an account to a new key waits, in seconds. A
     /// rule (`identity.key_move_delay` of `rules/alpha.toml`). Kept in

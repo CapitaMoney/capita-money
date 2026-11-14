@@ -18,6 +18,7 @@ capita-rules = { workspace = true }
 pallet-capita = { workspace = true }
 pallet-capita-credential = { workspace = true }
 pallet-capita-door = { workspace = true }
+pallet-capita-keys = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive", "serde"] }
 serde_json = { workspace = true, features = ["alloc"] }
@@ -74,6 +75,7 @@ std = [
     "pallet-aura/std",
     "pallet-capita-credential/std",
     "pallet-capita-door/std",
+    "pallet-capita-keys/std",
     "pallet-capita/std",
     "pallet-grandpa/std",
     "pallet-identity/std",
@@ -106,6 +108,7 @@ try-runtime = [
     "pallet-aura/try-runtime",
     "pallet-capita-credential/try-runtime",
     "pallet-capita-door/try-runtime",
+    "pallet-capita-keys/try-runtime",
     "pallet-capita/try-runtime",
     "pallet-grandpa/try-runtime",
     "pallet-identity/try-runtime",
