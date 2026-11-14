@@ -59,6 +59,12 @@ impl pallet_capita_credential::Config for Test {
     type RegistryOrigin = EnsureRoot<AccountId32>;
     type Memberships = Identities;
     type Rules = RulesStub;
+    type MoveDelay = MoveDelay;
+}
+
+frame_support::parameter_types! {
+    /// Waiting time of a move in the tests: seven days, or what a test sets.
+    pub storage MoveDelay: u64 = 7 * DAY;
 }
 
 /// What the stand-ins hold.
@@ -78,6 +84,10 @@ pub struct World {
     pub persons: BTreeMap<PersonId, AccountId32>,
     /// Accounts frozen by the rules.
     pub frozen: BTreeSet<AccountId32>,
+    /// Accounts whose identity ended because their person moved away.
+    pub retired: BTreeSet<AccountId32>,
+    /// Accounts that moved, with where to.
+    pub moved: BTreeMap<AccountId32, AccountId32>,
 }
 
 thread_local! {
@@ -118,6 +128,14 @@ impl pallet_capita_credential::Memberships<AccountId32> for Identities {
             Credential::membership_ended(who);
         }
     }
+
+    fn retire(who: &AccountId32) {
+        world(|w| {
+            w.members.remove(who);
+            w.identities.remove(who);
+            w.retired.insert(who.clone());
+        });
+    }
 }
 
 /// Stand-in for `pallet-capita`: one person, one account; a level per
@@ -153,6 +171,31 @@ impl pallet_capita_credential::Rules<AccountId32> for RulesStub {
     fn freeze(who: &AccountId32) -> DispatchResult {
         world(|w| w.frozen.insert(who.clone()));
         Ok(())
+    }
+
+    fn holder(person: &PersonId) -> Option<AccountId32> {
+        world(|w| w.persons.get(person).cloned())
+    }
+
+    fn move_account(
+        from: &AccountId32,
+        to: &AccountId32,
+        attestation: &Attestation,
+    ) -> DispatchResult {
+        world(|w| {
+            if w.frozen.contains(from) {
+                return Err(DispatchError::Other("frozen"));
+            }
+            if !w.open.contains(to) || w.attested.contains_key(to) {
+                return Err(DispatchError::Other("target not free"));
+            }
+            w.attested.remove(from);
+            w.open.remove(from);
+            w.persons.insert(attestation.person, to.clone());
+            w.attested.insert(to.clone(), attestation.clone());
+            w.moved.insert(from.clone(), to.clone());
+            Ok(())
+        })
     }
 }
 
@@ -223,6 +266,7 @@ pub fn claim(n: u8, level: u8, serial: u8) -> Claim {
         serial: Serial([serial; 16]),
         subject: CoreId([n; 32]),
         subject_ref: SubjectRef([n; 32]),
+        replaces: None,
         level: VerificationLevel(level),
         residence: None,
         attributes: vec![],

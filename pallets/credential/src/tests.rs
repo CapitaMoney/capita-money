@@ -31,8 +31,8 @@ use sp_runtime::DispatchError::{self, BadOrigin};
 
 use crate::mock::*;
 use crate::{
-    Call, Credentials, DropReason, Error, Event, HostCrypto, Issuers, NextIssuer, SerialState,
-    Serials,
+    Call, Credentials, DropReason, Error, Event, HostCrypto, Issuers, MoveOf, Moves, NextIssuer,
+    SerialState, Serials, StopReason,
 };
 
 /// Account `n` presents `claim`, signed by issuer key 1.
@@ -625,5 +625,189 @@ fn a_claim_for_another_chain_does_not_count_here() {
         let genesis = System::block_hash(0);
         assert_eq!(Credential::audience().0, genesis.0);
         assert_ne!(genesis.0, [0; 32]);
+    });
+}
+
+/// Account `to` asks for the move of the account of person `person`, with
+/// a new claim numbered `serial`.
+fn request_move(to: u8, person: u8, serial: u8) -> sp_runtime::DispatchResult {
+    let mut claim = claim(to, 1, serial);
+    claim.subject_ref = SubjectRef([person; 32]);
+    let signature = sign(1, &claim);
+    call(
+        signed(to),
+        Call::request_move {
+            claim,
+            signature,
+            name: None,
+        },
+    )
+}
+
+#[test]
+fn a_lost_key_moves_the_account_after_the_waiting_time() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        set_time(30 * DAY);
+        // Somebody who is nobody's person has nothing to move; the holder
+        // presents instead of moving; a claim for another account is of no
+        // use.
+        assert_noop!(request_move(2, 5, 2), Error::<Test>::NothingToMove);
+        assert_noop!(request_move(1, 1, 2), Error::<Test>::AlreadyHolder);
+        let mut foreign = claim(3, 1, 2);
+        foreign.subject_ref = SubjectRef([1; 32]);
+        let signature = sign(1, &foreign);
+        assert_noop!(
+            call(
+                signed(2),
+                Call::request_move {
+                    claim: foreign,
+                    signature,
+                    name: None
+                }
+            ),
+            Error::<Test>::NotSubject
+        );
+        // Person 1, verified again, with account 2 under a new key.
+        assert_ok!(request_move(2, 1, 2));
+        assert_eq!(MoveOf::<Test>::get(acct(2)), Some(acct(1)));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveRequested {
+                from: acct(1),
+                to: acct(2),
+                executable_at: ts(37 * DAY),
+            })
+        );
+        // Nothing moved yet; one move at a time; the claim is used.
+        assert!(is_member(1) && !is_member(2));
+        assert_noop!(request_move(3, 1, 3), Error::<Test>::MovePending);
+        assert_noop!(request_move(2, 1, 2), Error::<Test>::AlreadyPresented);
+        assert_noop!(
+            call(signed(9), Call::complete_move { from: acct(1) }),
+            Error::<Test>::MoveNotDue
+        );
+        check();
+        set_time(37 * DAY);
+        assert_ok!(call(signed(9), Call::complete_move { from: acct(1) }));
+        assert_eq!(
+            events().last(),
+            Some(&Event::Moved {
+                from: acct(1),
+                to: acct(2)
+            })
+        );
+        assert!(!is_member(1) && is_member(2));
+        assert_eq!(level(1), 0);
+        assert_eq!(level(2), 1);
+        assert!(world(|w| w.retired.contains(&acct(1))));
+        assert_eq!(world(|w| w.moved.get(&acct(1)).cloned()), Some(acct(2)));
+        assert!(Credentials::<Test>::get(acct(1)).is_none());
+        assert_eq!(
+            Credentials::<Test>::get(acct(2)).unwrap().serial,
+            Serial([2; 16])
+        );
+        assert!(Moves::<Test>::get(acct(1)).is_none() && MoveOf::<Test>::get(acct(2)).is_none());
+        assert_noop!(
+            call(signed(9), Call::complete_move { from: acct(1) }),
+            Error::<Test>::NoMove
+        );
+        // The new account renews and is verified again like any other.
+        assert_ok!(call(signed(2), Call::renew {}));
+        check();
+    });
+}
+
+#[test]
+fn the_old_key_stops_a_move_and_the_asker_can_withdraw() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        assert_ok!(request_move(2, 1, 2));
+        // Nobody else.
+        assert_noop!(call(signed(3), Call::stop_move {}), Error::<Test>::NoMove);
+        // "This was not me."
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::ByOldKey,
+            })
+        );
+        set_time(8 * DAY);
+        assert_noop!(
+            call(signed(9), Call::complete_move { from: acct(1) }),
+            Error::<Test>::NoMove
+        );
+        assert!(is_member(1) && !is_member(2));
+        // Asked again with a new claim, and withdrawn by the asker.
+        assert_ok!(request_move(2, 1, 3));
+        assert_ok!(call(signed(2), Call::stop_move {}));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::Withdrawn,
+            })
+        );
+        check();
+    });
+}
+
+#[test]
+fn a_move_whose_claim_counts_no_longer_does_not_happen() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        // Taken back by the issuer while the move waits.
+        assert_ok!(request_move(2, 1, 2));
+        assert_ok!(revoke(2, 1));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::Lapsed,
+            })
+        );
+        assert!(is_member(1));
+        // The issuer struck off the list while the move waits.
+        assert_ok!(request_move(2, 1, 3));
+        assert_ok!(update(Issuer {
+            status: IssuerStatus::Revoked,
+            ..issuer()
+        }));
+        set_time(7 * DAY);
+        assert_ok!(call(signed(9), Call::complete_move { from: acct(1) }));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::Lapsed,
+            })
+        );
+        assert!(world(|w| w.moved.is_empty()));
+        check();
+    });
+}
+
+#[test]
+fn without_a_waiting_time_a_move_happens_at_once() {
+    new_test_ext().execute_with(|| {
+        MoveDelay::set(&0);
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        // An account that holds a claim of its own is no target.
+        assert_ok!(present(3, &claim(3, 1, 3)));
+        assert_noop!(request_move(3, 1, 4), Error::<Test>::TargetHoldsClaim);
+        assert_ok!(request_move(2, 1, 2));
+        assert!(!is_member(1) && is_member(2));
+        assert_eq!(level(2), 1);
+        assert!(Moves::<Test>::iter().next().is_none());
+        // A person whose key changed twice.
+        assert_ok!(request_move(4, 1, 5));
+        assert!(!is_member(2) && is_member(4));
+        check();
     });
 }

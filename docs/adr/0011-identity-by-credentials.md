@@ -1,6 +1,6 @@
 # ADR 0011 – Identity by credentials
 
-Status: accepted (M3, 2026-11-13). Built and tested: the check (`capita-credential`), the chain host (`pallet-capita-credential`), the wiring to Duniter's pallets in the runtime. Not built: an identity service that issues claims (see "Not in M3").
+Status: accepted (M3, 2026-11-13); changed by M3b (2026-11-14): the pseudonym of a person is the person key of ADR 0013; claims have format v2 with the field `replaces`; an account moves to a new key (below, "A lost key"); an identity service exists (ADR 0014). Built and tested: the check (`capita-credential`), the chain host (`pallet-capita-credential`), the wiring to Duniter's pallets in the runtime. Not built: an identity service that issues claims (see "Not in M3").
 
 ## Context
 The rules need three facts about the holder of an account: that it is one person with one account, how thoroughly that was checked (verification level), and optionally where the person lives (ADR 0008). Who establishes them is open (F3). ADR 0009 left the place: Duniter's identity and membership pallets, with a credential pallet where Duniter has its web of trust. A web of trust needs people who know each other; newcomers in remote places know nobody. A document, an e-mail address or a letter can be checked from anywhere – by a service.
@@ -60,6 +60,10 @@ Wiring in `runtime/src/identity.rs`, through calls, public functions and the han
 - **No change of key.** Duniter can move an identity to a new key; the account and its money would stay with the old one. Refused (`OnKeyChange`). Offene Frage: B5 – a lost or stolen key: moving the account to a new key after a new verification (threat table of `architecture.md`, "Lost device").
 - The credential pallet itself knows neither Duniter nor `pallet-capita`: two small traits (`Memberships`, `Rules`), implemented in the runtime. Another identity pallet, or none, is a change there.
 
+### A lost key
+A key is stored nowhere but with its holder. Whoever loses it opens an account with a new key, is verified again, and asks for the old account to move there (`credential.requestMove`, with the new claim). The move waits (`identity.key_move_delay` of the rules file, default 7 days); until it is completed the old key can stop it (`credential.stopMove`), and whoever asked can withdraw. Then anybody completes it (`credential.completeMove`): person, balance, what was accrued, step and seniority go to the new account (`capita_core::recovery`); the old account is closed, its Duniter identity removed – not revoked, nothing went wrong – and the new account becomes a member identity with the new claim. What is paid to the old account afterwards reaches the new one. A move whose claim counts no longer does not happen.
+Offene Frage: 2discuss M – the waiting time, and who wins when the old key objects.
+
 ### Paying for the verification
 Not enforced on chain. The start grant can be paid only to the verification service (`pay_verification`); an issuer sees the payment in the public events before it issues.
 
@@ -74,7 +78,7 @@ Not enforced on chain. The start grant can be paid only to the verification serv
 − Public and linkable: issuer, level, country and attributes of an account, and the same pseudonym on every host. Zero-knowledge proofs would remove that.
 − Uniqueness is as good as the issuers of a realm, and open across realms.
 − The list is kept by one authority until governance exists.
-− A claim is bound to a key. Losing the key loses the account until moving accounts is built.
+− A claim is bound to a key. A lost key costs a new verification and the waiting time of the move.
 
 ## Open (technical)
 Weights by benchmark (a signature check per claim) · `sp-io` and a library may judge malformed Ed25519 signatures differently: hosts must agree before two hosts serve one currency · in a block hook the block time is that of the previous block, so a level withdrawn because a membership ran out is withdrawn as of that time · P-256 (EUDI wallet, eIDAS) as a further signature scheme · serde form of signatures (JSON for the service host) · status of single attributes (a claim is replaced as a whole).

@@ -27,10 +27,22 @@ jobs:
       # the rules files: read, checked, compiled, run through the core
       - run: cargo clippy -p capita-rulefile -p capita-rules --all-targets --all-features -- -D warnings
       - run: cargo test -p capita-rulefile -p capita-rules --all-features
+      # the person key: canonical forms, keyed function
+      - run: cargo clippy -p capita-person-key --all-targets -- -D warnings
+      - run: cargo test -p capita-person-key
       # no_std: build for a target without an operating system
-      - run: cargo build -p capita-core -p capita-credential -p capita-rules --target thumbv7em-none-eabi
+      - run: cargo build -p capita-core -p capita-credential -p capita-rules -p capita-person-key --target thumbv7em-none-eabi
       - run: cargo build -p capita-core --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-credential --features serde,scale --target thumbv7em-none-eabi
+  # The identity service: issuing logic, store, interface, Challenger client.
+  issuer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+      - run: cargo clippy -p capita-issuer --all-targets -- -D warnings
+      - run: cargo test -p capita-issuer
   pallet:
     runs-on: ubuntu-latest
     steps:

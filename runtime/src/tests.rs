@@ -207,6 +207,7 @@ fn claim(who: Sr25519Keyring, level: u8, serial: u8, days: u64) -> Claim {
         serial: Serial([serial; 16]),
         subject: core_id(who),
         subject_ref: SubjectRef(who.public().0),
+        replaces: None,
         level: VerificationLevel(level),
         residence: None,
         attributes: vec![],
@@ -423,6 +424,7 @@ fn the_rules_run_on_the_chain_from_opening_to_claim() {
         assert_eq!(balance(Bob), 200);
         // … the identity service (here: root) attests level 1 …
         let attestation = Attestation {
+            replaces: None,
             person: PersonId([7; 32]),
             level: VerificationLevel(1),
             residence: None,
@@ -795,6 +797,115 @@ fn a_revoked_identity_freezes_the_account_and_no_identity_moves_to_another_key()
             },
         );
         assert_eq!(level(Charlie), 0);
+        end_block();
+    });
+}
+
+/// The call by which the subject of `claim` asks for the account of the
+/// person it names to move to it.
+fn request_move(claim: Claim) -> pallet_capita_credential::Call<Runtime> {
+    let bytes = claim_bytes(&Credential::audience(), &claim);
+    pallet_capita_credential::Call::request_move {
+        claim,
+        signature: capita_credential::types::Signature::Ed25519(issuer_key().sign(&bytes).0),
+        name: None,
+    }
+}
+
+#[test]
+fn a_lost_key_is_replaced_by_verifying_again() {
+    dev().execute_with(|| {
+        charlie_is_verified();
+        start_block(2, 6);
+        assert_ok!(run(
+            Charlie,
+            3,
+            pallet_capita::Call::set_tier { tier: TierId(1) }
+        ));
+        end_block();
+        let delay = crate::configs::KeyMoveDelay::get();
+        assert_eq!(delay, capita_rules::alpha::KEY_MOVE_DELAY.secs());
+        let (charlie, dave): (AccountId, AccountId) =
+            (Charlie.to_account_id(), Dave.to_account_id());
+
+        // Charlie's key is lost. The person opens an account with a new
+        // key – Dave's – is verified again, and asks for the move.
+        start_block(3, 3_606);
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        let grant = balance(Dave);
+        let mut again = claim(Dave, 1, 2, 365);
+        again.subject_ref = SubjectRef(Charlie.public().0);
+        // presenting it is refused as ever: one person, one account
+        assert_eq!(
+            run(Dave, 1, present(again.clone(), None)),
+            Err(pallet_capita::Error::<Runtime>::DuplicatePerson.into())
+        );
+        assert_ok!(run(Dave, 2, request_move(again)));
+        // nothing moved yet, and not before the waiting time is over
+        assert_eq!(Identity::identity_index_of(&charlie), Some(2));
+        assert_eq!(level(Charlie), 1);
+        assert_eq!(
+            run(
+                Bob,
+                1,
+                pallet_capita_credential::Call::complete_move {
+                    from: charlie.clone()
+                }
+            ),
+            Err(pallet_capita_credential::Error::<Runtime>::MoveNotDue.into())
+        );
+        end_block();
+
+        // After the waiting time anybody completes the move.
+        skip_to(10);
+        start_block(10, 3_606 + delay);
+        assert_ok!(run(
+            Bob,
+            2,
+            pallet_capita_credential::Call::complete_move {
+                from: charlie.clone()
+            }
+        ));
+        // the identity went with the person: Charlie's is gone, Dave is a
+        // member identity with the level of the new claim
+        assert_eq!(Identity::identity_index_of(&charlie), None);
+        let dave_index = Identity::identity_index_of(&dave).expect("identity created");
+        assert_eq!(status(dave_index), IdtyStatus::Member);
+        assert_eq!(level(Dave), 1);
+        assert!(pallet_capita_credential::Credentials::<Runtime>::get(&charlie).is_none());
+        assert!(pallet_capita_credential::Credentials::<Runtime>::get(&dave).is_some());
+        // the old account is closed and bound to nobody
+        let old = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
+        assert_eq!(old.status, capita_core::account::AccountStatus::Closed);
+        assert_eq!(old.person, None);
+        assert_eq!(
+            run(Charlie, 4, pallet_capita::Call::claim {}),
+            Err(pallet_capita::Error::<Runtime>::AccountNotActive.into())
+        );
+        // what accrued under the lost key is claimed with the new one: the
+        // whole waiting time at 1 cent per minute, and more
+        assert_eq!((balance(Charlie), balance(Dave)), (0, grant));
+        assert_ok!(run(Dave, 3, pallet_capita::Call::claim {}));
+        let minutes = i64::try_from(delay / 60).unwrap();
+        assert!(balance(Dave) >= grant + minutes);
+        // a payment to the old account reaches the new one
+        let before = balance(Dave);
+        sudo(
+            1,
+            pallet_capita::Call::purchase {
+                account: Bob.to_account_id(),
+                amount: capita_core::types::Amount::from_cents(500),
+            },
+        );
+        assert_ok!(run(
+            Bob,
+            3,
+            pallet_capita::Call::transfer {
+                to: charlie,
+                amount: capita_core::types::Amount::from_cents(200),
+            }
+        ));
+        assert_eq!((balance(Charlie), balance(Dave)), (0, before + 200));
         end_block();
     });
 }

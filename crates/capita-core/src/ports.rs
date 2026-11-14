@@ -104,6 +104,10 @@ pub enum TransferPurpose {
     LoanDisbursement,
     /// A borrower repays.
     LoanRepayment,
+    /// The whole balance of an account that moved to a new key
+    /// (`recovery`). The same person on both sides: not counted as a
+    /// payment.
+    AccountMoved,
 }
 
 /// One instruction to the ledger. The core produces these; it never touches
@@ -372,6 +376,17 @@ pub enum Event {
         amount: Amount,
         /// Why.
         purpose: TransferPurpose,
+        /// When.
+        at: Timestamp,
+    },
+    /// An account moved to a new key: the person, the balance and what
+    /// was accrued went from one account to the other; the old one is
+    /// closed.
+    AccountMoved {
+        /// The account left behind, closed.
+        from: AccountId,
+        /// The account of the person from now on.
+        to: AccountId,
         /// When.
         at: Timestamp,
     },

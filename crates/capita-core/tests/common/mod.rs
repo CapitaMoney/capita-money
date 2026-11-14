@@ -131,6 +131,7 @@ pub fn attestation(
     expires_at: Option<Timestamp>,
 ) -> Attestation {
     Attestation {
+        replaces: None,
         person: PersonId([person; 32]),
         level: VerificationLevel(level),
         residence: country.map(|c| Residence {

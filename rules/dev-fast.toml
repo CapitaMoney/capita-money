@@ -133,6 +133,24 @@ status = "example"
 source = "test chain"
 note = "How long a verification holds."
 
+[identity.person_key_basis]
+value = "name-birthdate"
+status = "example"
+source = "test chain"
+note = "What makes a person one person for the identity services: \"name-birthdate\" (name and date of birth from an identity document), \"name-address\" (name and postal address, proven by a letter) or \"document\" (country, kind and number of a document)."
+
+[identity.minimum_age]
+value = 0
+status = "example"
+source = "test chain"
+note = "Youngest age in years at which a person is verified. 0: no minimum age."
+
+[identity.key_move_delay]
+value = "2 minutes"
+status = "example"
+source = "test chain"
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
+
 [verification.price_eur]
 value = "1.00"
 status = "example"

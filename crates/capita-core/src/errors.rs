@@ -91,6 +91,12 @@ pub enum CoreError {
     DuplicatePerson,
     /// The attestation is no longer, or not yet, valid.
     AttestationNotValid,
+    /// The account to move is not the account of the person named.
+    NotAccountOfPerson,
+    /// The account a person wants to move to is bound to a person already.
+    MoveTargetBound,
+    /// An account with a credit line or recorded debt cannot move.
+    MoveWithDebt,
     /// The credit line asked for exceeds the maximum.
     CreditLineTooHigh,
     /// The loan would exceed the maximum recorded debt.
@@ -133,6 +139,9 @@ impl fmt::Display for CoreError {
             Self::PersonMismatch => f.write_str("attestation is for another person"),
             Self::DuplicatePerson => f.write_str("person already holds an account"),
             Self::AttestationNotValid => f.write_str("attestation not valid"),
+            Self::NotAccountOfPerson => f.write_str("not the account of this person"),
+            Self::MoveTargetBound => f.write_str("target account belongs to a person already"),
+            Self::MoveWithDebt => f.write_str("account with credit line or debt cannot move"),
             Self::CreditLineTooHigh => f.write_str("credit line above the maximum"),
             Self::DebtLimitExceeded => f.write_str("debt above the maximum"),
             Self::OtherLenderOutstanding => f.write_str("debt to another lender outstanding"),

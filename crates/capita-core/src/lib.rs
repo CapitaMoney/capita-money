@@ -40,6 +40,7 @@
 //! | [`issuance`]  | claim per-capita money; mint purchased money |
 //! | [`loans`]     | payments, credit lines, recorded loans, repayment |
 //! | [`demurrage`] | optional holding fee (off by default) |
+//! | [`recovery`]  | lost key: move an account to a new one after a new verification |
 //! | [`totals`]    | public sums over the event record |
 //! | [`params`]    | versioned rules and their validation |
 //!
@@ -70,5 +71,6 @@ pub mod loans;
 pub mod params;
 pub mod plan;
 pub mod ports;
+pub mod recovery;
 pub mod totals;
 pub mod types;

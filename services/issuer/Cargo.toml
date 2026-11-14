@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-issuer"
+description = "Identity service of Capita Money: checks a person, computes the person key, signs a claim for the account, and forgets the data."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+capita-core = { workspace = true, features = ["std"] }
+capita-credential = { workspace = true, features = ["std"] }
+capita-person-key = { workspace = true, features = ["local"] }
+capita-rulefile = { workspace = true }
+ed25519-dalek = "2.2.0"
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+toml = { version = "1.2", default-features = false, features = ["parse", "serde"] }
+ureq = { version = "2.12", default-features = false, features = ["tls", "json"] }
+
+[dev-dependencies]
+blake2 = "0.10.6"

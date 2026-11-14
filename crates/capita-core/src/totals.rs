@@ -77,12 +77,15 @@ impl Totals {
                 TransferPurpose::Payment => add(&mut self.paid, amount)?,
                 TransferPurpose::LoanDisbursement => add(&mut self.lent, amount)?,
                 TransferPurpose::LoanRepayment => add(&mut self.repaid, amount)?,
+                // The same person on both sides: no payment.
+                TransferPurpose::AccountMoved => {}
             },
             Event::Burnt { amount, reason, .. } => match reason {
                 BurnReason::Demurrage => add(&mut self.demurrage, amount)?,
                 BurnReason::AccountClosed => add(&mut self.closed, amount)?,
             },
             Event::StatusChanged { .. }
+            | Event::AccountMoved { .. }
             | Event::TierChanged { .. }
             | Event::CreditLineChanged { .. }
             | Event::ParamsEnacted { .. } => {}

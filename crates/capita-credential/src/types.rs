@@ -81,19 +81,20 @@ small! {
 }
 
 small! {
-    /// A group of issuers that give the same person the same pseudonym.
+    /// A group of issuers that give the same person the same person key:
+    /// they share its scheme and its secret (`docs/adr/0013-person-key.md`).
     /// Within a realm one person is one person; across realms nothing links
-    /// two pseudonyms.
+    /// two person keys.
     ///
-    /// Offene Frage: F3 – how issuers of one realm agree on the pseudonym,
-    /// and how realms are kept from overlapping.
+    /// Offene Frage: F3 – how realms are kept from overlapping.
     pub struct Realm(u32);
 }
 
 small! {
-    /// The pseudonym an issuer gives a person: the same for every claim
+    /// The person key an issuer gives a person: the same for every claim
     /// about that person, different for any other. Never a name or a
-    /// document number; for example a keyed hash of one.
+    /// document number, but a keyed hash of such data (`capita-person-key`,
+    /// `docs/adr/0013-person-key.md`): a pseudonym.
     pub struct SubjectRef([u8; 32]);
 }
 
@@ -201,8 +202,12 @@ data! {
         pub serial: Serial,
         /// The account the claim is made out to. Nobody else can use it.
         pub subject: AccountId,
-        /// The person behind the account, as a pseudonym.
+        /// The person behind the account, as a person key.
         pub subject_ref: SubjectRef,
+        /// The person key the same person had before, if it changed (a new
+        /// name, a new secret of the identity services). An account bound
+        /// to that key is bound to `subject_ref` from now on.
+        pub replaces: Option<SubjectRef>,
         /// Verification level reached.
         pub level: VerificationLevel,
         /// Proven residence, if any.

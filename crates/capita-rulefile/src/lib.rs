@@ -239,6 +239,38 @@ pub struct Sponsoring {
 pub struct Identity {
     /// How long a verification holds.
     pub membership_period: Rule<Span>,
+    /// What the person key – the one identifier a person has – is made
+    /// from.
+    pub person_key_basis: Rule<PersonKeyBasis>,
+    /// Youngest age at which a person is verified, in years; 0 = none.
+    pub minimum_age: Rule<u8>,
+    /// How long the move of an account to a new key waits, so that the old
+    /// key can stop it. Off: at once.
+    pub key_move_delay: Rule<Span>,
+}
+
+/// What the person key is made from (`docs/adr/0013-person-key.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PersonKeyBasis {
+    /// Name and date of birth, as an identity document states them.
+    NameBirthdate,
+    /// Name and postal address, proven by a letter with a code.
+    NameAddress,
+    /// Country, kind and number of an identity document.
+    Document,
+}
+
+impl PersonKeyBasis {
+    /// The word a rules file uses for it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NameBirthdate => "name-birthdate",
+            Self::NameAddress => "name-address",
+            Self::Document => "document",
+        }
+    }
 }
 
 /// The verification of a person.
@@ -555,6 +587,20 @@ impl RuleSet {
             "identity.membership_period",
             period,
             period.value.to_string(),
+        ));
+        let basis = &self.identity.person_key_basis;
+        lines.push(value(
+            "identity.person_key_basis",
+            basis,
+            basis.value.as_str().to_owned(),
+        ));
+        let age = &self.identity.minimum_age;
+        lines.push(value("identity.minimum_age", age, age.value.to_string()));
+        let delay = &self.identity.key_move_delay;
+        lines.push(value(
+            "identity.key_move_delay",
+            delay,
+            delay.value.to_string(),
         ));
         let price = &self.verification.price_eur;
         lines.push(value(

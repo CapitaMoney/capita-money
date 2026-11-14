@@ -97,6 +97,7 @@ fn claim() -> Claim {
         serial: Serial([9; 16]),
         subject: AccountId([5; 32]),
         subject_ref: SubjectRef([6; 32]),
+        replaces: None,
         level: VerificationLevel(2),
         residence: Some(Residence {
             country: CountryCode(*b"FR"),
@@ -148,12 +149,13 @@ fn the_signed_bytes_are_fixed() {
     // A test vector for issuers written in other languages.
     let bytes = claim_bytes(&AUDIENCE, &claim());
     let mut expected = Vec::new();
-    expected.extend_from_slice(b"capita-claim-v1");
+    expected.extend_from_slice(b"capita-claim-v2");
     expected.extend_from_slice(&[7; 32]); // audience
     expected.extend_from_slice(&[0, 0, 0, 3]); // issuer
     expected.extend_from_slice(&[9; 16]); // serial
     expected.extend_from_slice(&[5; 32]); // subject
     expected.extend_from_slice(&[6; 32]); // subject_ref
+    expected.push(0); // replaces nothing
     expected.push(2); // level
     expected.push(1); // residence present
     expected.extend_from_slice(b"FR");
@@ -167,7 +169,7 @@ fn the_signed_bytes_are_fixed() {
     assert_eq!(bytes, expected);
     assert_eq!(
         bytes.len(),
-        15 + 32 + 4 + 16 + 32 + 32 + 1 + 11 + 2 + 10 + 8 + 9
+        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 11 + 2 + 10 + 8 + 9
     );
 
     // without residence, attributes and expiry
@@ -178,11 +180,33 @@ fn the_signed_bytes_are_fixed() {
         ..claim()
     };
     let bytes = claim_bytes(&AUDIENCE, &bare);
-    assert_eq!(bytes.len(), 15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 2 + 8 + 1);
+    assert_eq!(
+        bytes.len(),
+        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 1 + 2 + 8 + 1
+    );
     assert_eq!(
         &bytes[bytes.len() - 12..],
         [&[0u8, 0, 0][..], &(NOW - DAY).to_be_bytes(), &[0]].concat()
     );
+
+    // a claim that replaces an earlier person key: 32 bytes more, after
+    // the person key
+    let rebound = Claim {
+        replaces: Some(SubjectRef([8; 32])),
+        ..bare.clone()
+    };
+    let longer = claim_bytes(&AUDIENCE, &rebound);
+    let at_replaces = 15 + 32 + 4 + 16 + 32 + 32;
+    assert_eq!(longer.len(), bytes.len() + 32);
+    assert_eq!(longer[at_replaces], 1);
+    assert_eq!(&longer[at_replaces + 1..at_replaces + 33], &[8; 32]);
+    assert_eq!(&longer[at_replaces + 33..], &bytes[at_replaces + 1..]);
+    let stated = attestation::<Host>(&rebound, Realm(1));
+    assert_eq!(
+        stated.replaces,
+        Some(person_id::<Host>(Realm(1), &SubjectRef([8; 32])))
+    );
+    assert_eq!(attestation::<Host>(&bare, Realm(1)).replaces, None);
 
     let revocation = Revocation {
         issuer: ID,
@@ -219,6 +243,7 @@ fn a_claim_counts_for_one_host_one_account_one_content() {
         },
         Claim {
             subject_ref: SubjectRef([4; 32]),
+            replaces: None,
             ..claim.clone()
         },
         Claim {
