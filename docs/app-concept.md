@@ -79,6 +79,6 @@ One web app, installable (PWA): Android, iPhone, desktop browsers – one code, 
 
 ## Next steps
 1. Five non-technical people try the prototype; measure the time to the home screen and ask what they think happens next (plan step 4: play-money demo = UX test).
-2. Camera scan, Verify flow once F is decided (Opus: keys, NFC, face).
+2. Camera scan, Verify flow: designed in [the full app](app-full.md) – keys (ADR 0020), ways to verify (ADR 0021), helper stations (ADR 0022), shells and hosting (ADR 0023).
 3. Connect to the test chain: key on the device, `capita.open`, transfers, collection (Sonnet plumbing).
 4. Store wrappers (Play, F-Droid, App Store).
