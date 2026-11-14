@@ -464,6 +464,32 @@ fn a_ticket_pays_one_verification() {
 }
 
 #[test]
+fn tickets_paid_after_the_start_are_taken() {
+    let mut service = service(Settings {
+        payment: Payment::Tickets(BTreeSet::new()),
+        ..settings(Basis::NameBirthdate)
+    });
+    let ask = Request {
+        ticket: Some("NEW-1".into()),
+        ..request(1, person("Kim", "Min", "1980-01-01"))
+    };
+    assert_eq!(service.issue(ask.clone(), NOW), Err(Refusal::NotPaid));
+    assert!(!service.knows_ticket("NEW-1"));
+    let codes = capita_issuer::config::ticket_codes("# euro door\nNEW-1\n\nNEW-1\n");
+    assert_eq!(service.add_tickets(codes), 1);
+    assert!(service.knows_ticket("NEW-1"));
+    assert!(service.issue(ask, NOW).is_ok());
+    // Payment off: codes change nothing.
+    let mut free = service_off();
+    assert_eq!(free.add_tickets(["X".to_owned()]), 0);
+    assert!(!free.knows_ticket("X"));
+}
+
+fn service_off() -> Service<LocalKey, MemoryStore> {
+    service(settings(Basis::NameBirthdate))
+}
+
+#[test]
 fn a_revocation_is_signed_for_the_chain() {
     let service = service(settings(Basis::NameBirthdate));
     let (revocation, signature) = service.revoke([9; 16]);

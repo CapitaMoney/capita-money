@@ -55,7 +55,8 @@ fn run() -> Result<(), String> {
                 );
             }
             serve(
-                &App::new(service, config.checks.test, challenger),
+                &App::new(service, config.checks.test, challenger)
+                    .with_tickets_file(config.payment.tickets_file.clone()),
                 &config.listen,
             )
         }

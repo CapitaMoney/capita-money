@@ -342,6 +342,27 @@ impl<K: KeyService, S: Store> Service<K, S> {
         self.signing.verifying_key().to_bytes()
     }
 
+    /// Adds ticket codes paid for since the service started – the euro
+    /// door (`capita-euro-door`) writes them to the tickets file. Codes
+    /// already known stay once; with payment off nothing changes. Returns
+    /// how many codes were new.
+    pub fn add_tickets<I: IntoIterator<Item = String>>(&mut self, codes: I) -> usize {
+        let Payment::Tickets(valid) = &mut self.settings.payment else {
+            return 0;
+        };
+        codes
+            .into_iter()
+            .map(|code| valid.insert(code))
+            .filter(|new| *new)
+            .count()
+    }
+
+    /// Whether a ticket code is known to the service, used or not.
+    #[must_use]
+    pub fn knows_ticket(&self, code: &str) -> bool {
+        matches!(&self.settings.payment, Payment::Tickets(valid) if valid.contains(code))
+    }
+
     /// What the service is set up with.
     #[must_use]
     pub const fn settings(&self) -> &Settings {

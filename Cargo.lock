@@ -990,6 +990,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "capita-euro-door"
+version = "0.1.0"
+dependencies = [
+ "capita-rulefile",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tiny_http",
+ "toml 1.2.1+spec-1.1.0",
+ "ureq",
+]
+
+[[package]]
 name = "capita-issuer"
 version = "0.1.0"
 dependencies = [

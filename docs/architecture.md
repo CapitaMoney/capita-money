@@ -8,8 +8,10 @@ Rules still open are marked `Offene Frage:`; they are parameters or hooks, never
 All monetary rules live in one pure library, `capita-core`. It computes; it does not store, send or read a clock.
 Everything else is an adapter behind a port. Two hosts run the same core:
 
-- **Service host** (first): a small service next to a GNU Taler bank (libeufin-bank).
-- **Chain host**: a Substrate pallet on an own chain with Duniter pallets. A local test chain exists (ADR 0010).
+- **Chain host** (the ledger, ADR 0015): a Substrate pallet on an own chain with Duniter pallets. A local test chain exists (ADR 0010).
+- **Service host** (kept possible, not used): the same core next to a GNU Taler bank (ADR 0004, superseded).
+
+GNU Taler stays as the **euro door** only: a merchant backend takes euros, `services/euro-door` turns paid orders into verification tickets (ADR 0015).
 
 Same rules, same tests, either host. Swapping ledger or identity provider touches one adapter, never the rules.
 
@@ -38,7 +40,7 @@ flowchart TB
 | Part | Role | Repository path |
 |---|---|---|
 | `capita-core` | rules, data model, ports | `crates/capita-core` |
-| service host + Taler adapters | claim/lend API, outbox, libeufin client | M4 |
+| euro door | euros through a GNU Taler merchant backend → verification tickets for identity services (ADR 0015) | `services/euro-door` |
 | `pallet-capita` | same core inside a runtime (ADR 0009) | `pallets/capita` |
 | runtime + node | local test chain: `pallet-capita`, Duniter identity + membership, Aura/GRANDPA, sudo (ADR 0010) | `runtime`, `node` |
 | `capita-credential` | claims of identity services: format, signed bytes, check (ADR 0011) | `crates/capita-credential` |

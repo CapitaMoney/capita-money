@@ -39,6 +39,7 @@
 
 use std::collections::BTreeMap;
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -88,6 +89,7 @@ pub struct App<K: KeyService, S: Store> {
     test_check: bool,
     challenger: Option<Challenger>,
     sessions: Mutex<BTreeMap<String, Session>>,
+    tickets_file: Option<PathBuf>,
 }
 
 /// An answer: HTTP status and JSON body.
@@ -141,7 +143,16 @@ impl<K: KeyService, S: Store> App<K, S> {
             test_check,
             challenger,
             sessions: Mutex::new(BTreeMap::new()),
+            tickets_file: None,
         }
+    }
+
+    /// Reads the tickets file again when a ticket is not known yet: the
+    /// euro door adds codes while the service runs.
+    #[must_use]
+    pub fn with_tickets_file(mut self, path: Option<PathBuf>) -> Self {
+        self.tickets_file = path;
+        self
     }
 
     fn info(&self) -> Answer {
@@ -187,6 +198,13 @@ impl<K: KeyService, S: Store> App<K, S> {
         let Ok(mut service) = self.service.lock() else {
             return refuse(500, "system", "service unavailable");
         };
+        if let (Some(path), Some(code)) = (&self.tickets_file, &request.ticket) {
+            if !service.knows_ticket(code) {
+                if let Ok(text) = std::fs::read_to_string(path) {
+                    service.add_tickets(crate::config::ticket_codes(&text));
+                }
+            }
+        }
         match service.issue(request, now) {
             Ok(issued) => (200, call_json(&issued)),
             Err(why) => refusal(&why),

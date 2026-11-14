@@ -1,6 +1,6 @@
 # ADR 0004 – Start on GNU Taler, keep the data model portable
 
-Status: accepted for the start; revisit with E1 (governance) and E3 (transparency)
+Status: superseded by ADR 0015 (2026-11-14): the chain is the ledger, GNU Taler only the euro door. Kept for the reasoning and the portable data model, which stays.
 
 ## Context
 A blockchain gives rules nobody can change alone and a public ledger, but needs independent validators, runtime upgrades and key handling that loses money when a seed phrase is lost. A first community needs one-tap install and an account in two minutes.
