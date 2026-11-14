@@ -1,0 +1,12 @@
+{
+  "appId": "com.capitamoney.app",
+  "appName": "Capita",
+  "webDir": "www",
+  "server": {
+    "hostname": "app.capitamoney.com",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

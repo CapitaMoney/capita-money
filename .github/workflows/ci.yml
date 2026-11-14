@@ -23,6 +23,42 @@ jobs:
       - run: for f in app/*.js app/vendor/*.mjs; do node --check "$f"; done
       - run: npm test
         working-directory: app
+  # The Android shell: the web app plus chip reader and passkeys (ADR 0023).
+  # Signed with the public development key; on main the APK becomes the
+  # pre-release "android-alpha".
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+        working-directory: app
+      - run: npm run android
+        working-directory: app
+      - run: ./gradlew --no-daemon assembleRelease
+        working-directory: app/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capita-android
+          path: app/android/app/build/outputs/apk/release/*.apk
+      - name: the APK as a pre-release (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/android/app/build/outputs/apk/release/app-release.apk capita-alpha.apk
+          gh release delete android-alpha --yes --cleanup-tag || true
+          gh release create android-alpha capita-alpha.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Capita for Android – alpha, test money only" \
+            --notes "Built from $GITHUB_SHA. Signed with the public development key (ADR 0023): test money only. Install: open the file on the phone and allow installing from this source."
   core:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.capitamoney.app",
+      "sha256_cert_fingerprints": [
+        "B4:12:63:E1:AA:6C:BE:53:83:D7:B0:01:7D:7D:76:D4:9A:0E:4D:5D:74:D9:66:C1:C1:BF:03:53:51:E1:70:EE"
+      ]
+    }
+  }
+]

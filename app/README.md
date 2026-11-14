@@ -28,3 +28,10 @@ Tests cover `logic.js`: start grant, verification, monthly Capita, claim window,
 | `fonts/` | Chakra Petch, IBM Plex Sans (SIL OFL 1.1, licences beside them) |
 
 Changing a rule value: change it in `rules/alpha.toml` and in `RULES` in `logic.js`.
+
+## Android shell (ADR 0023)
+The same files, wrapped by Capacitor (`android/`), plus the chip reader (`CapitaChipPlugin`, JMRTD) and passkeys inside the app. CI builds the APK (`android` job) and, on `main`, puts it on the pre-release `android-alpha`. Local build (needs the Android SDK): `npm ci && npm run android && cd android && ./gradlew assembleDebug`.
+
+Signed with a **public development key** (`android/dev-signing.jks`, password `capita-development`): anybody can sign an APK the site trusts – test money only. Its fingerprint stands in `well-known/assetlinks.json` (served as `/.well-known/assetlinks.json`) and as origin `android:apk-key-hash:tBJj4apsvlOD17ABfX121JoOTV102WbBwb8DU1HhcO4` on the test chains. A release key replaces both before real use.
+
+`npm run web` copies what the app ships into `www/` – for the shell and for GitHub Pages (`.github/workflows/pages.yml`).
