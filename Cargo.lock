@@ -1019,6 +1019,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "capita-person-key"
+version = "0.1.0"
+dependencies = [
+ "voprf",
+]
+
+[[package]]
 name = "capita-rulefile"
 version = "0.1.0"
 dependencies = [
@@ -1721,6 +1728,7 @@ dependencies = [
  "curve25519-dalek-derive",
  "digest 0.10.7",
  "fiat-crypto",
+ "rand_core 0.6.4",
  "rustc_version",
  "subtle 2.6.1",
  "zeroize",
@@ -1946,6 +1954,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "derive-where"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e2b94854e8576378ccda7c8de8a66ed8b4e8acbd2c50ec3418ea6c8aaf4b567"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -10156,6 +10175,24 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "voprf"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f59c30c76e2fea54cdece6a054e2662feffa7ab19658a7887524265ee39470"
+dependencies = [
+ "curve25519-dalek",
+ "derive-where",
+ "digest 0.10.7",
+ "displaydoc",
+ "elliptic-curve",
+ "generic-array 0.14.9",
+ "rand_core 0.6.4",
+ "sha2 0.10.9",
+ "subtle 2.6.1",
+ "zeroize",
+]
 
 [[package]]
 name = "w3f-bls"

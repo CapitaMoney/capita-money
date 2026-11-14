@@ -133,6 +133,16 @@ impl pallet_capita_credential::Config for Runtime {
     type RegistryOrigin = EnsureRoot<AccountId>;
     type Memberships = DuniterIdentities;
     type Rules = CapitaRules;
+    type MoveDelay = KeyMoveDelay;
+}
+
+parameter_types! {
+    /// How long the move of an account to a new key waits, in seconds. A
+    /// rule (`identity.key_move_delay` of `rules/alpha.toml`). Kept in
+    /// storage, so that whoever holds root can set another time on a
+    /// running chain (`system.setStorage`, key `:KeyMoveDelay:` hashed with
+    /// twox_128) – a test chain need not wait seven days.
+    pub storage KeyMoveDelay: u64 = capita_rules::alpha::KEY_MOVE_DELAY.secs();
 }
 
 // Periods of Duniter's pallets, in blocks. The one that is a rule comes from

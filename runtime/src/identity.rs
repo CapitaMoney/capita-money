@@ -25,10 +25,11 @@ use alloc::vec::Vec;
 
 use capita_core::account::AccountStatus;
 use capita_core::attributes::Attestation;
+use capita_core::types::PersonId;
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::weights::Weight;
 use frame_support::PalletId;
-use pallet_identity::{IdtyName, IdtyStatus};
+use pallet_identity::{IdtyName, IdtyStatus, RemovalReason};
 use pallet_membership::MembershipRemovalReason;
 use sp_runtime::traits::AccountIdConversion;
 
@@ -112,6 +113,16 @@ impl pallet_capita_credential::Memberships<AccountId> for DuniterIdentities {
             Membership::do_remove_membership(idty_index, MembershipRemovalReason::Revoked);
         }
     }
+
+    /// The person moved to another account: the identity is removed, not
+    /// revoked – a revocation would freeze the account and say something
+    /// went wrong. Its membership goes with it (`CredentialLink`); its name
+    /// stays taken.
+    fn retire(who: &AccountId) {
+        if let Some(idty_index) = Identity::identity_index_of(who) {
+            Identity::do_remove_identity(idty_index, RemovalReason::Root);
+        }
+    }
 }
 
 /// The monetary rules for the credential pallet: `pallet-capita`.
@@ -124,6 +135,18 @@ impl pallet_capita_credential::Rules<AccountId> for CapitaRules {
 
     fn freeze(who: &AccountId) -> DispatchResult {
         Capita::do_set_status(Capita::id(who.clone()), AccountStatus::Frozen)
+    }
+
+    fn holder(person: &PersonId) -> Option<AccountId> {
+        Capita::holder_of(person).map(|id| AccountId::from(id.0))
+    }
+
+    fn move_account(from: &AccountId, to: &AccountId, attestation: &Attestation) -> DispatchResult {
+        Capita::do_move(
+            Capita::id(from.clone()),
+            Capita::id(to.clone()),
+            attestation,
+        )
     }
 }
 
@@ -183,11 +206,11 @@ impl pallet_identity::traits::CheckIdtyCallAllowed<Runtime> for CredentialLink {
     }
 }
 
-/// An identity stays with its key. Moving it would leave the account, its
-/// money and its claim behind with the old key.
-///
-/// Offene Frage: B5 – lost or stolen key: moving an account to a new key
-/// after a new verification.
+/// An identity stays with its key: Duniter's own change of key would leave
+/// the account, its money and its claim behind with the old one. A lost key
+/// is replaced another way – the person verifies again with a new account,
+/// and the old account moves there as a whole (`credential.requestMove`,
+/// `capita_core::recovery`).
 impl pallet_identity::traits::KeyChange<Runtime> for CredentialLink {
     fn on_changed(_idty_index: IdtyIndex, _account: AccountId) -> Result<(), DispatchError> {
         Err(DispatchError::Other(

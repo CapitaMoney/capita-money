@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-person-key"
+description = "The person key of Capita Money: one identifier per person, computed by identity services from checked data and a secret, so that no personal data reaches a ledger."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["local"]
+# The keyed function computed with a secret this program holds itself
+# (one identity service, or several that share the secret).
+local = ["dep:voprf"]
+
+[dependencies]
+voprf = { version = "0.5", default-features = false, features = ["ristretto255-ciphersuite", "alloc"], optional = true }
