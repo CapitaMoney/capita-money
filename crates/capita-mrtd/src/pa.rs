@@ -103,7 +103,8 @@ fn read_file(path: &Path) -> Result<Vec<X509>, MrtdError> {
         .and_then(|e| e.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let read = || std::fs::read(path).map_err(|e| MrtdError::Io(format!("{}: {e}", path.display())));
+    let read =
+        || std::fs::read(path).map_err(|e| MrtdError::Io(format!("{}: {e}", path.display())));
     Ok(match extension.as_str() {
         "pem" | "crt" => X509::stack_from_pem(&read()?)?,
         "der" | "cer" => vec![X509::from_der(&read()?)?],
@@ -135,7 +136,8 @@ pub fn master_list(bytes: &[u8]) -> Result<Vec<X509>, MrtdError> {
 /// `ContentInfo { OID, [0] SignedData }` → the parts of `SignedData`.
 fn signed_data(cms: &[u8]) -> Result<Vec<tlv::Tlv<'_>>, MrtdError> {
     let info = tlv::one(cms)?;
-    let explicit = tlv::child(info.value, 0xa0)?.ok_or(MrtdError::Malformed("CMS without content"))?;
+    let explicit =
+        tlv::child(info.value, 0xa0)?.ok_or(MrtdError::Malformed("CMS without content"))?;
     let signed = tlv::one(explicit.value)?;
     tlv::children(signed.value)
 }
@@ -156,7 +158,10 @@ fn encapsulated_content(cms: &[u8]) -> Result<&[u8], MrtdError> {
 fn embedded_certificates(cms: &[u8]) -> Result<Vec<&[u8]>, MrtdError> {
     let parts = signed_data(cms)?;
     match parts.iter().find(|p| p.tag == 0xa0) {
-        Some(set) => Ok(tlv::children(set.value)?.into_iter().map(|c| c.raw).collect()),
+        Some(set) => Ok(tlv::children(set.value)?
+            .into_iter()
+            .map(|c| c.raw)
+            .collect()),
         None => Ok(Vec::new()),
     }
 }
@@ -196,13 +201,17 @@ type Hashes = Vec<(u8, Vec<u8>)>;
 fn security_object(content: &[u8]) -> Result<(&'static str, MessageDigest, Hashes), MrtdError> {
     let object = tlv::read(content)?.0;
     let parts = tlv::children(object.value)?;
-    let algorithm = parts.get(1).ok_or(MrtdError::Malformed("security object"))?;
+    let algorithm = parts
+        .get(1)
+        .ok_or(MrtdError::Malformed("security object"))?;
     let oid = tlv::children(algorithm.value)?
         .into_iter()
         .next()
         .ok_or(MrtdError::Malformed("hash algorithm"))?;
     let (name, md) = digest(oid.value)?;
-    let values = parts.get(2).ok_or(MrtdError::Malformed("security object"))?;
+    let values = parts
+        .get(2)
+        .ok_or(MrtdError::Malformed("security object"))?;
     let mut hashes = Vec::new();
     for entry in tlv::children(values.value)? {
         let fields = tlv::children(entry.value)?;

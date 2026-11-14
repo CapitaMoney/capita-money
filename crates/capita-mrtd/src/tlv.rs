@@ -51,13 +51,17 @@ pub fn read(input: &[u8]) -> Result<(Tlv<'_>, &[u8]), MrtdError> {
         if n == 0 || n > 3 {
             return Err(MrtdError::Malformed("length"));
         }
-        let (bytes, r) = rest.split_at_checked(n).ok_or(MrtdError::Malformed("length"))?;
+        let (bytes, r) = rest
+            .split_at_checked(n)
+            .ok_or(MrtdError::Malformed("length"))?;
         rest = r;
         bytes
             .iter()
             .fold(0usize, |acc, b| acc.wrapping_shl(8) | usize::from(*b))
     };
-    let (value, rest) = rest.split_at_checked(len).ok_or(MrtdError::Malformed("value"))?;
+    let (value, rest) = rest
+        .split_at_checked(len)
+        .ok_or(MrtdError::Malformed("value"))?;
     let raw = input
         .get(..input.len().saturating_sub(rest.len()))
         .ok_or(MrtdError::Malformed("value"))?;

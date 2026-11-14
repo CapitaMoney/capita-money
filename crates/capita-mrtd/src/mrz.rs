@@ -74,7 +74,8 @@ pub fn check_digit(field: &str) -> Option<u8> {
 }
 
 fn part(line: &str, from: usize, to: usize) -> Result<&str, MrtdError> {
-    line.get(from..to).ok_or(MrtdError::Malformed("zone too short"))
+    line.get(from..to)
+        .ok_or(MrtdError::Malformed("zone too short"))
 }
 
 fn checked(field: &str, digit: &str, name: &'static str) -> Result<(), MrtdError> {
@@ -129,7 +130,10 @@ fn first_char(field: &str) -> char {
 /// [`MrtdError::CheckDigit`] for a wrong check digit.
 pub fn parse(zone: &str) -> Result<Mrz, MrtdError> {
     let zone: String = zone.chars().filter(|c| !c.is_whitespace()).collect();
-    if !zone.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '<') {
+    if !zone
+        .chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '<')
+    {
         return Err(MrtdError::Malformed("zone characters"));
     }
     match zone.len() {
@@ -143,9 +147,13 @@ pub fn parse(zone: &str) -> Result<Mrz, MrtdError> {
 /// TD3 and TD2: line 1 = code, state, name; line 2 = number, nationality,
 /// birth, sex, expiry, optional data, composite.
 fn two_lines(zone: &str, width: usize) -> Result<Mrz, MrtdError> {
-    let (one, two) = zone.split_at_checked(width).ok_or(MrtdError::Malformed("zone"))?;
+    let (one, two) = zone
+        .split_at_checked(width)
+        .ok_or(MrtdError::Malformed("zone"))?;
     let last = width.saturating_sub(1);
-    let optional_end = if width == 44 { 42 } else { 35 };
+    // TD3: number, birth, expiry and personal number with their digits;
+    // TD2: number, birth, expiry and optional data.
+    let composite_end: usize = if width == 44 { 43 } else { 35 };
     let number = part(two, 0, 9)?;
     checked(number, part(two, 9, 10)?, "document number")?;
     checked(part(two, 13, 19)?, part(two, 19, 20)?, "date of birth")?;
@@ -160,7 +168,7 @@ fn two_lines(zone: &str, width: usize) -> Result<Mrz, MrtdError> {
     let composite = [
         part(two, 0, 10)?,
         part(two, 13, 20)?,
-        part(two, 21, optional_end.saturating_add(if width == 44 { 1 } else { 0 }))?,
+        part(two, 21, composite_end)?,
     ]
     .concat();
     checked(&composite, part(two, last, width)?, "composite")?;
@@ -201,7 +209,13 @@ fn td1(zone: &str) -> Result<Mrz, MrtdError> {
     }
     checked(part(two, 0, 6)?, part(two, 6, 7)?, "date of birth")?;
     checked(part(two, 8, 14)?, part(two, 14, 15)?, "date of expiry")?;
-    let composite = [part(one, 5, 30)?, part(two, 0, 7)?, part(two, 8, 15)?, part(two, 18, 29)?].concat();
+    let composite = [
+        part(one, 5, 30)?,
+        part(two, 0, 7)?,
+        part(two, 8, 15)?,
+        part(two, 18, 29)?,
+    ]
+    .concat();
     checked(&composite, part(two, 29, 30)?, "composite")?;
     let (family_name, given_names) = names(three);
     Ok(Mrz {

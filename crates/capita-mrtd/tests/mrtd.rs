@@ -48,7 +48,14 @@ fn a_passport_zone() {
     assert_eq!(mrz.given_names, "ANNA MARIA");
     assert_eq!(mrz.number, "L898902C3");
     assert_eq!(mrz.nationality, "UTO");
-    assert_eq!(mrz.birth, MrzDate { yy: 74, mm: 8, dd: 12 });
+    assert_eq!(
+        mrz.birth,
+        MrzDate {
+            yy: 74,
+            mm: 8,
+            dd: 12
+        }
+    );
     assert_eq!(mrz.birth.birth_year(2026), 1974);
     assert_eq!(mrz.sex, 'F');
     assert_eq!(mrz.expiry.expiry_year(), 2012);
@@ -62,23 +69,46 @@ fn an_identity_card_zone() {
     assert_eq!(mrz.number, "D23145890");
     assert_eq!(mrz.family_name, "ERIKSSON");
     assert_eq!(mrz.given_names, "ANNA MARIA");
-    assert_eq!(mrz.birth, MrzDate { yy: 74, mm: 8, dd: 12 });
+    assert_eq!(
+        mrz.birth,
+        MrzDate {
+            yy: 74,
+            mm: 8,
+            dd: 12
+        }
+    );
 }
 
 #[test]
 fn a_changed_zone_fails_its_check_digits() {
-    let born_later = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<L898902C36UTO7508122F1204159ZE184226B<<<<<10";
-    assert_eq!(parse(born_later), Err(MrtdError::CheckDigit("date of birth")));
-    let other_number = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<L898902C46UTO7408122F1204159ZE184226B<<<<<10";
-    assert_eq!(parse(other_number), Err(MrtdError::CheckDigit("document number")));
+    let born_later =
+        "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<L898902C36UTO7508122F1204159ZE184226B<<<<<10";
+    assert_eq!(
+        parse(born_later),
+        Err(MrtdError::CheckDigit("date of birth"))
+    );
+    let other_number =
+        "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<L898902C46UTO7408122F1204159ZE184226B<<<<<10";
+    assert_eq!(
+        parse(other_number),
+        Err(MrtdError::CheckDigit("document number"))
+    );
     assert!(matches!(parse("P<UTO"), Err(MrtdError::Malformed(_))));
 }
 
 #[test]
 fn birth_years_take_the_latest_century_not_in_the_future() {
-    let d = MrzDate { yy: 10, mm: 1, dd: 1 };
+    let d = MrzDate {
+        yy: 10,
+        mm: 1,
+        dd: 1,
+    };
     assert_eq!(d.birth_year(2026), 2010);
-    let d = MrzDate { yy: 30, mm: 1, dd: 1 };
+    let d = MrzDate {
+        yy: 30,
+        mm: 1,
+        dd: 1,
+    };
     assert_eq!(d.birth_year(2026), 1930);
 }
 
