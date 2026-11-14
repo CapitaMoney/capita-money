@@ -148,6 +148,10 @@ pub fn check_claim<C: Crypto>(
 pub fn attestation<C: Crypto>(claim: &Claim, realm: Realm) -> Attestation {
     Attestation {
         person: person_id::<C>(realm, &claim.subject_ref),
+        replaces: claim
+            .replaces
+            .as_ref()
+            .map(|previous| person_id::<C>(realm, previous)),
         level: claim.level,
         residence: claim.residence,
         attributes: claim.attributes.clone(),

@@ -223,6 +223,7 @@ pub fn claim(n: u8, level: u8, serial: u8) -> Claim {
         serial: Serial([serial; 16]),
         subject: CoreId([n; 32]),
         subject_ref: SubjectRef([n; 32]),
+        replaces: None,
         level: VerificationLevel(level),
         residence: None,
         attributes: vec![],

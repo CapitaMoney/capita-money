@@ -21,12 +21,14 @@
 //! purpose on one host only.
 //!
 //! ```text
-//! claim       "capita-claim-v1"
+//! claim       "capita-claim-v2"
 //!             audience        32 bytes
 //!             issuer           4 bytes
 //!             serial          16 bytes
 //!             subject         32 bytes   the account
-//!             subject_ref     32 bytes   the pseudonym of the person
+//!             subject_ref     32 bytes   the person key
+//!             replaces         1 byte    0 = none, 1 = present; if present:
+//!               person key    32 bytes   the key the person had before
 //!             level            1 byte
 //!             residence        1 byte    0 = none, 1 = present; if present:
 //!               country        2 bytes   ISO 3166-1 alpha-2, ASCII
@@ -53,7 +55,7 @@ use alloc::vec::Vec;
 use crate::types::{Audience, Claim, Realm, Revocation, SubjectRef};
 
 /// Tag of a signed claim.
-pub const CLAIM_TAG: &[u8] = b"capita-claim-v1";
+pub const CLAIM_TAG: &[u8] = b"capita-claim-v2";
 /// Tag of a signed revocation.
 pub const REVOCATION_TAG: &[u8] = b"capita-revocation-v1";
 /// Tag of the bytes a person identifier is the hash of.
@@ -73,6 +75,13 @@ pub fn claim_bytes(audience: &Audience, claim: &Claim) -> Vec<u8> {
     out.extend_from_slice(&claim.serial.0);
     out.extend_from_slice(&claim.subject.0);
     out.extend_from_slice(&claim.subject_ref.0);
+    match &claim.replaces {
+        None => out.push(0),
+        Some(previous) => {
+            out.push(1);
+            out.extend_from_slice(&previous.0);
+        }
+    }
     out.push(claim.level.0);
     match &claim.residence {
         None => out.push(0),

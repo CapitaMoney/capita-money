@@ -36,6 +36,7 @@ fn open(n: u8) {
 
 fn attestation(person: u8, level: u8) -> Attestation {
     Attestation {
+        replaces: None,
         person: PersonId([person; 32]),
         level: VerificationLevel(level),
         residence: None,

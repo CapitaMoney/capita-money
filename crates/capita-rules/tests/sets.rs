@@ -92,6 +92,7 @@ fn a_person_goes_from_opening_to_claims_under_every_set() {
 
         let top = params.ladder.iter().map(|s| s.min_level).max().unwrap();
         let attestation = Attestation {
+            replaces: None,
             person: PersonId([1; 32]),
             level: top,
             residence: None,

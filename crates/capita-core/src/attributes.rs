@@ -128,6 +128,10 @@ pub struct Residence {
 pub struct Attestation {
     /// The unique person behind the account.
     pub person: PersonId,
+    /// The identifier the same person was known under before, if it
+    /// changed (a new name, a new secret of the identity services). An
+    /// account bound to that identifier is bound to `person` from now on.
+    pub replaces: Option<PersonId>,
     /// Verification level reached.
     pub level: VerificationLevel,
     /// Proven residence, if any.

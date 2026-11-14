@@ -26,7 +26,8 @@
 //!
 //! Options: `--issuer N` (number on the list, default 0) · `--person 0x…`
 //! (pseudonym of the person, 32 bytes; default: the account, so every
-//! account is its own person) · `--serial 0x…` (16 bytes; default: derived
+//! account is its own person) · `--replaces 0x…` (the person key the person
+//! had before, 32 bytes) · `--serial 0x…` (16 bytes; default: derived
 //! from account and time) · `--country FR` (states a residence, proven now)
 //! · `--days N` (validity, default 365; 0 = without end) · `--seed 0x…`
 //! (Ed25519 secret key, 32 bytes) · `--revoke` (sign the revocation of
@@ -164,6 +165,9 @@ fn main() {
                 .get("person")
                 .map_or(subject, |text| bytes("person", text)),
         ),
+        replaces: options
+            .get("replaces")
+            .map(|text| SubjectRef(bytes("replaces", text))),
         level: VerificationLevel(u8::try_from(number("level", 1)).expect("--level: too large")),
         residence: options.get("country").map(|country| Residence {
             country: CountryCode(
@@ -182,6 +186,10 @@ fn main() {
     println!("  claim.serial        {}", hex(&claim.serial.0));
     println!("  claim.subject       {}", hex(&claim.subject.0));
     println!("  claim.subjectRef    {}", hex(&claim.subject_ref.0));
+    match &claim.replaces {
+        None => println!("  claim.replaces      none"),
+        Some(previous) => println!("  claim.replaces      {}", hex(&previous.0)),
+    }
     println!("  claim.level         {}", claim.level.0);
     match &claim.residence {
         None => println!("  claim.residence     none"),

@@ -98,6 +98,12 @@ pub fn plan_open(id: AccountId, params: &Params, now: Timestamp) -> Result<Plan,
 ///   already holds, if any (`AccountStore::account_of`): one person, one
 ///   account.
 ///
+/// A statement with `replaces` rebinds: an account bound to the identifier
+/// named there is bound to the new one from now on (the person changed
+/// name, or the identity services changed the secret of their person keys).
+/// The host keeps the old identifier pointing at the account, so that
+/// nobody can open a second account under it.
+///
 /// A move to another country restarts the seniority ramp from the cap
 /// reached so far: to a poorer country the local cap applies at once, to a
 /// richer one the difference is ramped up from the day of the move.
@@ -128,7 +134,12 @@ pub fn plan_attest(
     if att.issued_at > now || att.expires_at.is_some_and(|end| end <= now) {
         return Err(CoreError::AttestationNotValid);
     }
-    if state.person.is_some_and(|p| p != att.person) {
+    // Bound to another identifier: only if this statement says that the
+    // person was known under exactly that one before.
+    if state
+        .person
+        .is_some_and(|p| p != att.person && att.replaces != Some(p))
+    {
         return Err(CoreError::PersonMismatch);
     }
     if held_by_person.is_some_and(|other| other != state.id) {

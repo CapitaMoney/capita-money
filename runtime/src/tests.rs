@@ -207,6 +207,7 @@ fn claim(who: Sr25519Keyring, level: u8, serial: u8, days: u64) -> Claim {
         serial: Serial([serial; 16]),
         subject: core_id(who),
         subject_ref: SubjectRef(who.public().0),
+        replaces: None,
         level: VerificationLevel(level),
         residence: None,
         attributes: vec![],
@@ -423,6 +424,7 @@ fn the_rules_run_on_the_chain_from_opening_to_claim() {
         assert_eq!(balance(Bob), 200);
         // … the identity service (here: root) attests level 1 …
         let attestation = Attestation {
+            replaces: None,
             person: PersonId([7; 32]),
             level: VerificationLevel(1),
             residence: None,
