@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.6 (2026-11-14)"
+diary = "rules diary v0.7 (2026-11-14)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -320,8 +320,8 @@ code = ["crates/capita-core/src/lifecycle.rs", "pallets/capita/src/lib.rs"]
 [[register]]
 id = "frozen-account"
 rule = "A frozen account receives nothing and cannot claim; what it was owed before stays. Nothing is destroyed."
-status = "default"
-source = "B5"
+status = "decided"
+source = "B5, diary 20"
 code = ["crates/capita-core/src/lifecycle.rs"]
 
 [[register]]
@@ -414,3 +414,45 @@ rule = "Banned is what the law of the region or country bans."
 status = "decided"
 source = "diary 13"
 planned = "market (M5)"
+
+[[register]]
+id = "double-account"
+rule = "A second account of the same person, found later: the younger account is closed and its balance deleted; the older account stays untouched."
+status = "decided"
+source = "diary 21, B5"
+planned = "identity service, pallet-capita"
+
+[[register]]
+id = "rule-changes"
+rule = "Rules change in stages: in alpha the owner alone, with a public diary, announced ahead, never retroactive; then the board of the association; later a vote of verified members, one person one vote."
+status = "decided"
+source = "diary 22, E1"
+planned = "governance origin of the chain"
+
+[[register]]
+id = "public-ledger"
+rule = "Totals and every payment between addresses are public; no names."
+status = "decided"
+source = "diary 23, E3"
+planned = "statistics page (M5)"
+
+[[register]]
+id = "member-data"
+rule = "A member keeps own data, photos and later chats on own device; services keep only person key, account, day and kind of proof."
+status = "decided"
+source = "diary 24, E4"
+planned = "app (M5)"
+
+[[register]]
+id = "worldwide"
+rule = "Open worldwide from the first day, except countries the legal check excludes."
+status = "decided"
+source = "diary 25, F1"
+planned = "identity service (country list after legal check P04.3)"
+
+[[register]]
+id = "alternate-checks"
+rule = "The yearly verification alternates between two check systems (own phone check, Didit). When one fails for a person, the other is used."
+status = "decided"
+source = "diary 26, F3"
+planned = "identity service (Didit adapter)"
