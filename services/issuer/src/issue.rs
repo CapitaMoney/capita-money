@@ -160,6 +160,9 @@ pub struct Request {
     pub former: Option<Person>,
     /// A ticket that pays for the verification, if tickets are in use.
     pub ticket: Option<String>,
+    /// The account of the helper whose phone ran the check (ADR 0022),
+    /// hexadecimal; `None` on the person's own device.
+    pub helper: Option<String>,
 }
 
 /// The rule values the service follows, from the rules file.
@@ -416,6 +419,7 @@ impl<K: KeyService, S: Store> Service<K, S> {
             proof,
             former,
             ticket,
+            helper,
         } = request;
         if person.basis() != rules.basis {
             return Err(Refusal::WrongBasis);
@@ -496,6 +500,7 @@ impl<K: KeyService, S: Store> Service<K, S> {
                 proof,
                 namesake_tag: tag,
                 ticket,
+                helper,
             })
             .map_err(Refusal::Store)?;
         Ok(Issued {

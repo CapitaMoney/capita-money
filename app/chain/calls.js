@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// The calls the screens send, in SCALE, and the chain state they read.
+//
+// Calls: `capita.open`, `credential.present` / `credential.requestMove`
+// from the identity service's answer, and the device calls of
+// `pallet-capita-keys` (ADR 0020). The runtime decodes the same bytes in
+// its tests (`runtime/src/tests.rs`, vectors `app/tests/call-vectors.json`
+// made by `app/tests/make-call-vectors.mjs`).
+//
+// State: storage addresses (twox128 of pallet and item, then BLAKE2b-128 ‖
+// key) and the few values the screens need – the keys of an account, its
+// nonce, a pending home claim, the claim it holds. Nothing here is shown
+// to the person.
+
+import { blake2b } from "./blake2b.js";
+import { twox128 } from "./xxhash.js";
+import { KEYS, concat, compact, bytesVec, fromHex, hex, keyBytes } from "./keys.js";
+
+/** Pallet indexes of the runtime (`runtime/src/lib.rs`) and the calls used. */
+export const PALLETS = Object.freeze({ capita: 10, credential: 22, keys: KEYS.pallet });
+export const CAPITA = Object.freeze({ open: 0 });
+export const CREDENTIAL = Object.freeze({ present: 0, requestMove: 4 });
+
+const u32le = (n) => Uint8Array.of(n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255);
+function u64le(n) {
+  let v = BigInt(n);
+  const out = new Uint8Array(8);
+  for (let k = 0; k < 8; k++) { out[k] = Number(v & 255n); v >>= 8n; }
+  return out;
+}
+function exact(text, n, what) {
+  const b = fromHex(text);
+  if (b.length !== n) throw new TypeError(`${what}: ${n} bytes`);
+  return b;
+}
+const option = (value, encode) => (value === null || value === undefined ? Uint8Array.of(0) : concat(Uint8Array.of(1), encode(value)));
+
+// ---------------------------------------------------------------- calls
+
+/** `capita.open()`: the account joins the ledger (start grant). */
+export const openAccount = () => Uint8Array.of(PALLETS.capita, CAPITA.open);
+
+/**
+ * `Claim` in SCALE, from the JSON the identity service answers
+ * (`capita_issuer::http::call_json`). The service sends no residence and no
+ * attributes; a claim with either is refused here rather than guessed.
+ */
+export function claimBytes(c) {
+  if (c.residence !== null && c.residence !== undefined) throw new TypeError("claim with residence");
+  if (c.attributes?.length) throw new TypeError("claim with attributes");
+  return concat(
+    u32le(c.issuer),
+    exact(c.serial, 16, "serial"),
+    exact(c.subject, 32, "subject"),
+    exact(c.subjectRef, 32, "subjectRef"),
+    option(c.replaces, (r) => exact(r, 32, "replaces")),
+    Uint8Array.of(c.level),
+    Uint8Array.of(0), // residence: none
+    compact(0), // attributes: none
+    u64le(c.issuedAt),
+    option(c.expiresAt, u64le),
+  );
+}
+
+/**
+ * The call an answer of the identity service asks for: `credential.present`
+ * or, for a person whose account moves to this key, `credential.requestMove`.
+ * No name: an identity's name is public for ever; the chain derives one.
+ */
+export function claimCall(answer) {
+  const index = { "credential.present": CREDENTIAL.present, "credential.requestMove": CREDENTIAL.requestMove }[answer.call];
+  if (index === undefined) throw new TypeError(`unknown call ${answer.call}`);
+  return concat(
+    Uint8Array.of(PALLETS.credential, index),
+    claimBytes(answer.claim),
+    Uint8Array.of(0), exact(answer.signature, 64, "signature"), // Signature::Ed25519
+    Uint8Array.of(0), // name: none
+  );
+}
+
+/** `keys.add_key(key, possession)` from the bytes a new device handed over. */
+export const addKeyRaw = (keyRaw, possessionRaw) => concat(Uint8Array.of(PALLETS.keys, KEYS.addKey), keyRaw, possessionRaw);
+/** `keys.remove_key(key)` from a key's bytes. */
+export const removeKeyRaw = (keyRaw) => concat(Uint8Array.of(PALLETS.keys, KEYS.removeKey), keyRaw);
+/** `keys.claim_home()`, `keys.take_home()`, `keys.refuse_home()`. */
+export const claimHome = () => Uint8Array.of(PALLETS.keys, KEYS.claimHome);
+export const takeHome = () => Uint8Array.of(PALLETS.keys, KEYS.takeHome);
+export const refuseHome = () => Uint8Array.of(PALLETS.keys, KEYS.refuseHome);
+
+// ---------------------------------------------------------------- storage addresses
+
+const enc = new TextEncoder();
+const prefix = (pallet, item) => concat(twox128(enc.encode(pallet)), twox128(enc.encode(item)));
+
+/** Address of a `Blake2_128Concat` map entry. */
+export const mapKey = (pallet, item, key) => concat(prefix(pallet, item), blake2b(key, 16), key);
+
+export const at = Object.freeze({
+  keys: (account) => mapKey("Keys", "Keys", account),
+  nonce: (account) => mapKey("Keys", "Nonce", account),
+  homeClaim: (account) => mapKey("Keys", "HomeClaim", account),
+  keyOwner: (keyRaw) => mapKey("Keys", "KeyOwner", keyRaw),
+  credential: (account) => mapKey("Credential", "Credentials", account),
+  capitaAccount: (account) => mapKey("Capita", "Accounts", account),
+});
+
+// ---------------------------------------------------------------- reading values
+
+class Reader {
+  constructor(bytes) { this.b = bytes; this.i = 0; }
+  take(n) {
+    if (this.i + n > this.b.length) throw new RangeError("short value");
+    const out = this.b.slice(this.i, this.i + n);
+    this.i += n;
+    return out;
+  }
+  u8() { return this.take(1)[0]; }
+  u32() { const b = this.take(4); return (b[0] | (b[1] << 8) | (b[2] << 16)) + b[3] * 2 ** 24; }
+  u64() { const b = this.take(8); let v = 0n; for (let k = 7; k >= 0; k--) v = (v << 8n) | BigInt(b[k]); return Number(v); }
+  compact() {
+    const first = this.b[this.i];
+    const mode = first & 3;
+    if (mode === 0) { this.i += 1; return first >> 2; }
+    if (mode === 1) { const b = this.take(2); return (b[0] | (b[1] << 8)) >> 2; }
+    if (mode === 2) return this.u32() >>> 2;
+    throw new RangeError("compact too large");
+  }
+  option(read) { return this.u8() === 1 ? read() : null; }
+}
+
+const KEY_LENGTH = [32, 33, 33];
+const KIND = ["ed25519", "passkey", "hardware"];
+
+/** One `DeviceKey`: { kind, raw } – raw = its SCALE bytes (the chain's name for it). */
+function deviceKey(r) {
+  const tag = r.u8();
+  if (tag > 2) throw new RangeError("unknown key kind");
+  return { kind: KIND[tag], raw: concat(Uint8Array.of(tag), r.take(KEY_LENGTH[tag])) };
+}
+
+/** `Keys::Keys`: the account's keys, home key first. */
+export function decodeKeys(bytes) {
+  if (!bytes) return [];
+  const r = new Reader(bytes);
+  return Array.from({ length: r.compact() }, () => deviceKey(r));
+}
+
+/** `Keys::Nonce` (missing = 0). */
+export const decodeNonce = (bytes) => (bytes ? new Reader(bytes).u32() : 0);
+
+/** `Keys::HomeClaim`: { key, since } (seconds), or null. */
+export function decodeHomeClaim(bytes) {
+  if (!bytes) return null;
+  const r = new Reader(bytes);
+  return { key: deviceKey(r), since: r.u64() };
+}
+
+/** `Credential::Credentials`: { level, issuedAt, expiresAt } of the claim held, or null. */
+export function decodeCredential(bytes) {
+  if (!bytes) return null;
+  const r = new Reader(bytes);
+  r.take(4 + 16 + 32 + 32); // issuer, serial, subject, person key
+  r.option(() => r.take(32)); // replaces
+  const level = r.u8();
+  r.option(() => r.take(2 + 8)); // residence: country, proven at
+  for (let n = r.compact(); n > 0; n--) r.take(2 + 8); // attributes
+  const issuedAt = r.u64();
+  const expiresAt = r.option(() => r.u64());
+  return { level, issuedAt, expiresAt };
+}
+
+/** The kind of device a key stands for, in the words the screens use. */
+export const deviceOf = (keyRaw) => (keyRaw[0] === 2 ? "phone" : "browser");
+
+/** The SCALE bytes of the app's own key object (chain name of the key). */
+export const rawOf = (key) => keyBytes(key);
+
+export { hex, fromHex, bytesVec };

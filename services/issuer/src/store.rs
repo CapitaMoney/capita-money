@@ -48,6 +48,10 @@ pub struct Record {
     /// A ticket used to pay for this verification, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticket: Option<String>,
+    /// The helper whose phone ran the check (ADR 0022), hexadecimal: the
+    /// count of checks per helper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub helper: Option<String>,
 }
 
 /// The memory of the service.

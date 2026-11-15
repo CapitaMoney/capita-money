@@ -21,9 +21,14 @@ async function post(url, body) {
 
 const hex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
-/** `POST /v1/document/start`. Answers { session, nonce, chipNonce, validSeconds } (nonces in base64). */
-export const documentStart = (service, account, ticket) =>
-  post(new URL("/v1/document/start", service), { account: hex(account), ...(ticket ? { ticket } : {}) });
+/**
+ * `POST /v1/document/start`. Answers { session, nonce, chipNonce, validSeconds } (nonces in base64).
+ * `helper`: this phone's own account (hex) when it checks somebody else (ADR 0022).
+ */
+export const documentStart = (service, account, ticket, helper) =>
+  post(new URL("/v1/document/start", service), {
+    account: hex(account), ...(ticket ? { ticket } : {}), ...(helper ? { helper } : {}),
+  });
 
 /** `POST /v1/document/moves`: the head movements, valid one minute from now. */
 export const documentMoves = (service, session) => post(new URL("/v1/document/moves", service), { session });
@@ -45,8 +50,8 @@ const opt = (text) => (text ? unb64(text) : undefined);
  * session key, the chip, the movements, the film, the signed finish.
  * `say` shows requests on the screen.
  */
-export async function verifyWithDocument({ service, account, ticket, key, video, say }) {
-  const { session, nonce, chipNonce } = await documentStart(service, account, ticket);
+export async function verifyWithDocument({ service, account, ticket, helper, key, video, say, camera }) {
+  const { session, nonce, chipNonce } = await documentStart(service, account, ticket, helper);
   const phoneNonce = unb64(nonce);
   const phone = await preparePhone(phoneNonce);
   say("Hold your document to the back of the phone", "chip");
@@ -54,6 +59,7 @@ export async function verifyWithDocument({ service, account, ticket, key, video,
   // The movements are asked for only now: they hold one minute, holding a
   // document may take longer (capita-face, Settings::valid_for).
   const { moves } = await documentMoves(service, session);
+  await camera?.();
   const frames = await filmMoves({ video, moves, say });
   say("Checking …", "wait");
   const digest = await requestDigest(phoneNonce, session, {

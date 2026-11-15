@@ -996,3 +996,126 @@ fn a_payment_in_euro_mints_bought_capita_once_by_a_transaction_without_signer() 
         end_block();
     });
 }
+
+/// The app's calls and storage addresses (`app/chain/calls.js`, vectors made
+/// by `app/tests/make-call-vectors.mjs`) are the runtime's.
+#[test]
+fn the_apps_calls_and_storage_addresses_are_the_runtimes() {
+    fn bytes(v: &Value) -> Vec<u8> {
+        let text = v.as_str().unwrap();
+        (2..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    fn n<const N: usize>(v: &Value) -> [u8; N] {
+        bytes(v).try_into().unwrap()
+    }
+    fn call(v: &Value) -> RuntimeCall {
+        let raw = bytes(v);
+        let call = RuntimeCall::decode(&mut &raw[..]).unwrap();
+        assert_eq!(call.encode(), raw, "no bytes left over or changed");
+        call
+    }
+    fn claim_of(answer: &Value) -> (Claim, [u8; 64]) {
+        let c = &answer["claim"];
+        let claim = Claim {
+            issuer: IssuerId(u32::try_from(c["issuer"].as_u64().unwrap()).unwrap()),
+            serial: Serial(n(&c["serial"])),
+            subject: CoreId(n(&c["subject"])),
+            subject_ref: SubjectRef(n(&c["subjectRef"])),
+            replaces: (!c["replaces"].is_null()).then(|| SubjectRef(n(&c["replaces"]))),
+            level: VerificationLevel(u8::try_from(c["level"].as_u64().unwrap()).unwrap()),
+            residence: None,
+            attributes: Vec::new(),
+            issued_at: Timestamp::from_secs(c["issuedAt"].as_u64().unwrap()),
+            expires_at: c["expiresAt"].as_u64().map(Timestamp::from_secs),
+        };
+        (claim, n(&answer["signature"]))
+    }
+    let v: Value = serde_json::from_str(include_str!("../../app/tests/call-vectors.json")).unwrap();
+    let calls = &v["calls"];
+    assert!(matches!(
+        call(&calls["open"]),
+        RuntimeCall::Capita(pallet_capita::Call::open {})
+    ));
+    for (name, kind) in [("present", 0), ("requestMove", 4)] {
+        let (claim, signature) = claim_of(&calls[name]["answer"]);
+        let expected = capita_credential::types::Signature::Ed25519(signature);
+        match (kind, call(&calls[name]["call"])) {
+            (
+                0,
+                RuntimeCall::Credential(pallet_capita_credential::Call::present {
+                    claim: got,
+                    signature: sig,
+                    name: None,
+                }),
+            )
+            | (
+                4,
+                RuntimeCall::Credential(pallet_capita_credential::Call::request_move {
+                    claim: got,
+                    signature: sig,
+                    name: None,
+                }),
+            ) => {
+                assert_eq!(got, claim, "{name}");
+                assert_eq!(sig, expected, "{name}");
+            }
+            (_, other) => panic!("{name}: {other:?}"),
+        }
+    }
+    match call(&calls["addKey"]["call"]) {
+        RuntimeCall::Keys(pallet_capita_keys::Call::add_key { key, possession }) => {
+            assert_eq!(key.encode(), bytes(&calls["addKey"]["key"]));
+            assert_eq!(possession.encode(), bytes(&calls["addKey"]["possession"]));
+        }
+        other => panic!("{other:?}"),
+    }
+    let removed = match call(&calls["removeKey"]["call"]) {
+        RuntimeCall::Keys(pallet_capita_keys::Call::remove_key { key }) => {
+            assert_eq!(key.encode(), bytes(&calls["removeKey"]["key"]));
+            key
+        }
+        other => panic!("{other:?}"),
+    };
+    assert!(matches!(
+        call(&calls["claimHome"]),
+        RuntimeCall::Keys(pallet_capita_keys::Call::claim_home {})
+    ));
+    assert!(matches!(
+        call(&calls["takeHome"]),
+        RuntimeCall::Keys(pallet_capita_keys::Call::take_home {})
+    ));
+    assert!(matches!(
+        call(&calls["refuseHome"]),
+        RuntimeCall::Keys(pallet_capita_keys::Call::refuse_home {})
+    ));
+    let raw: [u8; 32] = n(&v["account"]);
+    let account = AccountId::from(raw);
+    let at = &v["storage"];
+    assert_eq!(
+        pallet_capita_keys::Keys::<Runtime>::hashed_key_for(&account),
+        bytes(&at["keys"])
+    );
+    assert_eq!(
+        pallet_capita_keys::Nonce::<Runtime>::hashed_key_for(&account),
+        bytes(&at["nonce"])
+    );
+    assert_eq!(
+        pallet_capita_keys::HomeClaim::<Runtime>::hashed_key_for(&account),
+        bytes(&at["homeClaim"])
+    );
+    assert_eq!(
+        pallet_capita_keys::KeyOwner::<Runtime>::hashed_key_for(removed),
+        bytes(&at["keyOwner"])
+    );
+    assert_eq!(
+        pallet_capita_credential::Credentials::<Runtime>::hashed_key_for(&account),
+        bytes(&at["credential"])
+    );
+    assert_eq!(
+        pallet_capita::Accounts::<Runtime>::hashed_key_for(CoreId(raw)),
+        bytes(&at["capitaAccount"])
+    );
+}

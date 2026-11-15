@@ -8,8 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const here = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(here, "www");
-const SHIP = ["index.html", "app.css", "app.js", "logic.js", "sw.js", "manifest.webmanifest", "vendor", "icons", "fonts"];
-const OPTIONAL = ["chain", "native"];
+const SHIP = ["index.html", "app.css", "app.js", "logic.js", "device.js", "screens.js", "scan.js", "sw.js", "manifest.webmanifest", "vendor", "icons", "fonts", "chain", "native"];
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
 for (const f of SHIP) {
@@ -19,5 +18,4 @@ for (const f of SHIP) {
 }
 // The site's statement that the Android shell may use its passkeys (ADR 0023).
 cpSync(join(here, "well-known"), join(out, ".well-known"), { recursive: true });
-for (const f of OPTIONAL) if (existsSync(join(here, f))) cpSync(join(here, f), join(out, f), { recursive: true });
-console.log(`www/: ${SHIP.length} entries and what exists of ${OPTIONAL.join(", ")}`);
+console.log(`www/: ${SHIP.length} entries`);

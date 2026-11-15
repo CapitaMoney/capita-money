@@ -3,6 +3,8 @@
 // Battery: no timers, no polling. Money is collected when the app comes to the screen.
 import * as L from "./logic.js";
 import qrcode from "./vendor/qrcode.mjs";
+import * as D from "./device.js";
+import { install } from "./screens.js";
 
 const KEY = "capita-proto-v1";
 const OFFSET = "capita-proto-offset";
@@ -38,9 +40,10 @@ function go(name, replace = false) {
 }
 function route() {
   const want = location.hash.slice(1) || (state ? "home" : "welcome");
-  const open = ["welcome", "name"];
-  if (!state && !open.includes(want)) return go("welcome", true);
-  if (state && open.includes(want)) return go("home", true);
+  const before = ["welcome", "name", "link"]; // only without an account
+  if (!state && !before.includes(want) && want !== "network") return go("welcome", true);
+  if (state && before.includes(want)) return go("home", true);
+  if (!document.querySelector(`[data-screen="${want}"]`)) return go(state ? "home" : "welcome", true);
   show(want);
 }
 window.addEventListener("hashchange", route);
@@ -56,14 +59,20 @@ $("#name-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = L.cleanName($("#name-input").value);
   if (!name) return $("#name-input").focus();
-  // Here the real app creates the key on the device, silently.
   state = L.newAccount(name, now());
   save();
   go("gift", true);
+  // On a test network the device makes its key now and opens the account.
+  if (D.on() && !D.hasKey()) {
+    D.makeKey(name).then(() => D.ensureOpen()).catch(() => toast("Not connected yet – Capita tries again when you verify."));
+  }
 });
 
 // ------------------------------------------------------------ screens
 const render = {
+  welcome() {
+    $("#welcome-link").hidden = !D.on();
+  },
   gift() {
     if (!state) return go("welcome", true);
     $("#gift-hello").textContent = `Welcome, ${state.name}`;
@@ -91,6 +100,7 @@ const render = {
   },
   verify() {
     $("#verify-rate").textContent = L.formatCents(L.RULES.verifiedMonthlyCents);
+    screens.render.verify();
   },
   receive() {
     $("#receive-name").textContent = state.name;
@@ -119,6 +129,8 @@ const render = {
     list($("#all"), [...state.history].reverse());
   },
   settings() {
+    $("#settings-net").hidden = !D.on();
+    $("#settings-lost").hidden = D.on();
     $("#rename").value = state.name;
     const d = L.daysLeft(state, now());
     $("#verified-until").textContent = d === null ? "Not verified yet." : d > 0 ? `Verified – ${d} days left this year.` : "Verification has run out.";
@@ -168,16 +180,27 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && state && location.hash === "#home") render.home();
 });
 
-$("#verify-go").addEventListener("click", () => {
+// ------------------------------------------------------------ verification, helpers, devices (screens.js)
+// The demo's money follows a real verification: the start grant pays for it.
+function onVerified(real) {
   try {
     state = L.verify(state, now());
-    save();
-    toast("Verified. Capita now arrives every month.");
-    go("home", true);
   } catch {
-    toast("Not enough Capita to pay the verification.");
+    if (!real) return false;
+    state = { ...state, verifiedAt: now(), lastClaimAt: now() };
   }
-});
+  save();
+  return true;
+}
+D.load();
+const screens = install({ go, toast, getState: () => state, onVerified });
+screens.onLinked = (name) => {
+  state = L.newAccount(name || "Me", now());
+  save();
+  toast("This device joined your account.");
+  go("home", true);
+};
+for (const [name, fn] of Object.entries(screens.render)) if (!render[name]) render[name] = fn;
 
 // ------------------------------------------------------------ receive
 function drawQr() {
@@ -255,6 +278,15 @@ $("#demo-reset").addEventListener("click", () => {
   store.del(KEY); store.del(OFFSET); state = null;
   go("welcome", true);
 });
+// A link with ?node=…&service=… fills in the test network (for testers).
+{
+  const q = new URLSearchParams(location.search);
+  if (q.get("node") && q.get("service") && !D.on()) {
+    $("#net-node").value = q.get("node");
+    $("#net-service").value = q.get("service");
+    history.replaceState(null, "", location.pathname + "#network");
+  }
+}
 
 // ------------------------------------------------------------ toast
 let toastTimer = 0;

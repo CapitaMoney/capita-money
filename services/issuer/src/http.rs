@@ -19,6 +19,8 @@
 //! | `POST /v1/test-check` | test chains only: believes the data sent, answers with a claim |
 //! | `POST /v1/challenger/start` | opens a check by code; answers with the address to send the person to |
 //! | `GET /v1/challenger/callback` | where Challenger sends the person back; answers with a claim |
+//! | `POST /v1/document/start`, `…/moves`, `…/finish` | the document check from a checked phone (ADR 0024); `helper` names the phone's own account when it checks somebody else (ADR 0022) |
+//! | `POST /v1/relay/put`, `POST /v1/relay/take` | the hand-over box between two devices (ADR 0025) |
 //!
 //! A claim comes as the call the app sends to the chain – the app shows
 //! none of it to the person:
@@ -50,6 +52,7 @@ use crate::checks::{unescape, Challenger, Stated};
 use crate::document::{ChipData, DocumentCheck, Nonces};
 use crate::issue::{Action, Issued, Person, Refusal, Request, Service};
 use crate::phone::PhoneProof;
+use crate::relay::Relay;
 use crate::store::Store;
 use crate::{hex, unhex_n};
 
@@ -81,13 +84,29 @@ pub struct Ask {
     /// A ticket that pays for the verification.
     #[serde(default)]
     pub ticket: Option<String>,
+    /// The account of the phone that runs the check for somebody else
+    /// (helper mode, ADR 0022); absent or equal to `account` on one's own
+    /// phone.
+    #[serde(default)]
+    pub helper: Option<String>,
 }
 
 struct Session {
     account: [u8; 32],
     former: Option<Person>,
     ticket: Option<String>,
+    helper: Option<String>,
     opened: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RelayWord {
+    #[serde(rename = "box")]
+    name: String,
+    slot: String,
+    #[serde(default)]
+    data: Option<String>,
 }
 
 /// A document check under way (ADR 0024): the session, its nonces and the
@@ -107,6 +126,7 @@ pub struct App<K: KeyService, S: Store> {
     sessions: Mutex<BTreeMap<String, Session>>,
     document: Option<DocumentCheck>,
     documents: Mutex<BTreeMap<String, DocumentSession>>,
+    relay: Mutex<Relay>,
 }
 
 /// What `POST /v1/document/finish` accepts: the chip data and the frames of
@@ -264,6 +284,7 @@ impl<K: KeyService, S: Store> App<K, S> {
             sessions: Mutex::new(BTreeMap::new()),
             document: None,
             documents: Mutex::new(BTreeMap::new()),
+            relay: Mutex::new(Relay::default()),
         }
     }
 
@@ -302,6 +323,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 "validitySeconds": settings.rules.validity,
                 "checks": checks,
                 "phones": phones.unwrap_or_default(),
+                "handover": true,
             }),
         )
     }
@@ -356,6 +378,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 proof: "test".into(),
                 former,
                 ticket: ask.ticket,
+                helper: None,
             },
             now,
         )
@@ -395,6 +418,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 account,
                 former,
                 ticket: ask.ticket,
+                helper: None,
                 opened: now,
             },
         );
@@ -433,6 +457,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 proof: "challenger".into(),
                 former: session.former,
                 ticket: session.ticket,
+                helper: None,
             },
             now,
         )
@@ -449,6 +474,12 @@ impl<K: KeyService, S: Store> App<K, S> {
         let former = match self.former(&ask) {
             Ok(former) => former,
             Err(answer) => return answer,
+        };
+        let helper = match ask.helper.as_deref().map(unhex_n::<32>) {
+            None => None,
+            Some(None) => return refuse(400, "request", "helper: 32 bytes in hexadecimal"),
+            Some(Some(helper)) if helper == account => None,
+            Some(Some(helper)) => Some(hex(&helper)),
         };
         let mut random = [0u8; 56];
         if getrandom::fill(&mut random).is_err() {
@@ -476,6 +507,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                     account,
                     former,
                     ticket: ask.ticket,
+                    helper,
                     opened: now,
                 },
                 phone_nonce,
@@ -589,12 +621,51 @@ impl<K: KeyService, S: Store> App<K, S> {
             Request {
                 account: session.base.account,
                 person,
-                proof: "document-chip".into(),
+                proof: if session.base.helper.is_some() {
+                    "via-helper".into()
+                } else {
+                    "document-chip".into()
+                },
                 former: session.base.former,
                 ticket: session.base.ticket,
+                helper: session.base.helper,
             },
             now,
         )
+    }
+
+    fn relay(&self, body: &[u8], now: u64, put: bool) -> Answer {
+        let word: RelayWord = match serde_json::from_slice(body) {
+            Ok(word) => word,
+            Err(e) => return refuse(400, "request", &e.to_string()),
+        };
+        let Ok(mut relay) = self.relay.lock() else {
+            return refuse(500, "system", "service unavailable");
+        };
+        let done = if put {
+            let Some(data) = &word.data else {
+                return refuse(400, "request", "data is needed");
+            };
+            relay
+                .put(&word.name, &word.slot, data, now)
+                .map(|()| json!({}))
+        } else {
+            relay
+                .take(&word.name, &word.slot, now)
+                .map(|data| json!({ "data": data }))
+        };
+        match done {
+            Ok(answer) => (200, answer),
+            Err(why) => refuse(
+                if why == crate::relay::RelayRefusal::Busy {
+                    503
+                } else {
+                    400
+                },
+                why.code(),
+                why.message(),
+            ),
+        }
     }
 
     /// Answers one request. `target` is path and query as sent.
@@ -608,6 +679,8 @@ impl<K: KeyService, S: Store> App<K, S> {
             ("POST", "/v1/document/start") => self.document_start(body, now),
             ("POST", "/v1/document/moves") => self.document_moves(body, now),
             ("POST", "/v1/document/finish") => self.document_finish(body, now),
+            ("POST", "/v1/relay/put") => self.relay(body, now, true),
+            ("POST", "/v1/relay/take") => self.relay(body, now, false),
             _ => refuse(404, "not-found", "no such address"),
         }
     }
