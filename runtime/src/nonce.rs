@@ -22,8 +22,8 @@
 //! transaction, the one that opens its Capita account. This check keeps the
 //! replay protection and drops that condition.
 //!
-//! Offene Frage: protection against spam (fees in Capita or a quota per
-//! identity). Until then any key may write a nonce to the state.
+//! Decided (diary 32): no fees; a free quota of transactions per verified
+//! person. Not built: until then any key may write a nonce to the state.
 
 use alloc::{vec, vec::Vec};
 use codec::{Decode, DecodeWithMemTracking, Encode};

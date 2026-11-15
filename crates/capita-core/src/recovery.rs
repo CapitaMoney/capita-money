@@ -25,9 +25,10 @@
 //! Offene Frage: 2discuss M – the waiting time, and who wins when the old
 //! key objects: a thief holding the old key can stop the rightful owner as
 //! well as the owner can stop a thief.
-//! Offene Frage: B5 – a frozen account does not move (a freeze must not be
-//! escaped by a new key); a stolen key frozen by its owner therefore needs
-//! whoever may reopen accounts before it can move.
+//! Decided (owner 2026-11-15, diary 15): an account frozen by its own holder
+//! (stolen key) moves; one frozen by the authority does not (a freeze must
+//! not be escaped by a new key). Not built: the state does not record who
+//! froze, so every frozen account is refused for now.
 //! Offene Frage: C1 – an account with a credit line or recorded debt does
 //! not move; other accounts that owe it money keep paying to the closed
 //! account, and the host has to forward what arrives there.
