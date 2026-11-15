@@ -1,0 +1,81 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "com.capitamoney.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.capitamoney.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // The public development key (ADR 0023): every build is signed alike,
+    // so the site's assetlinks.json and the chain's origin list know it.
+    // Test money only; a release key that never enters the repository
+    // replaces it before real use.
+    signingConfigs {
+        dev {
+            storeFile file('../dev-signing.jks')
+            storePassword 'capita-development'
+            keyAlias 'capita-dev'
+            keyPassword 'capita-development'
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.dev
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.dev
+        }
+    }
+    packaging {
+        resources {
+            // BouncyCastle's jars (through JMRTD) each carry these files.
+            excludes += ['META-INF/versions/9/OSGI-INF/MANIFEST.MF', 'META-INF/BCKEY.DSA', 'META-INF/BCKEY.SF']
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    // passkeys inside the web view (Credential Manager)
+    implementation "androidx.webkit:webkit:$androidxWebkitVersion"
+    // document chips (ICAO 9303): JMRTD (LGPL-3.0) and SCUBA (LGPL-3.0)
+    implementation 'org.jmrtd:jmrtd:0.8.1'
+    implementation 'net.sf.scuba:scuba-sc-android:0.0.26'
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

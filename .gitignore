@@ -26,3 +26,6 @@ app/node_modules/
 
 # face models (services/face/fetch-models.sh)
 services/face/models/
+
+# app: what `npm run web` copies
+app/www/

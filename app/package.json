@@ -3,5 +3,16 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "scripts": { "test": "node --test tests/*.test.mjs" }
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "web": "node scripts/build-www.mjs",
+    "android": "node scripts/build-www.mjs && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
 }
