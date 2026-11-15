@@ -189,6 +189,47 @@ export async function passkeyProof({ rpId, credentialId, challenge }) {
   };
 }
 
+// ---------------------------------------------------------------- hardware key (phone shells, ADR 0024)
+
+const keyPlugin = () => globalThis.Capacitor?.Plugins?.CapitaKey;
+const fromB64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+const toB64 = (b) => btoa(String.fromCharCode(...b));
+
+/** Whether this device keeps keys in its security chip (the Android or iPhone shell). */
+export async function hardwarePossible() {
+  const p = keyPlugin();
+  if (!p) return false;
+  try { return !!(await p.status()).possible; } catch { return false; }
+}
+
+/** The phone's hardware key, if it has one. */
+export async function hardwareKey() {
+  const s = await keyPlugin()?.status();
+  return s?.exists ? { kind: "hardware", public: fromB64(s.public) } : null;
+}
+
+/** Makes the money key inside the phone's security chip. */
+export async function createHardwareKey() {
+  const r = await keyPlugin().create({});
+  return { key: { kind: "hardware", public: fromB64(r.public) }, strongBox: !!r.strongBox };
+}
+
+/** Signs a challenge with the hardware key; the phone asks for fingerprint, face or screen lock. */
+export async function hardwareProof(challenge, { title = "Confirm", subtitle = "" } = {}) {
+  const { signature } = await keyPlugin().sign({ challenge: toB64(challenge), title, subtitle });
+  return { kind: "hardware", signature: derToRaw(fromB64(signature)) };
+}
+
+/**
+ * The best key this device can make (ADR 0024): the security chip in the
+ * phone shells, else a passkey, else a key the browser keeps.
+ */
+export async function bestKeyKind() {
+  if (await hardwarePossible()) return "hardware";
+  if (await passkeyPossible()) return "passkey";
+  return "ed25519";
+}
+
 /** Makes an Ed25519 key in the browser; the secret half cannot be read out. */
 export async function createDeviceKey() {
   const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]);

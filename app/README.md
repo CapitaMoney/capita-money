@@ -29,8 +29,8 @@ Tests cover `logic.js`: start grant, verification, monthly Capita, claim window,
 
 Changing a rule value: change it in `rules/alpha.toml` and in `RULES` in `logic.js`.
 
-## Android shell (ADR 0023)
-The same files, wrapped by Capacitor (`android/`), plus the chip reader (`CapitaChipPlugin`, JMRTD) and passkeys inside the app. CI builds the APK (`android` job) and, on `main`, puts it on the pre-release `android-alpha`. Local build (needs the Android SDK): `npm ci && npm run android && cd android && ./gradlew assembleDebug`.
+## Android shell (ADR 0023, ADR 0024)
+The same files, wrapped by Capacitor (`android/`), plus three native pieces (ADR 0023, ADR 0024): the chip reader (`CapitaChipPlugin`, JMRTD – PACE/BAC, chip authentication, active authentication with the service's chip nonce), the money key in the phone's security chip (`CapitaKeyPlugin`: P-256 in StrongBox or the trusted environment, each signature confirmed by fingerprint, face or screen lock; `chain/keys.js` `createHardwareKey`, `hardwareProof`), and the phone check (`CapitaPhonePlugin`: a fresh session key whose attestation carries the service's nonce; `native/phone.js`). Passkeys still work inside the shell, for accounts that started in a browser. CI builds the APK (`android` job) and, on `main`, puts it on the pre-release `android-alpha`. Local build (needs the Android SDK): `npm ci && npm run android && cd android && ./gradlew assembleDebug`.
 
 Signed with a **public development key** (`android/dev-signing.jks`, password `capita-development`): anybody can sign an APK the site trusts – test money only. Its fingerprint stands in `well-known/assetlinks.json` (served as `/.well-known/assetlinks.json`) and as origin `android:apk-key-hash:tBJj4apsvlOD17ABfX121JoOTV102WbBwb8DU1HhcO4` on the test chains. A release key replaces both before real use.
 
