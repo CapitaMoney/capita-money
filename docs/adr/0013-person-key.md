@@ -1,6 +1,6 @@
 # ADR 0013 – The person key: one identifier per person
 
-Status: accepted as technical frame (M3b, 2026-11-14). Built and tested: `capita-person-key`, the field `replaces` of a claim, rebinding in `capita-core` and `pallet-capita`. What the key is made from is a rule and not decided (2discuss K): `identity.person_key_basis` of the rules file, default `name-birthdate`.
+Status: accepted as technical frame (M3b, 2026-11-14). Built and tested: `capita-person-key`, the field `replaces` of a claim, rebinding in `capita-core` and `pallet-capita`. What the key is made from is decided (rules diary 17, 2026-11-14): `identity.person_key_basis` = `name-birthdate`.
 
 ## Context
 The host refuses a second account for the same person (ADR 0011). For that every identity service has to name the same person the same way – whichever service checks, in whichever year – and everybody else differently, and the name must not tell who the person is: the ledger is public and permanent. ADR 0011 left open how ("pseudonym", realm).
@@ -48,6 +48,7 @@ After signing a claim the service keeps: person key, account, number of the clai
 − Folding lets different names fall together (`MICHAEL`, `MICHAL`); with the same birthday they are namesakes.
 
 ## Open
-Offene Frage: 2discuss K – the basis; which document check first; minimum age (`identity.minimum_age`, default none).
+Decided (rules diary v0.9, 2026-11-15): basis name + date of birth (diary 17); first document check = chip (NFC) + selfie (diary 18), Didit as a second check later, alternating yearly (diary 26); no minimum age (diary 19, `identity.minimum_age` = 0).
 Vermutung (Claude, ungeprüft): 24 and 12 letters are within every name field of identity documents; every document check (card, passport, EUDI wallet) yields name and date of birth – check both before real persons.
-Realms: issuers that share a secret form one. Decided (owner 2026-11-15, diary 29): there is only one realm, so none can overlap.
+Decided (diary 29, 2026-11-15): one realm – all identity services share one person key (one secret now, later a blind key service).
+Offene Frage: one person, two documents with differently spelled names – face dedup decided (diary 33), built after the legal check P04.3, with its own ADR.
