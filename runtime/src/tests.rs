@@ -862,21 +862,22 @@ fn a_revoked_identity_freezes_the_account_and_no_identity_moves_to_another_key()
         ));
         assert_eq!(status(2), IdtyStatus::Revoked);
         assert!(!Membership::is_member(&2));
-        // the claim counts no longer and the account is frozen: no claim,
-        // no payment
+        // the claim counts no longer and the account is locked as by its
+        // own holder: no claim, no payment
         assert!(
             !pallet_capita_credential::Credentials::<Runtime>::contains_key(
                 Charlie.to_account_id()
             )
         );
         let state = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
-        assert_eq!(state.status, AccountStatus::Frozen);
+        assert_eq!(state.status, AccountStatus::HolderFrozen);
         assert_eq!(
             run(Charlie, 4, pallet_capita::Call::claim {}),
             Err(pallet_capita::Error::<Runtime>::AccountNotActive.into())
         );
         // A revoked identity is final: a new claim for the same key is
-        // refused. Offene Frage B5: moving the account to a new key.
+        // refused. The account can move to a new key after a new
+        // verification (rules diary 15).
         assert_eq!(
             run(Charlie, 5, present(claim(Charlie, 1, 2, 30), None)),
             Err(DispatchError::Other("identity revoked"))
@@ -903,6 +904,129 @@ fn request_move(claim: Claim) -> pallet_capita_credential::Call<Runtime> {
         signature: capita_credential::types::Signature::Ed25519(issuer_key().sign(&bytes).0),
         name: None,
     }
+}
+
+/// Rules diary 15: the old key stops a move ("this was not me"). That
+/// locks the account for both sides – nobody spends – until the second
+/// check decides; on the test chains root stands for the board.
+#[test]
+fn a_stopped_move_locks_the_account_until_the_board_decides() {
+    dev().execute_with(|| {
+        charlie_is_verified();
+        start_block(2, 6);
+        assert_ok!(run(
+            Charlie,
+            3,
+            pallet_capita::Call::set_tier { tier: TierId(1) }
+        ));
+        end_block();
+        let delay = crate::configs::KeyMoveDelay::get();
+        let (charlie, dave): (AccountId, AccountId) =
+            (Charlie.to_account_id(), Dave.to_account_id());
+        let status = || {
+            pallet_capita::Accounts::<Runtime>::get(core_id(Charlie))
+                .unwrap()
+                .status
+        };
+        let not_active = Err(pallet_capita::Error::<Runtime>::AccountNotActive.into());
+
+        // Somebody verified as Charlie's person with a new key – Dave's –
+        // asks for the account. Charlie's key objects.
+        start_block(3, 3_606);
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        let grant = balance(Dave);
+        let mut again = claim(Dave, 1, 2, 365);
+        again.subject_ref = SubjectRef(Charlie.public().0);
+        assert_ok!(run(Dave, 1, request_move(again)));
+        assert_ok!(run(
+            Charlie,
+            4,
+            pallet_capita_credential::Call::stop_move {}
+        ));
+        assert_eq!(status(), AccountStatus::Disputed);
+        // Locked for both sides: the old key cannot pay, claim or close,
+        // and the new key holds nothing of the account.
+        let pay = pallet_capita::Call::transfer {
+            to: Bob.to_account_id(),
+            amount: capita_core::types::Amount::from_cents(1),
+        };
+        assert_eq!(run(Charlie, 5, pay), not_active);
+        assert_eq!(run(Charlie, 6, pallet_capita::Call::claim {}), not_active);
+        assert_eq!(run(Charlie, 7, pallet_capita::Call::close {}), not_active);
+        assert_eq!(level(Dave), 0);
+        end_block();
+
+        // The waiting time passes and completes nothing.
+        skip_to(10);
+        start_block(10, 3_606 + delay);
+        let complete = pallet_capita_credential::Call::complete_move {
+            from: charlie.clone(),
+        };
+        assert_eq!(
+            run(Bob, 1, complete),
+            Err(pallet_capita_credential::Error::<Runtime>::MoveDisputed.into())
+        );
+        // Neither side decides; the board does. Granted: the account moves.
+        let decide = |grant| pallet_capita_credential::Call::decide_move {
+            from: charlie.clone(),
+            grant,
+        };
+        assert_eq!(run(Dave, 2, decide(true)), Err(DispatchError::BadOrigin));
+        sudo(1, decide(true));
+        let old = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
+        assert_eq!(old.status, AccountStatus::Closed);
+        assert_eq!(old.person, None);
+        assert_eq!(Identity::identity_index_of(&charlie), None);
+        assert!(Identity::identity_index_of(&dave).is_some());
+        assert_eq!(level(Dave), 1);
+        // What accrued under the old key, the dispute included, is claimed
+        // with the new one: a lock is not a sanction.
+        assert_ok!(run(Dave, 3, pallet_capita::Call::claim {}));
+        let minutes = i64::try_from(delay / 60).unwrap();
+        assert!(balance(Dave) >= grant + minutes);
+        end_block();
+    });
+}
+
+/// Refused by the board, the account is the old key's again, as before.
+#[test]
+fn a_refused_move_returns_the_account_to_the_old_key() {
+    dev().execute_with(|| {
+        charlie_is_verified();
+        let charlie: AccountId = Charlie.to_account_id();
+        start_block(2, 3_606);
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        let mut again = claim(Dave, 1, 2, 365);
+        again.subject_ref = SubjectRef(Charlie.public().0);
+        assert_ok!(run(Dave, 1, request_move(again)));
+        assert_ok!(run(
+            Charlie,
+            3,
+            pallet_capita_credential::Call::stop_move {}
+        ));
+        sudo(
+            1,
+            pallet_capita_credential::Call::decide_move {
+                from: charlie.clone(),
+                grant: false,
+            },
+        );
+        let state = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
+        assert_eq!(state.status, AccountStatus::Active);
+        assert!(state.person.is_some());
+        assert_eq!(level(Charlie), 1);
+        assert_eq!(level(Dave), 0);
+        assert!(pallet_capita_credential::Moves::<Runtime>::get(&charlie).is_none());
+        assert_ok!(run(Charlie, 4, pallet_capita::Call::claim {}));
+        // The holder's own lock ("my key was stolen") is one-way for the
+        // key: it cannot claim, and cannot open the account again.
+        assert_ok!(run(Charlie, 5, pallet_capita::Call::freeze_own {}));
+        assert_eq!(
+            run(Charlie, 6, pallet_capita::Call::claim {}),
+            Err(pallet_capita::Error::<Runtime>::AccountNotActive.into())
+        );
+        end_block();
+    });
 }
 
 #[test]
@@ -1284,6 +1408,8 @@ fn the_app_reads_the_ledger_as_the_runtime_wrote_it() {
                 AccountStatus::Active => "active",
                 AccountStatus::Frozen => "frozen",
                 AccountStatus::Closed => "closed",
+                AccountStatus::HolderFrozen => "holder-frozen",
+                AccountStatus::Disputed => "disputed",
             },
             "openedAt": state.opened_at.secs(),
             "level": state.level.0,

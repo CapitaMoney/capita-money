@@ -221,9 +221,13 @@ pub fn plan_set_tier(
 
 /// Plans a change of the life-cycle state.
 ///
-/// - Freezing sets aside what accrued so far; a frozen account accrues
-///   nothing and cannot claim. Reopening (frozen to active) restarts
-///   accrual at `now`.
+/// - Freezing by the authority sets aside what accrued so far; a frozen
+///   account accrues nothing and cannot claim. Reopening restarts accrual
+///   at `now`.
+/// - A lock – by the holder, or while a stopped move waits for the second
+///   check (rules diary 15, ADR 0028) – keeps spending and claiming shut
+///   and leaves the entitlement alone: it accrues on, for the next claim
+///   of whoever holds the account then.
 /// - Closing is final. What was accrued or set aside lapses; a positive
 ///   balance is burnt if `closed_balance` says so. Recorded debt stays on
 ///   record.
@@ -246,7 +250,7 @@ pub fn plan_set_status(
         return Ok(Plan::of(next));
     }
     let params = in_force_at(list, now)?;
-    if state.status == AccountStatus::Active {
+    if state.status.accrues() && !to.accrues() {
         carry_forward(&mut next, list, now)?;
     }
     let mut ops = Vec::new();
@@ -257,12 +261,14 @@ pub fn plan_set_status(
         at: now,
     }];
     match to {
-        AccountStatus::Active => {
-            // Nothing accrues for the time spent frozen.
-            next.issuance.anchor = now;
-            next.issuance.paid_since_anchor = Amount::ZERO;
-            next.issuance.paid_until = now;
-            next.issuance.rate = effective_rate(params, &next, now)?;
+        AccountStatus::Active | AccountStatus::HolderFrozen | AccountStatus::Disputed => {
+            if !state.status.accrues() {
+                // Nothing accrues for the time spent frozen by the authority.
+                next.issuance.anchor = now;
+                next.issuance.paid_since_anchor = Amount::ZERO;
+                next.issuance.paid_until = now;
+                next.issuance.rate = effective_rate(params, &next, now)?;
+            }
         }
         AccountStatus::Frozen => {}
         AccountStatus::Closed => {

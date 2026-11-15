@@ -24,7 +24,7 @@ A laptop is a web app, never a separate program *(owner: app and website for eve
 - **In a browser** (a laptop, or an iPhone until the iPhone app is out) the key is a passkey; where no passkey is possible, a key the browser keeps and never lets out. A browser key is a second device of the phone's account; a person who starts in a browser links the app later, and its chip key becomes the home key after seven days.
 - **The account is made from the first key.** No name, no e-mail, no password. The chain checks every signature itself; nobody can move money without the device.
 - **Up to three devices.** "Use Capita on another device": the new device shows a QR code, the phone scans it and confirms. The first device is the *home* device: only it can remove the others. Linked devices can remove only themselves.
-- **Lost phone:** with a second device – it becomes the home device after seven days, unless the old phone objects. Without – verify again; the account moves to the new phone's key (ADR 0013, seven days). Removing the app from a phone removes its key; Settings says so.
+- **Lost phone:** with a second device – it becomes the home device after seven days, unless the old phone objects. Without – verify again; the account moves to the new phone's key (ADR 0013, seven days). The old phone can stop that move: then the account is locked for both until the board has decided (ADR 0028). Removing the app from a phone removes its key; Settings says so.
 - What the person sees: "Confirm with your fingerprint", "Use Capita on another device", "Your devices" (phone, laptop – with the day each was added), "Lost your phone?". Never: key, passkey, credential, signature.
 
 ## Verification (ADR 0021)

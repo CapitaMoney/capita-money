@@ -17,6 +17,7 @@
 //!
 //! Which claims count is tested in `capita-credential`.
 
+use capita_core::account::AccountStatus;
 use capita_core::attributes::{AttrKey, AttrValue, Attribute, Residence, VerificationLevel};
 use capita_core::types::{CountryCode, Date};
 use capita_credential::check::person_id;
@@ -598,7 +599,7 @@ fn present_as_active(n: u8) -> sp_runtime::DispatchResult {
 }
 
 #[test]
-fn a_revoked_identity_ends_the_claim_and_freezes_the_account() {
+fn a_revoked_identity_ends_the_claim_and_locks_the_account() {
     new_test_ext().execute_with(|| {
         assert_ok!(present(1, &claim(1, 2, 1)));
         // the identity pallets revoke the identity: membership first, …
@@ -610,7 +611,8 @@ fn a_revoked_identity_ends_the_claim_and_freezes_the_account() {
         Credential::identity_revoked(&acct(1));
 
         assert_eq!(level(1), 0);
-        assert!(world(|w| w.frozen.contains(&acct(1))));
+        // locked as by its own holder: it can still move to a new key
+        assert_eq!(status(1), Some(AccountStatus::HolderFrozen));
         assert_eq!(Credentials::<Test>::get(acct(1)), None);
         assert_eq!(
             events().last(),
@@ -626,11 +628,17 @@ fn a_revoked_identity_ends_the_claim_and_freezes_the_account() {
             DispatchError::Other("identity revoked")
         );
         assert_noop!(call(signed(1), Call::renew {}), Error::<Test>::NoCredential);
-        // an account without a claim: frozen all the same, nothing dropped
+        // an account without a claim: locked all the same, nothing dropped
         let before = events().len();
         Credential::identity_revoked(&acct(2));
-        assert!(world(|w| w.frozen.contains(&acct(2))));
+        assert_eq!(status(2), Some(AccountStatus::HolderFrozen));
         assert_eq!(events().len(), before);
+        // a freeze by the authority and a dispute stay what they are
+        for kept in [AccountStatus::Frozen, AccountStatus::Disputed] {
+            set_status(3, kept);
+            Credential::identity_revoked(&acct(3));
+            assert_eq!(status(3), Some(kept));
+        }
         check();
     });
 }
@@ -762,30 +770,72 @@ fn a_lost_key_moves_the_account_after_the_waiting_time() {
 }
 
 #[test]
-fn the_old_key_stops_a_move_and_the_asker_can_withdraw() {
+fn the_old_key_stops_a_move_and_the_second_check_decides() {
     new_test_ext().execute_with(|| {
+        let decide = |grant| Call::decide_move {
+            from: acct(1),
+            grant,
+        };
         assert_ok!(present(1, &claim(1, 1, 1)));
         assert_ok!(request_move(2, 1, 2));
         // Nobody else.
         assert_noop!(call(signed(3), Call::stop_move {}), Error::<Test>::NoMove);
-        // "This was not me."
+        // Nothing to decide while the old key is silent.
+        assert_noop!(call(root(), decide(true)), Error::<Test>::NotDisputed);
+        // "This was not me": the account is locked for both sides.
         assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveDisputed {
+                from: acct(1),
+                to: acct(2),
+            })
+        );
+        assert_eq!(status(1), Some(AccountStatus::Disputed));
+        assert_noop!(
+            call(signed(1), Call::stop_move {}),
+            Error::<Test>::MoveDisputed
+        );
+        // Waiting completes nothing: only the second check decides.
+        set_time(8 * DAY);
+        assert_noop!(
+            call(signed(9), Call::complete_move { from: acct(1) }),
+            Error::<Test>::MoveDisputed
+        );
+        for nobody in [1, 2, 9] {
+            assert_noop!(call(signed(nobody), decide(true)), BadOrigin);
+        }
+        // Refused: the account is the old key's again, as it was.
+        assert_ok!(call(root(), decide(false)));
+        assert_eq!(status(1), Some(AccountStatus::Active));
         assert_eq!(
             events().last(),
             Some(&Event::MoveStopped {
                 from: acct(1),
                 to: acct(2),
-                reason: StopReason::ByOldKey,
+                reason: StopReason::Refused,
             })
         );
-        set_time(8 * DAY);
-        assert_noop!(
-            call(signed(9), Call::complete_move { from: acct(1) }),
-            Error::<Test>::NoMove
-        );
         assert!(is_member(1) && !is_member(2));
-        // Asked again with a new claim, and withdrawn by the asker.
+        assert_noop!(call(root(), decide(true)), Error::<Test>::NoMove);
+
+        // Asked again with a new claim, stopped again, granted: it moves
+        // at once.
         assert_ok!(request_move(2, 1, 3));
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_ok!(call(root(), decide(true)));
+        assert_eq!(world(|w| w.moved.get(&acct(1)).cloned()), Some(acct(2)));
+        assert!(!is_member(1) && is_member(2));
+        assert_eq!(level(2), 1);
+        check();
+    });
+}
+
+#[test]
+fn the_asker_withdraws_a_move_also_out_of_a_dispute() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        assert_ok!(request_move(2, 1, 2));
         assert_ok!(call(signed(2), Call::stop_move {}));
         assert_eq!(
             events().last(),
@@ -795,6 +845,100 @@ fn the_old_key_stops_a_move_and_the_asker_can_withdraw() {
                 reason: StopReason::Withdrawn,
             })
         );
+        assert_eq!(status(1), Some(AccountStatus::Active));
+        // Locked by its own holder (a stolen key) the account still moves;
+        // stopped by the old key and then withdrawn, it is locked as before.
+        set_status(1, AccountStatus::HolderFrozen);
+        assert_ok!(request_move(2, 1, 3));
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_eq!(status(1), Some(AccountStatus::Disputed));
+        assert_ok!(call(signed(2), Call::stop_move {}));
+        assert_eq!(status(1), Some(AccountStatus::HolderFrozen));
+        assert!(is_member(1) && !is_member(2));
+        // Unstopped, it moves when the waiting time is over.
+        assert_ok!(request_move(2, 1, 4));
+        set_time(7 * DAY);
+        assert_ok!(call(signed(9), Call::complete_move { from: acct(1) }));
+        assert_eq!(world(|w| w.moved.get(&acct(1)).cloned()), Some(acct(2)));
+        check();
+    });
+}
+
+#[test]
+fn a_freeze_by_the_authority_is_not_escaped_by_a_new_key() {
+    new_test_ext().execute_with(|| {
+        let decide = |grant| Call::decide_move {
+            from: acct(1),
+            grant,
+        };
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        set_status(1, AccountStatus::Frozen);
+        assert_noop!(request_move(2, 1, 2), Error::<Test>::AccountFrozen);
+        // Frozen while a move waits: the old key's stop only clears the
+        // move away, the freeze stays.
+        set_status(1, AccountStatus::Active);
+        assert_ok!(request_move(2, 1, 2));
+        set_status(1, AccountStatus::Frozen);
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::ByOldKey,
+            })
+        );
+        assert_eq!(status(1), Some(AccountStatus::Frozen));
+        // Frozen during a dispute: the second check cannot move the
+        // account, and its refusal does not reopen it.
+        set_status(1, AccountStatus::Active);
+        assert_ok!(request_move(2, 1, 3));
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        set_status(1, AccountStatus::Frozen);
+        assert_noop!(call(root(), decide(true)), DispatchError::Other("frozen"));
+        assert_ok!(call(root(), decide(false)));
+        assert_eq!(status(1), Some(AccountStatus::Frozen));
+        assert!(world(|w| w.moved.is_empty()));
+        check();
+    });
+}
+
+#[test]
+fn a_dispute_ends_when_the_claim_behind_it_counts_no_longer() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(present(1, &claim(1, 1, 1)));
+        // The issuer struck off the list during the dispute: the move
+        // cannot be granted any more.
+        assert_ok!(request_move(2, 1, 2));
+        assert_ok!(call(signed(1), Call::stop_move {}));
+        assert_ok!(update(Issuer {
+            status: IssuerStatus::Revoked,
+            ..issuer()
+        }));
+        assert_noop!(
+            call(
+                root(),
+                Call::decide_move {
+                    from: acct(1),
+                    grant: true
+                }
+            ),
+            Error::<Test>::ClaimLapsed
+        );
+        assert_ok!(update(issuer()));
+        // The claim taken back by the issuer during the dispute: the move
+        // is cleared away and the account is the old key's again.
+        assert_ok!(revoke(2, 1));
+        assert_eq!(
+            events().last(),
+            Some(&Event::MoveStopped {
+                from: acct(1),
+                to: acct(2),
+                reason: StopReason::Lapsed,
+            })
+        );
+        assert_eq!(status(1), Some(AccountStatus::Active));
+        assert!(is_member(1));
         check();
     });
 }

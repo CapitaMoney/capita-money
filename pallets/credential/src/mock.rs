@@ -18,6 +18,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
+use capita_core::account::AccountStatus;
 use capita_core::attributes::{Attestation, AttrKey, VerificationLevel};
 use capita_core::types::{AccountId as CoreId, Duration, PersonId, Timestamp as Instant};
 use capita_credential::encoding::{claim_bytes, revocation_bytes};
@@ -60,6 +61,7 @@ impl pallet_capita_credential::Config for Test {
     type Memberships = Identities;
     type Rules = RulesStub;
     type MoveDelay = MoveDelay;
+    type BoardOrigin = EnsureRoot<AccountId32>;
 }
 
 frame_support::parameter_types! {
@@ -82,8 +84,8 @@ pub struct World {
     pub attested: BTreeMap<AccountId32, Attestation>,
     /// The account each person holds.
     pub persons: BTreeMap<PersonId, AccountId32>,
-    /// Accounts frozen by the rules.
-    pub frozen: BTreeSet<AccountId32>,
+    /// The life-cycle state of the accounts that are not in normal operation.
+    pub status: BTreeMap<AccountId32, AccountStatus>,
     /// Accounts whose identity ended because their person moved away.
     pub retired: BTreeSet<AccountId32>,
     /// Accounts that moved, with where to.
@@ -168,9 +170,22 @@ impl pallet_capita_credential::Rules<AccountId32> for RulesStub {
         })
     }
 
-    fn freeze(who: &AccountId32) -> DispatchResult {
-        world(|w| w.frozen.insert(who.clone()));
-        Ok(())
+    fn status(who: &AccountId32) -> Option<AccountStatus> {
+        world(|w| {
+            w.open
+                .contains(who)
+                .then(|| w.status.get(who).copied().unwrap_or_default())
+        })
+    }
+
+    fn set_status(who: &AccountId32, status: AccountStatus) -> DispatchResult {
+        world(|w| {
+            if !w.open.contains(who) {
+                return Err(DispatchError::Other("no account"));
+            }
+            w.status.insert(who.clone(), status);
+            Ok(())
+        })
     }
 
     fn holder(person: &PersonId) -> Option<AccountId32> {
@@ -183,9 +198,10 @@ impl pallet_capita_credential::Rules<AccountId32> for RulesStub {
         attestation: &Attestation,
     ) -> DispatchResult {
         world(|w| {
-            if w.frozen.contains(from) {
+            if !w.status.get(from).copied().unwrap_or_default().may_move() {
                 return Err(DispatchError::Other("frozen"));
             }
+            w.status.remove(from);
             if !w.open.contains(to) || w.attested.contains_key(to) {
                 return Err(DispatchError::Other("target not free"));
             }
@@ -228,6 +244,15 @@ pub fn set_time(offset: u64) {
 /// The level the rules currently hold for account `n`.
 pub fn level(n: u8) -> u8 {
     world(|w| w.attested.get(&acct(n)).map_or(0, |a| a.level.0))
+}
+
+/// The life-cycle state of account `n` with the rules.
+pub fn status(n: u8) -> Option<AccountStatus> {
+    <RulesStub as pallet_capita_credential::Rules<AccountId32>>::status(&acct(n))
+}
+
+pub fn set_status(n: u8, status: AccountStatus) {
+    world(|w| w.status.insert(acct(n), status));
 }
 
 pub fn is_member(n: u8) -> bool {

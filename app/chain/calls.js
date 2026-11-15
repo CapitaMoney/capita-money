@@ -218,7 +218,10 @@ export function decodeBalance(bytes) {
   return Number(BigInt.asIntN(64, v));
 }
 
-const STATUS = ["active", "frozen", "closed"];
+// "frozen": by the authority. "holder-frozen": locked by its own holder.
+// "disputed": a move to a new key was stopped and waits for the second
+// check (ADR 0028). Only an active account spends or claims.
+const STATUS = ["active", "frozen", "closed", "holder-frozen", "disputed"];
 
 /**
  * `Capita::Accounts`: what the ledger remembers of an account, as far as

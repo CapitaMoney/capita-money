@@ -37,10 +37,45 @@ pub enum AccountStatus {
     /// Normal operation.
     #[default]
     Active,
-    /// Suspended (for example a suspected duplicate): receives nothing.
+    /// Suspended by the authority (for example a suspected duplicate):
+    /// receives nothing, and does not move to a new key.
     Frozen,
     /// Ended (exit or death): receives nothing, never reopened.
     Closed,
+    /// Locked by its own holder (a stolen key, the own identity revoked):
+    /// nobody can spend or claim. What the person is entitled to keeps
+    /// accruing; the account can still move to a new key after a new
+    /// verification (rules diary 15).
+    HolderFrozen,
+    /// The old key stopped the move to a new key: locked for both sides
+    /// until a second check decides (rules diary 15). What the person is
+    /// entitled to keeps accruing for whoever the decision names.
+    Disputed,
+}
+
+impl AccountStatus {
+    /// Whether what the holder is entitled to keeps accruing: in normal
+    /// operation and while the account is only locked. A lock is not a
+    /// sanction – behind it there is still one verified person.
+    #[must_use]
+    pub const fn accrues(self) -> bool {
+        matches!(self, Self::Active | Self::HolderFrozen | Self::Disputed)
+    }
+
+    /// Whether the account may move to a new key of the same person: not
+    /// one the authority froze – a freeze is not escaped by a new key – and
+    /// not a closed one.
+    #[must_use]
+    pub const fn may_move(self) -> bool {
+        self.accrues()
+    }
+
+    /// Locked: open, but nobody can spend or claim until a new verification
+    /// or a second check settles to whom the account belongs.
+    #[must_use]
+    pub const fn locked(self) -> bool {
+        matches!(self, Self::HolderFrozen | Self::Disputed)
+    }
 }
 
 /// Bookkeeping of lazy issuance (ADR 0002).

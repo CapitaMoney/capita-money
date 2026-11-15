@@ -30,7 +30,7 @@ use core::cmp::max;
 
 use alloc::vec;
 
-use crate::account::{AccountState, AccountStatus, IssuanceState};
+use crate::account::{AccountState, IssuanceState};
 use crate::attributes::VerificationLevel;
 use crate::errors::{ArithmeticError, CoreError};
 use crate::params::{check_sequence, in_force_at, next_change, Params, MAX_SEGMENTS};
@@ -301,8 +301,9 @@ pub fn accrue(
 }
 
 /// Accounts everything accrued up to `now` under the present conditions and
-/// sets it aside (`carried`) for the next claim; a frozen account accrues
-/// nothing. Called before a step,
+/// sets it aside (`carried`) for the next claim; an account the authority
+/// froze accrues nothing, a locked one does (`AccountStatus::accrues`).
+/// Called before a step,
 /// level, residence, date of birth or status changes, so that the change
 /// never reaches back in time. With ripening switched on, the amount set
 /// aside becomes mintable one ripening period after `now`.
@@ -311,7 +312,7 @@ pub(crate) fn carry_forward(
     list: &[Params],
     now: Timestamp,
 ) -> Result<(), CoreError> {
-    if state.status != AccountStatus::Active {
+    if !state.status.accrues() {
         return Ok(());
     }
     let accrued = accrue(state, list, now)?;

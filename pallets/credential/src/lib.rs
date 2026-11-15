@@ -38,7 +38,9 @@
 //! A lost key: the person verifies again with a new account under a new
 //! key and asks for the move ([`Pallet::request_move`]). The move waits
 //! (`Config::MoveDelay`, a rule value); meanwhile the old key can stop it
-//! ([`Pallet::stop_move`]). Then anybody completes it
+//! ([`Pallet::stop_move`]) – then the account is locked for both sides
+//! until the second check decides ([`Pallet::decide_move`], rules diary 15,
+//! ADR 0028). Unstopped, anybody completes it
 //! ([`Pallet::complete_move`]): person, money and membership go to the new
 //! account, the old one is closed (`capita_core::recovery`).
 //!
@@ -63,6 +65,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use capita_core::account::AccountStatus;
 use capita_core::attributes::Attestation;
 use capita_core::types::PersonId;
 use capita_credential::check::Crypto;
@@ -90,8 +93,11 @@ pub trait Rules<AccountId> {
     /// Records what an identity service states about the holder of `who`.
     /// `None`: nothing counts any longer.
     fn attest(who: &AccountId, attestation: Option<Attestation>) -> DispatchResult;
-    /// Suspends the account: its identity was revoked.
-    fn freeze(who: &AccountId) -> DispatchResult;
+    /// The life-cycle state of the account `who`, if it is open.
+    fn status(who: &AccountId) -> Option<AccountStatus>;
+    /// Changes the life-cycle state of the account: locked when its
+    /// identity was revoked or its move was stopped, and back.
+    fn set_status(who: &AccountId, status: AccountStatus) -> DispatchResult;
     /// The account `person` holds, if any.
     fn holder(person: &PersonId) -> Option<AccountId>;
     /// Moves the account `from` to the account `to`, which the same person
@@ -134,6 +140,7 @@ impl Crypto for HostCrypto {
 pub mod pallet {
     use alloc::vec::Vec;
 
+    use capita_core::account::AccountStatus;
     use capita_core::attributes::VerificationLevel;
     use capita_core::types::Timestamp;
     use capita_credential::check::{attestation, check_claim, check_revocation, still_counts};
@@ -175,6 +182,24 @@ pub mod pallet {
         /// Offene Frage: 2discuss M.
         #[pallet::constant]
         type MoveDelay: Get<u64>;
+        /// Who decides a move the old key stopped: the second check of
+        /// rules diary 15 – in the alpha the board of the Verein, later a
+        /// second independent identity service.
+        ///
+        /// Offene Frage: ADR 0028 – who that is on the chain, and by when
+        /// the decision must be made.
+        type BoardOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+    }
+
+    /// A move the old key stopped: the account is locked for both sides
+    /// until the second check decides.
+    #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+    pub struct Dispute {
+        /// When the old key stopped the move.
+        pub since: Timestamp,
+        /// The state of the account before: it returns there if the move
+        /// is refused or withdrawn.
+        pub before: AccountStatus,
     }
 
     /// A move that waits: the account of a person is to go to another one,
@@ -191,6 +216,9 @@ pub mod pallet {
         pub requested_at: Timestamp,
         /// From when it can be completed.
         pub executable_at: Timestamp,
+        /// Set once the old key stopped it: nothing completes the move but
+        /// the second check.
+        pub disputed: Option<Dispute>,
     }
 
     /// Why a move that waited did not happen.
@@ -207,13 +235,16 @@ pub mod pallet {
         TypeInfo,
     )]
     pub enum StopReason {
-        /// The old key objected.
+        /// The old key objected to the move of an account that could not
+        /// have moved anyway (frozen by the authority, or closed).
         ByOldKey,
         /// Whoever asked for it withdrew.
         Withdrawn,
         /// Its claim counts no longer: expired, taken back, or its issuer
         /// struck off the list.
         Lapsed,
+        /// The old key objected, and the second check refused the move.
+        Refused,
     }
 
     /// What became of a claim number.
@@ -364,6 +395,24 @@ pub mod pallet {
             /// From when the move can be completed.
             executable_at: Timestamp,
         },
+        /// The old key stopped a move ("this was not me"). The account is
+        /// locked for both sides until the second check decides.
+        MoveDisputed {
+            /// The account that was to be moved; locked now.
+            from: T::AccountId,
+            /// The account it was to move to.
+            to: T::AccountId,
+        },
+        /// The second check decided a stopped move.
+        MoveDecided {
+            /// The account that was to be moved.
+            from: T::AccountId,
+            /// The account it was to move to.
+            to: T::AccountId,
+            /// Whether the account moved (`Moved` follows) or stays with
+            /// the old key (`MoveStopped` follows).
+            granted: bool,
+        },
         /// A move that waited will not happen.
         MoveStopped {
             /// The account that was to be moved.
@@ -422,6 +471,16 @@ pub mod pallet {
         NoMove,
         /// The waiting time of the move is not over.
         MoveNotDue,
+        /// The account of the person was frozen by the authority, or is
+        /// closed: it does not move to a new key.
+        AccountFrozen,
+        /// The old key stopped the move: it waits for the second check.
+        MoveDisputed,
+        /// The move was not stopped: there is nothing to decide.
+        NotDisputed,
+        /// The claim behind the move counts no longer: the move cannot be
+        /// granted. Refuse it; the person verifies again.
+        ClaimLapsed,
         /// The account to move to holds a claim of its own.
         TargetHoldsClaim,
         /// The issuer is suspended or revoked.
@@ -677,6 +736,12 @@ pub mod pallet {
                 .or_else(|| stated.replaces.as_ref().and_then(T::Rules::holder))
                 .ok_or(Error::<T>::NothingToMove)?;
             ensure!(from != who, Error::<T>::AlreadyHolder);
+            // Locked by its own holder it moves; frozen by the authority
+            // it does not – a freeze is not escaped by a new key.
+            ensure!(
+                T::Rules::status(&from).is_some_and(AccountStatus::may_move),
+                Error::<T>::AccountFrozen
+            );
             ensure!(
                 !Credentials::<T>::contains_key(&who),
                 Error::<T>::TargetHoldsClaim
@@ -698,6 +763,7 @@ pub mod pallet {
                 name,
                 requested_at: now,
                 executable_at,
+                disputed: None,
             };
             Self::deposit_event(Event::MoveRequested {
                 from: from.clone(),
@@ -712,20 +778,41 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Stop a move that waits: as the holder of the account that is to
-        /// be moved (the old key – "this was not me"), or as the one who
-        /// asked for the move.
+        /// Stop a move that waits.
+        ///
+        /// As the holder of the account that is to be moved (the old key –
+        /// "this was not me"): the move is not cancelled – a thief holding
+        /// the old key could block the owner forever. The account is locked
+        /// for both sides, nobody can spend, until the second check decides
+        /// (`decide_move`, rules diary 15).
+        ///
+        /// As the one who asked for the move: it is withdrawn, also out of
+        /// a dispute; the account returns to the old key as it was.
         #[pallet::call_index(5)]
-        #[pallet::weight(weight_of::<T>(50_000_000, 3, 3))]
+        #[pallet::weight(weight_of::<T>(50_000_000, 5, 5))]
         pub fn stop_move(origin: OriginFor<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
-            let (from, reason) = if Moves::<T>::contains_key(&who) {
-                (who, StopReason::ByOldKey)
-            } else {
+            let Some(mut pending) = Moves::<T>::get(&who) else {
                 let from = MoveOf::<T>::get(&who).ok_or(Error::<T>::NoMove)?;
-                (from, StopReason::Withdrawn)
+                Self::drop_move(&from, StopReason::Withdrawn);
+                return Ok(());
             };
-            Self::drop_move(&from, reason);
+            ensure!(pending.disputed.is_none(), Error::<T>::MoveDisputed);
+            let before = T::Rules::status(&who).ok_or(Error::<T>::NothingToMove)?;
+            if !before.may_move() {
+                // Frozen by the authority meanwhile: the account could not
+                // move anyway, and that freeze stays what it is.
+                Self::drop_move(&who, StopReason::ByOldKey);
+                return Ok(());
+            }
+            T::Rules::set_status(&who, AccountStatus::Disputed)?;
+            pending.disputed = Some(Dispute {
+                since: Self::now(),
+                before,
+            });
+            let to = pending.to.clone();
+            Moves::<T>::insert(&who, pending);
+            Self::deposit_event(Event::MoveDisputed { from: who, to });
             Ok(())
         }
 
@@ -737,6 +824,7 @@ pub mod pallet {
         pub fn complete_move(origin: OriginFor<T>, from: T::AccountId) -> DispatchResult {
             ensure_signed(origin)?;
             let pending = Moves::<T>::get(&from).ok_or(Error::<T>::NoMove)?;
+            ensure!(pending.disputed.is_none(), Error::<T>::MoveDisputed);
             ensure!(Self::now() >= pending.executable_at, Error::<T>::MoveNotDue);
             let counts = Issuers::<T>::get(pending.claim.issuer)
                 .is_some_and(|issuer| still_counts(&pending.claim, &issuer, Self::now()));
@@ -744,6 +832,38 @@ pub mod pallet {
                 Self::drop_move(&from, StopReason::Lapsed);
                 return Ok(());
             }
+            Self::execute_move(&from, pending)
+        }
+
+        /// The second check decides a move the old key stopped (rules
+        /// diary 15): `grant` – the account moves to the new key, at once;
+        /// otherwise it stays with the old key, as it was before the stop.
+        ///
+        /// An account the authority froze meanwhile does not move, and is
+        /// not reopened by a refusal either.
+        #[pallet::call_index(7)]
+        #[pallet::weight(weight_of::<T>(200_000_000, 30, 30))]
+        pub fn decide_move(
+            origin: OriginFor<T>,
+            from: T::AccountId,
+            grant: bool,
+        ) -> DispatchResult {
+            T::BoardOrigin::ensure_origin(origin)?;
+            let pending = Moves::<T>::get(&from).ok_or(Error::<T>::NoMove)?;
+            ensure!(pending.disputed.is_some(), Error::<T>::NotDisputed);
+            let to = pending.to.clone();
+            Self::deposit_event(Event::MoveDecided {
+                from: from.clone(),
+                to,
+                granted: grant,
+            });
+            if !grant {
+                Self::drop_move(&from, StopReason::Refused);
+                return Ok(());
+            }
+            let counts = Issuers::<T>::get(pending.claim.issuer)
+                .is_some_and(|issuer| still_counts(&pending.claim, &issuer, Self::now()));
+            ensure!(counts, Error::<T>::ClaimLapsed);
             Self::execute_move(&from, pending)
         }
 
@@ -808,7 +928,10 @@ pub mod pallet {
         }
 
         /// For the identity pallets of the runtime: the identity of `who`
-        /// was revoked. The claim stops counting and the account is frozen.
+        /// was revoked. The claim stops counting and the account is locked
+        /// as by its own holder: it can move to a new key after a new
+        /// verification (rules diary 15). A freeze by the authority is
+        /// `capita.set_status`.
         pub fn identity_revoked(who: &T::AccountId) {
             if Credentials::<T>::take(who).is_some() {
                 Self::deposit_event(Event::Dropped {
@@ -816,13 +939,26 @@ pub mod pallet {
                     reason: DropReason::IdentityRevoked,
                 });
             }
-            let _ = with_storage_layer(|| T::Rules::freeze(who));
+            // Only out of normal operation: a freeze by the authority, a
+            // dispute over a move and a closed account stay what they are.
+            if T::Rules::status(who) == Some(AccountStatus::Active) {
+                let _ =
+                    with_storage_layer(|| T::Rules::set_status(who, AccountStatus::HolderFrozen));
+            }
         }
 
-        /// Clears a waiting move away.
+        /// Clears a waiting move away. An account locked by the stop of
+        /// that move returns to the state it had before – unless something
+        /// else changed its state meanwhile (a freeze by the authority).
         fn drop_move(from: &T::AccountId, reason: StopReason) {
             if let Some(pending) = Moves::<T>::take(from) {
                 MoveOf::<T>::remove(&pending.to);
+                if let Some(dispute) = pending.disputed {
+                    if T::Rules::status(from) == Some(AccountStatus::Disputed) {
+                        // Called from hooks too, where nothing rolls back on its own.
+                        let _ = with_storage_layer(|| T::Rules::set_status(from, dispute.before));
+                    }
+                }
                 Self::deposit_event(Event::MoveStopped {
                     from: from.clone(),
                     to: pending.to,

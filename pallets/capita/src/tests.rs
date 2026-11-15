@@ -417,6 +417,25 @@ fn frozen_and_closed_accounts_receive_nothing() {
         // The hour before the freeze and the hour after it; nothing between.
         assert_eq!(balance(1), 120);
 
+        // Locked by the holder ("my key was stolen"): nobody spends, claims
+        // or ends the account, the key cannot open it again, and paying
+        // into it fails as well. Only the authority reopens it here.
+        assert_ok!(call(signed(1), Call::freeze_own {}));
+        assert_eq!(
+            Capita::status_of(&cid(1)),
+            Some(AccountStatus::HolderFrozen)
+        );
+        set_time(7 * HOUR);
+        for refused in [Call::claim {}, Call::close {}, Call::freeze_own {}] {
+            assert_noop!(call(signed(1), refused), Error::<Test>::AccountNotActive);
+        }
+        assert_noop!(transfer(1, 2, 1), Error::<Test>::AccountNotActive);
+        assert_noop!(transfer(2, 1, 1), Error::<Test>::AccountNotActive);
+        assert_ok!(call(root(), status(AccountStatus::Active)));
+        // The hour in the lock was not lost: a lock is not a sanction.
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 180);
+
         // Exit by the holder is final.
         assert_ok!(call(signed(1), Call::close {}));
         assert_noop!(
