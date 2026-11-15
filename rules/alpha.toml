@@ -459,10 +459,17 @@ planned = "identity service, when a rule needs residence"
 
 [[register]]
 id = "document-check"
-rule = "The first document check reads the chip of the passport or identity card on the phone (NFC; the state's signature proves the document genuine) and compares a selfie with the chip photo. Further checks may be added beside it."
+rule = "The first document check reads the chip of the passport or identity card on the phone (NFC; the state's signature proves the document genuine) and compares a selfie with the chip photo. Further checks may be added beside it. Second check: Didit, built later as a further adapter; the yearly re-verification then alternates between both."
 status = "decided"
-source = "diary 18, 2discuss F"
+source = "diary 18, 26, 2discuss F"
 planned = "identity service + app (task 1c)"
+
+[[register]]
+id = "face-dedup"
+rule = "One person with two documents whose names are spelled differently: at every document check the face print of the chip photo is compared with the accounts of the same birth date; a match holds the new account until the Verein board decides; same person: refused (double account), different persons: the pair is marked and the account opens. Not before the legal check (P04.3)."
+status = "decided"
+source = "owner 2026-11-15, diary 33, 2discuss B"
+planned = "identity service + face check, after legal check P04.3"
 
 [[register]]
 id = "banned-goods"
