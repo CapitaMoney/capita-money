@@ -88,6 +88,7 @@ MERCHANT=mock services/door/demo/run-demo.sh   # the same without a wallet: orde
 Real euros need a Taler exchange for EUR, a merchant instance and a legal owner (P04.3).
 
 ## Build and test
+Before a push: `scripts/check.sh` runs the Rust steps of CI here (read from `.github/workflows/ci.yml`; `scripts/check.sh core issuer` = only these jobs, `--list` = show them). `git config core.hooksPath .githooks` once per clone: every push then checks the formatting first.
 ```
 # the crates without the Polkadot SDK (default members of the workspace)
 cargo test --all-features
