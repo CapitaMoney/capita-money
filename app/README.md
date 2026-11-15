@@ -14,7 +14,7 @@ Open http://localhost:8000 – on a phone: same network, the computer's address 
 cd app
 npm test
 ```
-Tests cover `logic.js`: start grant, verification, monthly Capita, claim window, no debt, amounts.
+Tests cover `logic.js`: start grant, verification, Capita by age (first verification, birthdays), claim window, no debt, amounts.
 
 ## Files
 | File | What |

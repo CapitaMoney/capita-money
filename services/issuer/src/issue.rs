@@ -432,6 +432,14 @@ impl<K: KeyService, S: Store> Service<K, S> {
                 return Err(Refusal::TooYoung);
             }
         }
+        // The date of birth goes into the claim: the rules issue money by
+        // age (ADR 0026). It is the one fact about the person that leaves
+        // this service besides the person key.
+        let born = person
+            .born()
+            .map(|born| capita_core::types::Date::new(born.year(), born.month(), born.day()))
+            .transpose()
+            .map_err(|_| Refusal::System("date of birth outside the calendar"))?;
         let account_hex = hex(&account);
         let (key, tag, found) = self.find(&self.key, &person)?;
         let (action, replaces) = match found {
@@ -481,6 +489,7 @@ impl<K: KeyService, S: Store> Service<K, S> {
             replaces: replaces.map(SubjectRef),
             level: VerificationLevel(rules.level),
             residence: None,
+            born,
             attributes: Vec::new(),
             issued_at: Timestamp::from_secs(now),
             expires_at: Some(Timestamp::from_secs(expires)),

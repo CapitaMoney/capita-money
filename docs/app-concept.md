@@ -24,8 +24,8 @@ The lesson behind it: the first sixty seconds decide. Good per-capita currencies
 |---|---|---|---|---|
 | 0–10 s | Welcome | "Capita – Money everyone receives, equally." "An experiment. No sign-up, no e-mail, no password." | taps **Start** | – |
 | 10–25 s | Name | "What is your name? People see it when you pay them." | types a name, **Continue** | key pair made on the device; account opened (`capita.open`); start grant reserved |
-| 25–40 s | Gift | "Welcome, Anna" · **1.00 Capita** · "Your first Capita. A gift – everyone gets one. It pays for your verification. After that, Capita arrives every month." | taps **Open Capita** | – |
-| 40–60 s | Home | balance **1.00 Capita**, "Kept for your verification", card "Receive 10.00 Capita every month – Verify" | reads, may tap **Verify** | – |
+| 25–40 s | Gift | "Welcome, Anna" · **1.00 Capita** · "Your first Capita. A gift – everyone gets one. It pays for your verification. Then you receive your age in Capita – and twice your age on every birthday." | taps **Open Capita** | – |
+| 40–60 s | Home | balance **1.00 Capita**, "Kept for your verification", card "Receive your age in Capita – Verify" | reads, may tap **Verify** | – |
 
 After one minute the person has: the app, a name, 1.00 Capita, and one clear next step. Verification is offered, not forced, and happens after the first minute.
 
@@ -35,8 +35,8 @@ After one minute the person has: the app, a name, 1.00 Capita, and one clear nex
 | Welcome | promise | mark, name, one sentence, Start |
 | Name | the only question | one field |
 | Gift | the moment | 1.00 Capita, what it is for |
-| Home | every day | balance; next-step card (verify / verify again / "You receive 10.00 Capita a month"); Receive, Send; four recent lines |
-| Verify | the step to monthly Capita | what is checked, that nothing is kept, what it costs (the gift), how (document or letter – not built) |
+| Home | every day | balance; next-step card (verify / verify again / "74.00 Capita on your birthday"); Receive, Send; four recent lines |
+| Verify | the step to Capita by age | what is checked, that nothing is kept, what it costs (the gift), how (document or letter – not built) |
 | Receive | get paid | QR code, own name, optional amount |
 | Send | pay | scan a code, or pick from people paid before |
 | Amount | how much | keypad; "Available: …"; Send button carries the amount; refuses more than is there |
@@ -61,7 +61,7 @@ Later, not in the alpha: buy Capita with euros (GNU Taler, ADR 0004, 2discuss N)
 From [`rules/alpha.toml`](../rules/alpha.toml); the prototype mirrors them in `app/logic.js`.
 - Start grant 1.00, earmarked: it pays the own verification and cannot be sent.
 - Verification costs 1.00 (1 € = 1 verification); the gift pays the first one; it holds 365 days.
-- Verified: 10.00 Capita a month (example value, 2discuss A), by the second, collected on opening.
+- Verified: Capita by age (ADR 0026) – the age × 1.00 at the first verification, at once; the age × 2.00 on each birthday, all at once, collected on opening within the claim window.
 - Claim window 14 days: what is not collected within 14 days lapses. The app says so once, plainly.
 - After a verification the account moves to the paying step by its own call (`step-by-holder`): the app makes that call itself, unseen.
 - No balance below zero.
@@ -70,7 +70,7 @@ From [`rules/alpha.toml`](../rules/alpha.toml); the prototype mirrors them in `a
 One web app, installable (PWA): Android, iPhone, desktop browsers – one code, no separate desktop program. Store presence later by thin wrappers around the same code: Google Play as a Trusted Web Activity, F-Droid and the App Store as a wrapper (for example Capacitor). Reasons: ADR 0015.
 
 ## Open questions
-- **Collecting without opening:** the claim window means money lapses if the app is not opened for 14 days. A reminder needs either a push service (a server) or a wider window. Proposal: a window of at least 31 days, so a monthly habit never loses money (rules chat).
+- **Collecting without opening:** the claim window means a birthday amount lapses if the app is not opened within 14 days of the birthday. A reminder needs either a push service (a server) or a wider window. Proposal: a window of at least 31 days, so a monthly habit never loses money (rules chat).
 - **Verification flow:** document check not chosen (2discuss F); the Verify screen is a placeholder.
 - **Name:** shown to people who are paid. Is a name chosen freely, or the verified one? Proposal: freely chosen display name, the verified name stays with the identity service.
 - **Scan a code:** camera access in a web app works on Android and iPhone (getUserMedia); to be built with a small QR reader library.

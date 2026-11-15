@@ -20,7 +20,7 @@ The rules need three facts about the holder of an account: that it is one person
 
 ### The claim
 Issuer (number on the list) · serial (16 bytes, unique per issuer) · subject (the account) · pseudonym of the person (32 bytes) · verification level · residence (country, proven when), optional · numbered attributes, optional · issued at · expires at, optional.
-No name, no document number, no date of birth: derived facts only. The verifiable credential a claim was derived from stays with the person.
+No name, no document number: derived facts only – and, since [ADR 0026](0026-issuance-by-age.md), the date of birth, because Capita are issued by age (claim format v3). The verifiable credential a claim was derived from stays with the person.
 The issuer signs fixed bytes: a tag (`capita-claim-v1`), the audience, then every field in a fixed layout, integers big-endian (`capita_credential::encoding`, with a test vector). No serialization library needed, so an issuer can be written in any language. Signature schemes: Ed25519, Sr25519; another scheme is another variant of two enums.
 
 ### What makes a claim count

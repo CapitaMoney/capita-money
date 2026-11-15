@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The prototype's money rules, mirrored from rules/alpha.toml.
+// The prototype's money rules, mirrored from rules/alpha.toml: Capita come
+// by age – the age at the first verification, twice the age on each birthday.
 // Pure functions: state in, new state out. No storage, no clock, no screen.
 // Integer cents everywhere (ADR 0003). No function lets a balance go below
 // zero (rules.md rule 10: no debt).
@@ -7,11 +8,57 @@
 export const RULES = Object.freeze({
   startGrantCents: 100, // issuance.start_grant = "1.00" (decided)
   verificationPriceCents: 100, // verification.price_eur = "1.00" (decided); paid by the start grant
-  verifiedMonthlyCents: 1000, // ladder step 1 = "10.00" per month (example, 2discuss A)
+  ageFirstCents: 100, // issuance.age.at_verification = "1.00" per year of age, once, at the first verification (decided)
+  agePerYearCents: 200, // issuance.age.per_year = "2.00" per year of age on each birthday (decided)
   claimWindowMs: 14 * 86400000, // issuance.claim_window = "14 days" (decided)
-  monthMs: Math.round((365.25 / 12) * 86400000), // month = 1/12 of 365.25 days (core)
   membershipMs: 365 * 86400000, // membership 365 days: verify again once a year
 });
+
+// ---------------------------------------------------------------- age (ADR 0026)
+// A date of birth is "YYYY-MM-DD"; a birthday begins at 00:00 UTC, as on
+// the ledger. Born on 29 February, the birthday of other years is 1 March.
+
+/** "1990-05-17" → [1990, 5, 17], or null if it is no day of the calendar. */
+function dateParts(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text ?? ""));
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const real = new Date(Date.UTC(y, mo - 1, d));
+  return y >= 1 && real.getUTCMonth() === mo - 1 && real.getUTCDate() === d ? [y, mo, d] : null;
+}
+
+export const isDate = (text) => dateParts(text) !== null;
+
+/** Completed years of age at the moment `t`. */
+export function ageAt(born, t) {
+  const [y, mo, d] = dateParts(born);
+  const day = new Date(t);
+  const before = day.getUTCMonth() + 1 < mo || (day.getUTCMonth() + 1 === mo && day.getUTCDate() < d);
+  return Math.max(0, day.getUTCFullYear() - y - (before ? 1 : 0));
+}
+
+/** The moment the birthday begins on which `age` years are completed. */
+export function birthdayAt(born, age) {
+  const [y, mo, d] = dateParts(born);
+  // Date.UTC turns 29 February of a year without it into 1 March.
+  return Date.UTC(y + age, mo - 1, d);
+}
+
+/** The next birthday after `now`: { t, age, cents }, or null without a date of birth. */
+export function nextBirthday(s, now) {
+  if (!s.born) return null;
+  const age = ageAt(s.born, now) + 1;
+  return { t: birthdayAt(s.born, age), age, cents: age * RULES.agePerYearCents };
+}
+
+/** The demo is not connected: its person turns 30 on the day of the tap. */
+export function demoBorn(now) {
+  const day = new Date(now);
+  const two = (n) => String(n).padStart(2, "0");
+  const born = `${day.getUTCFullYear() - 30}-${two(day.getUTCMonth() + 1)}-${two(day.getUTCDate())}`;
+  // Tapped on 29 February: the year 30 years back has none.
+  return isDate(born) ? born : `${day.getUTCFullYear() - 30}-03-01`;
+}
 
 export const MAX_NAME = 40;
 
@@ -27,6 +74,8 @@ export function newAccount(name, now) {
     reservedCents: RULES.startGrantCents,
     verifiedAt: null,
     lastClaimAt: null,
+    born: null,
+    firstPaid: false,
     history: [{ t: now, kind: "gift", cents: RULES.startGrantCents }],
   };
 }
@@ -45,11 +94,15 @@ export function spendableCents(s) {
 }
 
 /**
- * Pays the verification with the start grant (demo: the check itself is a placeholder).
+ * Pays the verification with the start grant (demo: the check itself is a placeholder)
+ * and records it. `born` is the date of birth the check read, if any.
  * Returns the new state; throws if nothing is there to pay with.
  */
-export function verify(s, now) {
-  if (isVerified(s, now)) return s;
+export function verify(s, now, born = null) {
+  if (isVerified(s, now)) {
+    // Verified already: nothing to pay; a date of birth learned only now counts.
+    return born && !s.born ? verified(s, now, born) : s;
+  }
   let reserved = s.reservedCents;
   let balance = s.balanceCents;
   const price = RULES.verificationPriceCents;
@@ -59,46 +112,62 @@ export function verify(s, now) {
   if (rest > spendableCents(s)) throw new Error("funds");
   reserved -= fromGrant;
   balance -= price;
-  return {
+  const paid = {
     ...s,
     balanceCents: balance,
     reservedCents: reserved,
-    verifiedAt: now,
-    lastClaimAt: now,
     history: [...s.history, { t: now, kind: "verify", cents: -price }],
+  };
+  return verified(paid, now, born);
+}
+
+/**
+ * Records a verification that is already paid. The first one with a date of
+ * birth brings the age in Capita, at once and once per person; birthdays
+ * count from `now`.
+ */
+export function verified(s, now, born = null) {
+  // What fell due under the old verification first: nothing reaches back.
+  const settled = collect(s, now).state;
+  const next = { ...settled, verifiedAt: now, lastClaimAt: now, born: isDate(born) ? born : settled.born ?? null };
+  if (!next.born || settled.firstPaid) return next;
+  const cents = ageAt(next.born, now) * RULES.ageFirstCents;
+  return {
+    ...next,
+    firstPaid: true,
+    balanceCents: next.balanceCents + cents,
+    history: cents > 0 ? [...next.history, { t: now, kind: "age", cents }] : next.history,
   };
 }
 
 /**
- * Collects what accrued since the last collection, at most the claim window back.
- * Returns { state, collected, lapsed } in cents. Called whenever the app comes
- * to the screen – never by a timer (battery).
+ * Collects the birthdays since the last collection: each brings the age
+ * times the age factor, all at once – if the verification held on that day
+ * and the birthday is at most the claim window back. Returns
+ * { state, collected, lapsed } in cents. Called whenever the app comes to
+ * the screen – never by a timer (battery).
  */
 export function collect(s, now) {
-  if (s.verifiedAt === null || s.lastClaimAt === null) return { state: s, collected: 0, lapsed: 0 };
-  const end = Math.min(now, s.verifiedAt + RULES.membershipMs);
-  if (end <= s.lastClaimAt) return { state: s, collected: 0, lapsed: 0 };
-  const rate = RULES.verifiedMonthlyCents;
-  const from = Math.max(s.lastClaimAt, end - RULES.claimWindowMs);
-  const lapsed = Math.floor(((from - s.lastClaimAt) * rate) / RULES.monthMs);
-  const cents = Math.floor(((end - from) * rate) / RULES.monthMs);
-  if (cents <= 0) return { state: { ...s, lastClaimAt: from }, collected: 0, lapsed };
-  // Keep the remainder: move the clock only as far as the whole cents reach.
-  const used = Math.floor((cents * RULES.monthMs) / rate);
-  const history = mergeMonthly(s.history, now, cents);
-  return {
-    state: { ...s, balanceCents: s.balanceCents + cents, lastClaimAt: from + used, history },
-    collected: cents,
-    lapsed,
-  };
-}
-
-function mergeMonthly(history, now, cents) {
-  const last = history[history.length - 1];
-  if (last && last.kind === "monthly" && sameDay(last.t, now)) {
-    return [...history.slice(0, -1), { ...last, t: now, cents: last.cents + cents }];
+  if (s.verifiedAt === null || s.lastClaimAt === null || !s.born) return { state: s, collected: 0, lapsed: 0 };
+  if (now <= s.lastClaimAt) return { state: s, collected: 0, lapsed: 0 };
+  const from = Math.max(s.lastClaimAt, now - RULES.claimWindowMs);
+  const until = s.verifiedAt + RULES.membershipMs;
+  let collected = 0;
+  let lapsed = 0;
+  const history = [...s.history];
+  for (let age = ageAt(s.born, s.lastClaimAt) + 1; ; age++) {
+    const t = birthdayAt(s.born, age);
+    if (t > now) break;
+    if (t <= s.lastClaimAt || t >= until) continue; // counted before, or not verified on that day
+    const cents = age * RULES.agePerYearCents;
+    if (t > from) {
+      collected += cents;
+      history.push({ t: now, kind: "birthday", cents });
+    } else {
+      lapsed += cents;
+    }
   }
-  return [...history, { t: now, kind: "monthly", cents }];
+  return { state: { ...s, balanceCents: s.balanceCents + collected, lastClaimAt: now, history }, collected, lapsed };
 }
 
 export function send(s, toName, cents, now) {
@@ -140,7 +209,9 @@ export function describe(item) {
   switch (item.kind) {
     case "gift": return "Welcome gift";
     case "verify": return "Verification";
-    case "monthly": return "Your Capita";
+    case "age": return "Your age in Capita";
+    case "birthday": return "Birthday";
+    case "monthly": return "Your Capita"; // from before Capita came by age
     case "in": return `From ${item.who}`;
     case "out": return `To ${item.who}`;
     default: return "";

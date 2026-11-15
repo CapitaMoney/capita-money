@@ -82,25 +82,51 @@ const render = {
     const t = now();
     $("#balance").textContent = L.formatCents(state.balanceCents);
     const card = $("#next-card");
-    const rate = L.formatCents(L.RULES.verifiedMonthlyCents);
     if (!L.isVerified(state, t)) {
       $("#balance-sub").textContent = state.reservedCents > 0
         ? (state.reservedCents === state.balanceCents ? "Kept for your verification" : `${L.formatCents(state.reservedCents)} of it kept for your verification`)
         : "";
       const renew = state.verifiedAt !== null;
-      card.innerHTML = `<p class="title">${renew ? "Verify again" : `Receive ${rate} Capita every month`}</p>
-        <p>${renew ? "Your year is over. Verify again to keep receiving Capita." : "Verify once – about two minutes. Your welcome gift pays for it."}</p>
+      card.innerHTML = `<p class="title">${renew ? "Verify again" : "Receive your age in Capita"}</p>
+        <p>${renew ? "Your year is over. Verify again to receive Capita on your next birthday." : "Verify once – about two minutes. Your welcome gift pays for it. Then every birthday brings twice your age."}</p>
         <button class="btn primary" data-go="verify">Verify</button>`;
     } else {
       $("#balance-sub").textContent = "";
-      card.innerHTML = `<p class="title">You receive ${rate} Capita a month</p>
-        <p>It arrives by itself whenever you open Capita.</p>`;
+      const next = L.nextBirthday(state, t);
+      // Built from text nodes: nothing of a person's data is ever read as markup.
+      const title = document.createElement("p");
+      title.className = "title";
+      const text = document.createElement("p");
+      if (next) {
+        title.textContent = `${L.formatCents(next.cents)} Capita on your birthday`;
+        text.textContent = `Twice your age, all at once, on ${birthdayText(next.t)}. Open Capita within two weeks of that day to receive it.`;
+      } else {
+        title.textContent = "You are verified";
+        text.textContent = "Capita arrive on your birthdays once your date of birth is known: verify with your passport.";
+      }
+      card.replaceChildren(title, text);
     }
     list($("#recent"), state.history.slice(-4).reverse());
   },
   verify() {
-    $("#verify-rate").textContent = L.formatCents(L.RULES.verifiedMonthlyCents);
     screens.render.verify();
+  },
+  // The moment after a verification: the age in Capita, what comes on
+  // birthdays, and the ask to allow notifications (rules diary 4).
+  verified() {
+    const t = now();
+    if (!L.isVerified(state, t)) return go("home", true);
+    const first = [...state.history].reverse().find((h) => h.kind === "age" && h.t === state.verifiedAt);
+    $("#verified-amount").hidden = !first;
+    $("#verified-cents").textContent = L.formatCents(first ? first.cents : 0);
+    $("#verified-lead").textContent = first ? "Your age in Capita. It is yours now." : "You are verified for a year.";
+    const next = L.nextBirthday(state, t);
+    $("#verified-next").textContent = next
+      ? `From now on every birthday brings twice your age, all at once – next: ${L.formatCents(next.cents)} Capita on ${birthdayText(next.t)}.`
+      : "";
+    const ask = canAskNotifications();
+    $("#verified-notify").hidden = !ask;
+    $("#verified-notify-note").hidden = !ask;
   },
   receive() {
     $("#receive-name").textContent = state.name;
@@ -166,6 +192,22 @@ function day(t) {
   return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+/** A birthday as a day: it begins at 00:00 UTC, so the day is read in UTC. */
+function birthdayText(t) {
+  return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+// ------------------------------------------------------------ notifications
+// Asked once, right after a verification, and only by a tap (rules diary 4).
+// Not built: the reminder itself – nothing is sent yet.
+function canAskNotifications() {
+  return typeof Notification !== "undefined" && Notification.permission === "default";
+}
+$("#verified-notify").addEventListener("click", async () => {
+  try { await Notification.requestPermission(); } catch { /* the device does not offer them */ }
+  render.verified();
+});
+
 // ------------------------------------------------------------ collecting
 function collectNow() {
   if (!state) return;
@@ -173,8 +215,8 @@ function collectNow() {
   if (r.state === state) return;
   state = r.state;
   save();
-  if (r.lapsed > 0) toast(`+${L.formatCents(r.collected)} Capita. ${L.formatCents(r.lapsed)} lapsed – open Capita at least every two weeks.`);
-  else if (r.collected >= 1) toast(`+${L.formatCents(r.collected)} Capita arrived`);
+  if (r.lapsed > 0) toast(`${L.formatCents(r.lapsed)} birthday Capita lapsed – open Capita within two weeks of your birthday.`);
+  if (r.collected > 0) toast(`Happy birthday! +${L.formatCents(r.collected)} Capita`);
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && state && location.hash === "#home") render.home();
@@ -182,12 +224,15 @@ document.addEventListener("visibilitychange", () => {
 
 // ------------------------------------------------------------ verification, helpers, devices (screens.js)
 // The demo's money follows a real verification: the start grant pays for it.
-function onVerified(real) {
+// `born`: the date of birth in the identity service's claim; the demo
+// without a network has none and takes a person of 30.
+function onVerified(real, born = null) {
+  const t = now();
   try {
-    state = L.verify(state, now());
+    state = L.verify(state, t, real ? born : L.demoBorn(t));
   } catch {
     if (!real) return false;
-    state = { ...state, verifiedAt: now(), lastClaimAt: now() };
+    state = L.verified(state, t, born);
   }
   save();
   return true;

@@ -269,6 +269,7 @@ pub fn claim(n: u8, level: u8, serial: u8) -> Claim {
         replaces: None,
         level: VerificationLevel(level),
         residence: None,
+        born: None,
         attributes: vec![],
         issued_at: Credential::now(),
         expires_at: Some(Instant::from_secs(Credential::now().secs() + 365 * DAY)),

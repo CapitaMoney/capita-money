@@ -16,7 +16,7 @@
 use alloc::vec::Vec;
 
 use capita_core::attributes::{AttrKey, Attribute, Residence, VerificationLevel};
-use capita_core::types::{AccountId, Duration, Timestamp};
+use capita_core::types::{AccountId, Date, Duration, Timestamp};
 
 /// Most attributes one claim may carry.
 pub const MAX_ATTRIBUTES: usize = 32;
@@ -193,7 +193,7 @@ data! {
 
 data! {
     /// What an issuer states about the holder of an account. Derived facts
-    /// only: no name, no document, no date of birth.
+    /// and the date of birth: no name, no document.
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct Claim {
         /// Who states it.
@@ -212,6 +212,9 @@ data! {
         pub level: VerificationLevel,
         /// Proven residence, if any.
         pub residence: Option<Residence>,
+        /// Date of birth, if the issuer read one from an identity document:
+        /// the rules issue money by age (ADR 0026).
+        pub born: Option<Date>,
         /// Further proven attributes.
         pub attributes: Vec<Attribute>,
         /// When the issuer made the statement.

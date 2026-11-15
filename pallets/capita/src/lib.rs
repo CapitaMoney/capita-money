@@ -358,19 +358,16 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Claim the per-capita money accrued since the last claim. While
-        /// debt is recorded, a share of it goes on to the lender.
+        /// Claim the per-capita money that fell due since the last claim:
+        /// the birthdays of the holder (ADR 0026) and what accrued by
+        /// rate. While debt is recorded, a share of it goes on to the
+        /// lender.
         #[pallet::call_index(1)]
         #[pallet::weight(weight_of::<T>(7, 7))]
         pub fn claim(origin: OriginFor<T>) -> DispatchResult {
             let who = Self::id(ensure_signed(origin)?);
             let (now, list) = Self::context()?;
-            Self::settle(&who, &list, now)?;
-            let state = Self::account(&who)?;
-            if let Some(lender) = state.loan.lender {
-                Self::settle(&lender, &list, now)?;
-            }
-            Self::apply(issuance::plan_claim(&state, &list, now).map_err(Self::rule)?)
+            Self::do_claim(&who, &list, now)
         }
 
         /// Pay `amount` to another account. If that account moved to a new
@@ -621,6 +618,9 @@ pub mod pallet {
         /// Records a statement of the identity provider. For identity
         /// pallets of the same runtime; the call `attest` does the same for
         /// an origin.
+        ///
+        /// A first verification with a date of birth pays its one-time
+        /// amount by age at once (ADR 0026).
         pub fn do_attest(account: CoreId, attestation: Option<Attestation>) -> DispatchResult {
             let (now, list) = Self::context()?;
             let state = Self::account(&account)?;
@@ -631,7 +631,9 @@ pub mod pallet {
             if let Some(attestation) = attestation {
                 PersonAccount::<T>::insert(attestation.person, account);
             }
-            Self::apply(plan)
+            let first_payout = plan.state.first_payout_made && !state.first_payout_made;
+            Self::apply(plan)?;
+            Self::pay_first(&account, first_payout, &list, now)
         }
 
         /// The account a person holds, if any: one person, one account. An
@@ -672,6 +674,8 @@ pub mod pallet {
             let balance = Balances::<T>::get(from);
             let plan = recovery::plan_move(&old, balance, &new, &list, attestation, now)
                 .map_err(Self::rule)?;
+            let first_payout =
+                plan.to.first_payout_made && !(old.first_payout_made || new.first_payout_made);
             ensure!(
                 old.revision.checked_add(1) == Some(plan.from.revision)
                     && new.revision.checked_add(1) == Some(plan.to.revision),
@@ -699,7 +703,7 @@ pub mod pallet {
             for event in plan.events {
                 Self::deposit_event(Event::Rule(event));
             }
-            Ok(())
+            Self::pay_first(&to, first_payout, &list, now)
         }
 
         /// Changes the life-cycle state of an account. For identity pallets
@@ -711,6 +715,34 @@ pub mod pallet {
             let balance = Balances::<T>::get(account);
             let plan = lifecycle::plan_set_status(&state, balance, &list, status, now);
             Self::apply(plan.map_err(Self::rule)?)
+        }
+
+        /// Mints what fell due for `account` since its last claim.
+        fn do_claim(account: &CoreId, list: &[Params], now: Timestamp) -> DispatchResult {
+            Self::settle(account, list, now)?;
+            let state = Self::account(account)?;
+            if let Some(lender) = state.loan.lender {
+                Self::settle(&lender, list, now)?;
+            }
+            Self::apply(issuance::plan_claim(&state, list, now).map_err(Self::rule)?)
+        }
+
+        /// Pays the one-time amount of a first verification at once, if a
+        /// statement just set it aside (`first_payout`): the person need
+        /// not claim it. A frozen account receives it with its first claim
+        /// after it is reopened.
+        fn pay_first(
+            account: &CoreId,
+            first_payout: bool,
+            list: &[Params],
+            now: Timestamp,
+        ) -> DispatchResult {
+            let active = Accounts::<T>::get(account)
+                .is_some_and(|state| state.status == AccountStatus::Active);
+            if first_payout && active {
+                Self::do_claim(account, list, now)?;
+            }
+            Ok(())
         }
 
         /// Time and rules of this call.

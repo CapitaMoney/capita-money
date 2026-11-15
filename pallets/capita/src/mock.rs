@@ -15,7 +15,7 @@
 
 use capita_core::attributes::VerificationLevel;
 use capita_core::params::{
-    CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
+    AgeParams, CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
 };
 use capita_core::ports::{Event as RuleEvent, NoGate};
 use capita_core::types::{
@@ -120,6 +120,7 @@ pub fn params() -> Params {
             step(1, 1, 1, MINUTE),
             step(2, 2, 3, MINUTE),
         ],
+        age: AgeParams::OFF,
         claim_window: Duration::from_secs(14 * DAY),
         caps: CapParams {
             period: Duration::MONTH,
@@ -141,6 +142,20 @@ pub fn params() -> Params {
         sponsor_keys: vec![],
         closed_balance: ClosedBalance::Keep,
     }
+}
+
+/// [`params`] with money by age instead of the ladder (ADR 0026): 2 Capita
+/// per year of age on each birthday, 1 Capita per year of age at the first
+/// verification, nothing by rate.
+pub fn params_by_age() -> Params {
+    let mut p = params();
+    p.ladder = vec![step(0, 0, 0, MONTH), step(1, 1, 0, MONTH)];
+    p.age = AgeParams {
+        per_year: cents(200),
+        at_verification: cents(100),
+        ..AgeParams::OFF
+    };
+    p
 }
 
 /// [`params`] with demurrage of 1 % per month on everything above 10 Capita.

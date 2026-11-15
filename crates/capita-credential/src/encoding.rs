@@ -21,7 +21,7 @@
 //! purpose on one host only.
 //!
 //! ```text
-//! claim       "capita-claim-v2"
+//! claim       "capita-claim-v3"
 //!             audience        32 bytes
 //!             issuer           4 bytes
 //!             serial          16 bytes
@@ -33,6 +33,10 @@
 //!             residence        1 byte    0 = none, 1 = present; if present:
 //!               country        2 bytes   ISO 3166-1 alpha-2, ASCII
 //!               proven_at      8 bytes   seconds since the Unix epoch
+//!             born             1 byte    0 = none, 1 = present; if present:
+//!               year           2 bytes   date of birth
+//!               month          1 byte    1 to 12
+//!               day            1 byte    1 to 31
 //!             attributes       2 bytes   how many; for each:
 //!               key            2 bytes
 //!               value          8 bytes
@@ -55,7 +59,7 @@ use alloc::vec::Vec;
 use crate::types::{Audience, Claim, Realm, Revocation, SubjectRef};
 
 /// Tag of a signed claim.
-pub const CLAIM_TAG: &[u8] = b"capita-claim-v2";
+pub const CLAIM_TAG: &[u8] = b"capita-claim-v3";
 /// Tag of a signed revocation.
 pub const REVOCATION_TAG: &[u8] = b"capita-revocation-v1";
 /// Tag of the bytes a person identifier is the hash of.
@@ -89,6 +93,15 @@ pub fn claim_bytes(audience: &Audience, claim: &Claim) -> Vec<u8> {
             out.push(1);
             out.extend_from_slice(&residence.country.0);
             out.extend_from_slice(&residence.proven_at.secs().to_be_bytes());
+        }
+    }
+    match claim.born {
+        None => out.push(0),
+        Some(born) => {
+            out.push(1);
+            out.extend_from_slice(&born.year().to_be_bytes());
+            out.push(born.month());
+            out.push(born.day());
         }
     }
     let count = u16::try_from(claim.attributes.len()).unwrap_or(u16::MAX);

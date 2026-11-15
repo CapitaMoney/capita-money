@@ -31,7 +31,7 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 
 ## The core
 `capita-core` holds every monetary rule and nothing else – no storage, no network, no clock:
-- **Issuance:** every account accrues Capita by the second at the rate of its step on the incentive ladder, limited by a cap (global, later per country and seniority). Nothing is created until claimed; a claim reaches back a limited time.
+- **Issuance by age** ([ADR 0026](docs/adr/0026-issuance-by-age.md)): right at the first verification a person receives the age in Capita, at once; from then on every birthday brings the age factor times the age, all at once. Nothing is created until claimed; a claim reaches back a limited time. (The core also knows a rate per step of an incentive ladder, limited by caps; the alpha rules set it to zero.)
 - **No debt:** the alpha rules grant no credit line and record no loan; no balance goes below zero. (The core knows interest-free credit lines and loans; the rules file switches them off. The data model has no interest field.)
 - **Lost key:** after a new verification an account moves to a new key – person, balance, what was accrued.
 - **One way in:** Capita can be bought with ordinary money; there is no function for the way back.
@@ -57,7 +57,7 @@ The tests use fixed numbers of their own, so a change of rules breaks none of th
 
 ## Identity
 Who is a person is not decided by the chain and not by a web of trust: identity services check people – an e-mail address, an identity document, a letter to the home address – and sign what they found. `capita-credential` defines that statement and checks it ([ADR 0011](docs/adr/0011-identity-by-credentials.md)):
-- **A claim** names an account, a person as a person key, a verification level, optionally a country of residence, and how long it holds. No name, no document, no date of birth.
+- **A claim** names an account, a person as a person key, a verification level, optionally a country of residence and the date of birth, and how long it holds. No name, no document. The date of birth is there because Capita come by age ([ADR 0026](docs/adr/0026-issuance-by-age.md)).
 - **The person key** is a keyed function of what a check established – by default name and date of birth – computed by the identity services ([ADR 0013](docs/adr/0013-person-key.md)). Without their secret nobody can tell whose key it is.
 - **A public list** holds the trusted services: a decentralised identifier (DID), keys, and what each may state at most.
 - **A claim counts** for one host, one account, once; a later one replaces it; its issuer can take it back.

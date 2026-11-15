@@ -28,7 +28,7 @@ use crate::{
 };
 use capita_core::account::AccountStatus;
 use capita_core::attributes::{Attestation, VerificationLevel};
-use capita_core::types::{AccountId as CoreId, PersonId, TierId, Timestamp};
+use capita_core::types::{AccountId as CoreId, Date, PersonId, TierId, Timestamp};
 use capita_credential::encoding::{claim_bytes, revocation_bytes};
 use capita_credential::types::{
     Claim, Issuer, IssuerId, IssuerStatus, PublicKey, Revocation, Serial, SubjectRef,
@@ -213,6 +213,7 @@ fn claim(who: Sr25519Keyring, level: u8, serial: u8, days: u64) -> Claim {
         replaces: None,
         level: VerificationLevel(level),
         residence: None,
+        born: None,
         attributes: vec![],
         issued_at: now,
         expires_at: Some(Timestamp::from_secs(now.secs() + days * 86_400)),
@@ -408,6 +409,94 @@ fn the_alpha_rules_run_on_the_chain_whatever_their_numbers() {
     });
 }
 
+/// Money by age under the alpha rules, from the identity service's claim
+/// to the ledger (ADR 0026): the first verification pays the age at once,
+/// each birthday the age factor times the age. The numbers come from the
+/// rules file.
+#[test]
+fn a_verified_person_receives_money_by_age_under_the_alpha_rules() {
+    let rules = capita_rules::alpha::params().expect("checked by the build");
+    let cents = |amount: capita_core::types::Amount, age: u16| {
+        i64::try_from(amount.cents()).unwrap() * i64::from(age)
+    };
+    let born = Date::new(1990, 5, 17).unwrap();
+    let dated = |who, serial| Claim {
+        born: Some(born),
+        ..claim(who, capita_rules::alpha::TOP_LEVEL.0, serial, 300)
+    };
+
+    new_ext(sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET).execute_with(|| {
+        // The test clock starts on 15 January 2027: Charlie is 36.
+        let age = born.age_on(Date::of(Timestamp::from_secs(T0)).unwrap());
+        assert_eq!(age, 36);
+        start_block(1, 0);
+        assert_ok!(run(Bob, 0, pallet_capita::Call::open {}));
+        sudo(
+            0,
+            pallet_capita::Call::set_service_account {
+                account: Bob.to_account_id(),
+            },
+        );
+        assert_ok!(run(Charlie, 0, pallet_capita::Call::open {}));
+        assert_ok!(run(Charlie, 1, pallet_capita::Call::pay_verification {}));
+        assert_eq!(balance(Charlie), 0);
+        // Presenting the claim is all Charlie does: the age arrives at once.
+        assert_ok!(run(Charlie, 2, present(dated(Charlie, 1), None)));
+        let first = cents(rules.age.at_verification, age);
+        assert_eq!(balance(Charlie), first);
+        let state = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
+        assert_eq!(state.born, Some(born));
+        assert!(state.first_payout_made);
+        // Dave is verified without a date of birth: nothing by age.
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        assert_ok!(run(
+            Dave,
+            1,
+            present(claim(Dave, capita_rules::alpha::TOP_LEVEL.0, 2, 300), None)
+        ));
+        let grant = i64::try_from(rules.start_grant.cents()).unwrap();
+        assert_eq!(balance(Dave), grant);
+        end_block();
+
+        // A newer claim a week later: no second amount.
+        start_block(2, 7 * 86_400);
+        assert_ok!(run(Charlie, 3, present(dated(Charlie, 3), None)));
+        assert_ok!(run(Charlie, 4, pallet_capita::Call::claim {}));
+        assert_eq!(balance(Charlie), first);
+        end_block();
+
+        // The second before the 37th birthday (17 May 2027, 00:00 UTC).
+        let birthday = born.birthday(37).and_then(Date::start).unwrap().secs() - T0;
+        start_block(3, birthday - 1);
+        assert_ok!(run(Charlie, 5, pallet_capita::Call::claim {}));
+        assert_eq!(balance(Charlie), first);
+        end_block();
+        // The birthday.
+        start_block(4, birthday + 5);
+        assert_ok!(run(Charlie, 6, pallet_capita::Call::claim {}));
+        assert_ok!(run(Dave, 2, pallet_capita::Call::claim {}));
+        let by_rate = |from: u64| {
+            let window = capita_core::types::Duration::from_secs(
+                (birthday + 5 - from).min(rules.claim_window.secs()),
+            );
+            let top = rules.ladder[rules.ladder.len() - 1];
+            i64::try_from(top.rate.accrued(window).unwrap().cents()).unwrap()
+        };
+        assert_eq!(
+            balance(Charlie),
+            first + cents(rules.age.per_year, 37) + by_rate(birthday - 1)
+        );
+        assert_eq!(balance(Dave), grant + by_rate(0));
+        // Claimed once.
+        assert_ok!(run(Charlie, 7, pallet_capita::Call::claim {}));
+        assert_eq!(
+            balance(Charlie),
+            first + cents(rules.age.per_year, 37) + by_rate(birthday - 1)
+        );
+        end_block();
+    });
+}
+
 #[test]
 fn the_rules_run_on_the_chain_from_opening_to_claim() {
     dev().execute_with(|| {
@@ -431,6 +520,7 @@ fn the_rules_run_on_the_chain_from_opening_to_claim() {
             person: PersonId([7; 32]),
             level: VerificationLevel(1),
             residence: None,
+            born: None,
             attributes: vec![],
             issued_at: Capita::now(),
             expires_at: None,
@@ -1027,6 +1117,15 @@ fn the_apps_calls_and_storage_addresses_are_the_runtimes() {
             replaces: (!c["replaces"].is_null()).then(|| SubjectRef(n(&c["replaces"]))),
             level: VerificationLevel(u8::try_from(c["level"].as_u64().unwrap()).unwrap()),
             residence: None,
+            born: c["born"].as_str().map(|text| {
+                let part = |i: usize| text.split('-').nth(i).unwrap();
+                Date::new(
+                    part(0).parse().unwrap(),
+                    part(1).parse().unwrap(),
+                    part(2).parse().unwrap(),
+                )
+                .unwrap()
+            }),
             attributes: Vec::new(),
             issued_at: Timestamp::from_secs(c["issuedAt"].as_u64().unwrap()),
             expires_at: c["expiresAt"].as_u64().map(Timestamp::from_secs),

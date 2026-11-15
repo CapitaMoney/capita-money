@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 
 use crate::errors::CoreError;
 use crate::params::Params;
-use crate::types::{CountryCode, PersonId, Timestamp};
+use crate::types::{CountryCode, Date, PersonId, Timestamp};
 
 /// Numbered attribute key. Meaning assigned by the identity adapter and
 /// published in `Params::sponsor_keys`.
@@ -113,7 +113,7 @@ pub struct Residence {
 }
 
 /// What an identity provider states about the holder of an account.
-/// Contains derived facts only – no name, document or birth date.
+/// Derived facts and the date of birth – no name, no document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -136,6 +136,9 @@ pub struct Attestation {
     pub level: VerificationLevel,
     /// Proven residence, if any.
     pub residence: Option<Residence>,
+    /// Date of birth, if the provider read one from a document: the basis
+    /// of issuance by age (ADR 0026).
+    pub born: Option<Date>,
     /// Further proven attributes (for sponsor targeting).
     pub attributes: Vec<Attribute>,
     /// When the provider issued the statement.

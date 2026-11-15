@@ -30,9 +30,15 @@ test("the vectors file is what the app makes", () => {
 test("a claim held on chain reads back", () => {
   const v = vectors();
   const bytes = C.claimBytes(v.calls.present.answer.claim);
-  assert.deepEqual(C.decodeCredential(bytes), { level: 1, issuedAt: 1800000000, expiresAt: 1831536000 });
+  assert.deepEqual(C.decodeCredential(bytes), { level: 1, born: "1990-05-17", issuedAt: 1800000000, expiresAt: 1831536000 });
   const moved = C.claimBytes(v.calls.requestMove.answer.claim);
-  assert.deepEqual(C.decodeCredential(moved), { level: 1, issuedAt: 1800000000, expiresAt: null });
+  assert.deepEqual(C.decodeCredential(moved), { level: 1, born: null, issuedAt: 1800000000, expiresAt: null });
+  // A date of birth is a day of the calendar, written YYYY-MM-DD.
+  for (const born of ["1990-02-30", "17.05.1990", "1990-5-17", "0000-01-01"]) {
+    assert.throws(() => C.claimBytes({ ...v.calls.present.answer.claim, born }), TypeError, born);
+  }
+  const leap = C.claimBytes({ ...v.calls.present.answer.claim, born: "1996-02-29" });
+  assert.equal(C.decodeCredential(leap).born, "1996-02-29");
   assert.throws(() => C.claimBytes({ ...v.calls.present.answer.claim, residence: { country: "DE" } }));
   assert.throws(() => C.claimCall({ ...v.calls.present.answer, call: "credential.revoke" }));
 });

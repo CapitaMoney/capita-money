@@ -20,7 +20,7 @@ use capita_core::account::AccountStatus;
 use capita_core::attributes::{Attestation, VerificationLevel};
 use capita_core::ports::Event as RuleEvent;
 use capita_core::totals::Totals;
-use capita_core::types::{ParamsVersion, PersonId, TierId};
+use capita_core::types::{Date, ParamsVersion, PersonId, TierId};
 use frame_support::{assert_noop, assert_ok};
 use sp_runtime::DispatchError::BadOrigin;
 
@@ -40,6 +40,7 @@ fn attestation(person: u8, level: u8) -> Attestation {
         person: PersonId([person; 32]),
         level: VerificationLevel(level),
         residence: None,
+        born: None,
         attributes: vec![],
         issued_at: Capita::now(),
         expires_at: None,
@@ -590,6 +591,98 @@ fn an_account_moves_to_a_new_key_and_payments_to_the_old_one_follow() {
         assert_ok!(transfer(3, 1, 100));
         assert_eq!(balance(4), 800 + accrued + 100 + 100);
         assert_eq!(Backed::<Test>::get(cid(4)), cents(500));
+        check();
+    });
+}
+
+#[test]
+fn a_first_verification_pays_the_age_at_once_and_each_birthday_twice_the_age() {
+    new_test_ext(params_by_age()).execute_with(|| {
+        service();
+        open(1);
+        assert_ok!(call(signed(1), Call::pay_verification {}));
+        assert_eq!(balance(1), 0);
+        // Born on 17 May 1990: 36 years old at the start of the test clock
+        // (15 January 2027).
+        let born = Date::new(1990, 5, 17).unwrap();
+        let stated = Attestation {
+            born: Some(born),
+            ..attestation(1, 1)
+        };
+        let attest = |stated: &Attestation| {
+            call(
+                root(),
+                Call::attest {
+                    account: acct(1),
+                    attestation: Some(stated.clone()),
+                },
+            )
+        };
+        // Verified: 36 Capita, at once, without a claim.
+        assert_ok!(attest(&stated));
+        assert_eq!(balance(1), 3_600);
+        assert_eq!(
+            rule_events().last(),
+            Some(&RuleEvent::Claimed {
+                account: cid(1),
+                issued: cents(3_600),
+                repaid: cents(0),
+                from: ts(0),
+                to: ts(0)
+            })
+        );
+        // Once per person: a later statement pays nothing more.
+        set_time(DAY);
+        assert_ok!(attest(&stated));
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 3_600);
+
+        // The 37th birthday begins at 00:00 UTC of 17 May 2027.
+        let birthday = born.birthday(37).and_then(Date::start).unwrap().secs() - T0;
+        set_time(birthday - 1);
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 3_600);
+        set_time(birthday);
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 3_600 + 7_400);
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 11_000);
+        assert_eq!(PublicTotals::<Test>::get().issued, 11_000);
+
+        // The key is lost: the account moves, the age with it, and the new
+        // key earns no second amount for a verification.
+        open(2);
+        assert_ok!(Capita::do_move(cid(1), cid(2), &stated));
+        let new = Accounts::<Test>::get(cid(2)).unwrap();
+        assert_eq!(new.born, Some(born));
+        assert!(new.first_payout_made);
+        assert_eq!(balance(2), 11_000 + 100);
+        assert_eq!(PublicTotals::<Test>::get().issued, 11_000);
+        // Next birthday, new key: 38 × 2.
+        let birthday = born.birthday(38).and_then(Date::start).unwrap().secs() - T0;
+        set_time(birthday);
+        assert_ok!(call(signed(2), Call::claim {}));
+        assert_eq!(balance(2), 11_100 + 7_600);
+        check();
+    });
+}
+
+#[test]
+fn a_frozen_account_gets_the_amount_of_its_verification_when_reopened() {
+    new_test_ext(params_by_age()).execute_with(|| {
+        open(1);
+        assert_ok!(Capita::do_set_status(cid(1), AccountStatus::Frozen));
+        let stated = Attestation {
+            born: Some(Date::new(1990, 5, 17).unwrap()),
+            ..attestation(1, 1)
+        };
+        assert_ok!(Capita::do_attest(cid(1), Some(stated)));
+        // Set aside, not paid: a frozen account receives nothing.
+        assert_eq!(balance(1), 100);
+        set_time(DAY);
+        assert_ok!(Capita::do_set_status(cid(1), AccountStatus::Active));
+        assert_ok!(call(signed(1), Call::claim {}));
+        assert_eq!(balance(1), 100 + 3_600);
         check();
     });
 }

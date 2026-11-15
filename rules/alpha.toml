@@ -43,11 +43,40 @@ status = "decided"
 source = "diary 5"
 note = "One Capita for every new account. It can only pay the account's own verification."
 
+# Money by age (diary 4, docs/adr/0026): the only way Capita come into being
+# for a verified person. The date of birth comes from the identity document.
+[issuance.age.per_year]
+value = "2.00"
+status = "decided"
+source = "owner 2026-11-15, diary 4, 2discuss Y"
+note = "The age factor: Capita per completed year of age, paid on each birthday, all at once. Age 37: 74 Capita. One value for the world."
+
+[issuance.age.at_verification]
+value = "1.00"
+status = "decided"
+source = "owner 2026-11-15, diary 4"
+note = "Capita per completed year of age, paid once per person, right at the first verification. Age 36: 36 Capita."
+
+[issuance.age.min_level]
+value = 1
+status = "decided"
+source = "diary 9, 30"
+note = "Verification level an account needs, on the day itself, for a birthday or a first verification to pay. A birthday on which the verification had run out pays nothing."
+
+# Another birthday amount for the people of one country (diary 4, 2discuss
+# Y). None for now. To use it, add one table per country:
+#   [[issuance.age.country]]
+#   country = "IN"
+#   per_year = "4.00"
+#   status = "example"
+#   source = "2discuss Y"
+#   note = "…"
+
 [issuance.claim_window]
 value = "14 days"
 status = "decided"
 source = "owner 2026-11-14, B4"
-note = "How far back a claim reaches. Money not claimed within this time lapses."
+note = "How far back a claim reaches. Money not claimed within this time lapses – a birthday amount too: it must be claimed within this time after the birthday."
 
 [issuance.ripening]
 value = "off"
@@ -333,10 +362,10 @@ code = ["pallets/credential/src/lib.rs"]
 
 [[register]]
 id = "issuance-by-age"
-rule = "Capita per year = age factor x age in completed years, paid all at once on each birthday; no monthly amount. The factor is one global value (2), changeable later, with an optional value per country. The same worldwide; no minimum age; age 0 gets nothing. Not built: until then a verified account receives nothing but its start grant."
+rule = "Capita come by age only: on each birthday an account receives the age factor (issuance.age.per_year) x the age in completed years, all at once; no monthly amount. One global value, changeable later, with an optional value per country (issuance.age.country; the country of residence until decided otherwise). The same worldwide; no minimum age; age 0 gets nothing. The date of birth is read from the identity document and stated in the claim. A birthday begins at 00:00 UTC; born on 29 February, it is 1 March in other years. It pays if the account is verified on that day, and it is claimed within the claim window."
 status = "decided"
-source = "owner 2026-11-15, diary 4, 19, 2discuss Y"
-planned = "pallets/credential (birth date in the claim), crates/capita-core issuance"
+source = "owner 2026-11-15, diary 4, 19, 2discuss Y, ADR 0026"
+code = ["crates/capita-core/src/issuance.rs", "crates/capita-core/src/types.rs", "crates/capita-credential/src/types.rs", "pallets/capita/src/lib.rs", "services/issuer/src/issue.rs"]
 
 [[register]]
 id = "move-without-debt"
@@ -550,7 +579,7 @@ planned = "runtime/src/nonce.rs (quota per person)"
 
 [[register]]
 id = "first-payout"
-rule = "Right at verification an account receives 1 x age at once, with the notice that from now on it gets its age in Capita every birthday (and the ask to allow notifications). From the first birthday on: 2 x age."
+rule = "Right at the first verification an account receives issuance.age.at_verification x age at once, without a claim; once per person – a new key after a lost one earns no second. From the first birthday on: the age factor x age. The app says so on the spot and asks to allow notifications."
 status = "default"
-source = "owner 2026-11-15, diary 4 (whether the first birthday already gives 2 x age: open)"
-planned = "identity service and pallet-capita (payout at verification), app (notice, notification permission)"
+source = "owner 2026-11-15, diary 4 (whether the first birthday already gives 2 x age: open; built: yes), ADR 0026"
+code = ["crates/capita-core/src/issuance.rs", "crates/capita-core/src/lifecycle.rs", "pallets/capita/src/lib.rs", "app/screens.js"]

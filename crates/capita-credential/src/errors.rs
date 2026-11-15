@@ -41,6 +41,8 @@ pub enum CredentialError {
     ResidenceNotAllowed,
     /// The residence was proven after the claim was issued.
     ResidenceFromFuture,
+    /// The date of birth lies after the day the claim was issued.
+    BornAfterIssue,
     /// The issuer may not state this attribute.
     AttributeNotAllowed,
     /// More attributes than a claim may carry.
@@ -68,6 +70,7 @@ impl fmt::Display for CredentialError {
             Self::LevelNotAllowed => "verification level not allowed for the issuer",
             Self::ResidenceNotAllowed => "issuer may not state a residence",
             Self::ResidenceFromFuture => "residence proven after the claim was issued",
+            Self::BornAfterIssue => "date of birth after the claim was issued",
             Self::AttributeNotAllowed => "issuer may not state this attribute",
             Self::TooManyAttributes => "too many attributes",
             Self::InvalidDid => "not a decentralised identifier",

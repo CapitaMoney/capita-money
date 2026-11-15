@@ -7,7 +7,7 @@ Status: accepted (M0, 2026-11-13)
 - No floats anywhere. Rates are rationals (`Rate` = amount per duration). Fractions are parts per million (`Share`).
 - Every operation checked: overflow, underflow and division by zero are errors, never wrap, never saturate.
 - Products use `u128` intermediates. Rounding always down; remainders carried (ADR 0002).
-- Time: whole seconds since the Unix epoch, UTC. No calendar, no time zones: `MONTH` = 2 629 800 s, `YEAR` = 31 557 600 s (365.25 days). A "monthly" amount is per such month.
+- Time: whole seconds since the Unix epoch, UTC. No calendar, no time zones: `MONTH` = 2 629 800 s, `YEAR` = 31 557 600 s (365.25 days). A "monthly" amount is per such month. One exception since [ADR 0026](0026-issuance-by-age.md): a birthday is a day of the calendar (`Date`, UTC).
 - The guide value "1 Capita ≈ 1 €/$" is for display. The core contains no conversion.
 
 ## Consequences

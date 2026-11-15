@@ -165,6 +165,11 @@ fn a_checked_person_gets_a_claim_the_chain_accepts_and_the_service_forgets() {
         issued.claim.expires_at,
         Some(Timestamp::from_secs(NOW + YEAR))
     );
+    // the date of birth is stated: the ledger issues money by age
+    assert_eq!(
+        issued.claim.born,
+        Some(capita_core::types::Date::new(1990, 7, 4).unwrap())
+    );
     assert!(accepted(service.public_key(), &issued, NOW + 60));
     // signed for this chain and no other
     assert!(!{
@@ -640,7 +645,8 @@ fn the_interface_answers_with_the_call_for_the_chain() {
         unhex_n::<64>(call["signature"].as_str().unwrap()).map(|_| ()),
         Some(())
     );
-    // nothing about the person in the answer
+    // of the person the answer holds the date of birth, and no name
+    assert_eq!(call["claim"]["born"], "1990-07-04");
     assert!(!call.to_string().to_lowercase().contains("ller"));
     // a lost key
     let new_account = format!("0x{}", hex(&[2; 32]));

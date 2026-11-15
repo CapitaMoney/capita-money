@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Offline shell: the app opens without network. Change VERSION with every release.
-const VERSION = "capita-proto-2";
+const VERSION = "capita-proto-3";
 const FILES = ["./", "index.html", "app.css", "app.js", "logic.js", "device.js", "screens.js", "scan.js",
   "chain/keys.js", "chain/blake2b.js", "chain/calls.js", "chain/xxhash.js",
   "native/chip.js", "native/film.js", "native/phone.js", "native/verify.js",

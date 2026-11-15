@@ -29,6 +29,7 @@
 //! account is its own person) · `--replaces 0x…` (the person key the person
 //! had before, 32 bytes) · `--serial 0x…` (16 bytes; default: derived
 //! from account and time) · `--country FR` (states a residence, proven now)
+//! · `--born 1990-05-17` (states a date of birth: money by age)
 //! · `--days N` (validity, default 365; 0 = without end) · `--seed 0x…`
 //! (Ed25519 secret key, 32 bytes) · `--revoke` (sign the revocation of
 //! `--serial` instead of a claim).
@@ -48,7 +49,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use blake2::digest::consts::U32;
 use blake2::{Blake2b, Digest};
 use capita_core::attributes::{Residence, VerificationLevel};
-use capita_core::types::{AccountId, CountryCode, Timestamp};
+use capita_core::types::{AccountId, CountryCode, Date, Timestamp};
 use capita_credential::did::did_key;
 use capita_credential::encoding::{claim_bytes, revocation_bytes};
 use capita_credential::types::{
@@ -74,6 +75,19 @@ fn bytes<const N: usize>(name: &str, text: &str) -> [u8; N] {
     parsed
         .and_then(|bytes| <[u8; N]>::try_from(bytes).ok())
         .unwrap_or_else(|| panic!("--{name}: expected {N} bytes in hexadecimal"))
+}
+
+/// Reads `YYYY-MM-DD`.
+fn date(text: &str) -> Date {
+    let mut parts = text.split('-').map(str::parse::<u16>);
+    let mut number = || parts.next().and_then(Result::ok);
+    let (year, month, day) = (number(), number(), number());
+    year.zip(month)
+        .zip(day)
+        .and_then(|((year, month), day)| {
+            Date::new(year, u8::try_from(month).ok()?, u8::try_from(day).ok()?).ok()
+        })
+        .unwrap_or_else(|| panic!("--born: a day like 1990-05-17"))
 }
 
 fn main() {
@@ -175,6 +189,7 @@ fn main() {
             ),
             proven_at: Timestamp::from_secs(now),
         }),
+        born: options.get("born").map(|text| date(text)),
         attributes: vec![],
         issued_at: Timestamp::from_secs(now),
         expires_at: (days > 0).then(|| Timestamp::from_secs(now + days * 86_400)),
@@ -198,6 +213,15 @@ fn main() {
             hex(&residence.country.0),
             String::from_utf8_lossy(&residence.country.0),
             residence.proven_at.secs()
+        ),
+    }
+    match claim.born {
+        None => println!("  claim.born          none"),
+        Some(born) => println!(
+            "  claim.born          year {}, month {}, day {}",
+            born.year(),
+            born.month(),
+            born.day()
         ),
     }
     println!("  claim.attributes    none");

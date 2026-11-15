@@ -38,7 +38,8 @@ use core::fmt;
 
 use capita_core::attributes::{AttrKey, VerificationLevel};
 use capita_core::params::{
-    CapParams, ClosedBalance, CountryCap, DemurrageParams, LadderStep, LoanParams, Params,
+    AgeParams, CapParams, ClosedBalance, CountryAge, CountryCap, DemurrageParams, LadderStep,
+    LoanParams, Params,
 };
 use capita_core::types::{CountryCode, ParamsVersion, Rate, TierId, Timestamp};
 use serde::Deserialize;
@@ -136,18 +137,64 @@ pub struct Step {
     pub note: String,
 }
 
+/// Another birthday amount for the people of one country.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgeCountryRule {
+    /// Two capital letters (ISO 3166-1).
+    pub country: String,
+    /// Paid on each birthday per year of age, in this country.
+    pub per_year: Money,
+    /// How firm the entry is.
+    pub status: Status,
+    /// Where it comes from.
+    pub source: String,
+    /// What it means.
+    pub note: String,
+}
+
+/// Money by age (ADR 0026): on each birthday, and once at the first
+/// verification.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Age {
+    /// Paid on each birthday, per completed year of age: the age factor.
+    pub per_year: Rule<Money>,
+    /// Paid once, right at the first verification, per completed year of
+    /// age.
+    pub at_verification: Rule<Money>,
+    /// Verification level an account needs for either.
+    pub min_level: Rule<u8>,
+    /// Other birthday amounts per country; none = the same worldwide.
+    #[serde(default)]
+    pub country: Vec<AgeCountryRule>,
+}
+
 /// How money comes into being.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Issuance {
     /// One-time grant for a new account.
     pub start_grant: Rule<Money>,
+    /// Money by age.
+    pub age: Age,
     /// How far back a claim reaches.
     pub claim_window: Rule<Span>,
     /// Delay before issued money is usable.
     pub ripening: Rule<Span>,
     /// The steps, lowest first.
     pub ladder: Vec<Step>,
+}
+
+/// A country as the core writes it, from the two letters of a rules file.
+fn country_code(place: &str, country: &str) -> Result<CountryCode, Error> {
+    let code: [u8; 2] = country.as_bytes().try_into().map_err(|_| {
+        Error::at(
+            &format!("{place} \"{country}\""),
+            "a country is two capital letters, like \"BI\"",
+        )
+    })?;
+    Ok(CountryCode(code))
 }
 
 /// The cap of one country.
@@ -401,16 +448,21 @@ impl RuleSet {
             .country
             .iter()
             .map(|c| {
-                let code: [u8; 2] = c.country.as_bytes().try_into().map_err(|_| {
-                    Error::at(
-                        &format!("caps.country \"{}\"", c.country),
-                        "a country is two capital letters, like \"BI\"",
-                    )
-                })?;
                 Ok(CountryCap {
-                    country: CountryCode(code),
+                    country: country_code("caps.country", &c.country)?,
                     gni_per_capita: c.gni_per_capita.0,
                     pct: c.share.0,
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let age = &self.issuance.age;
+        let age_by_country = age
+            .country
+            .iter()
+            .map(|c| {
+                Ok(CountryAge {
+                    country: country_code("issuance.age.country", &c.country)?,
+                    per_year: c.per_year.0,
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -419,6 +471,12 @@ impl RuleSet {
             valid_from: Timestamp::from_secs(0),
             start_grant: self.issuance.start_grant.value.0,
             ladder,
+            age: AgeParams {
+                min_level: VerificationLevel(age.min_level.value),
+                per_year: age.per_year.value.0,
+                at_verification: age.at_verification.value.0,
+                by_country: age_by_country,
+            },
             claim_window: self.issuance.claim_window.value.0,
             caps: CapParams {
                 period: self.caps.period.value.0,
@@ -455,13 +513,15 @@ impl RuleSet {
         Ok(params)
     }
 
-    /// The highest verification level a step of the ladder asks for.
+    /// The highest verification level the rules ask for: by a step of the
+    /// ladder, or for money by age.
     #[must_use]
     pub fn top_level(&self) -> u8 {
         self.issuance
             .ladder
             .iter()
             .map(|s| s.min_level)
+            .chain([self.issuance.age.min_level.value])
             .max()
             .unwrap_or(0)
     }
@@ -487,6 +547,12 @@ impl RuleSet {
             return Err(Error::at(
                 "issuance.ladder",
                 "the first step must have min_level 0: a new account stands on it",
+            ));
+        }
+        if self.issuance.age.min_level.value == 0 {
+            return Err(Error::at(
+                "issuance.age.min_level",
+                "at least 1: only a verified person has an age",
             ));
         }
         if self.door.capita_per_euro.value.0.is_zero() {
@@ -554,6 +620,29 @@ impl RuleSet {
                 i.start_grant.value.to_string(),
             ),
             value(
+                "issuance.age.per_year",
+                &i.age.per_year,
+                i.age.per_year.value.to_string(),
+            ),
+            value(
+                "issuance.age.at_verification",
+                &i.age.at_verification,
+                i.age.at_verification.value.to_string(),
+            ),
+            value(
+                "issuance.age.min_level",
+                &i.age.min_level,
+                i.age.min_level.value.to_string(),
+            ),
+        ];
+        lines.extend(i.age.country.iter().map(|k| Line {
+            path: format!("issuance.age.country {}", k.country),
+            value: format!("{} per year of age", k.per_year),
+            status: k.status,
+            source: k.source.clone(),
+        }));
+        lines.extend([
+            value(
                 "issuance.claim_window",
                 &i.claim_window,
                 i.claim_window.value.to_string(),
@@ -563,7 +652,7 @@ impl RuleSet {
                 &i.ripening,
                 i.ripening.value.to_string(),
             ),
-        ];
+        ]);
         lines.extend(i.ladder.iter().map(|s| Line {
             path: format!("issuance.ladder, step {} ({})", s.step, s.name),
             value: format!("{} per {}, from level {}", s.amount, s.per, s.min_level),

@@ -13,11 +13,18 @@
 
 //! Issuance: how much per-capita money an account may claim (ADR 0002).
 //!
-//! Nothing is issued until claimed. The effective rate of an account is the
-//! rate of its ladder step, limited by its cap. Between two claims the rate
-//! may change – a new parameter version starts, a verification expires, the
-//! seniority ramp rises – so the time is walked piece by piece and split
-//! wherever the rate changes.
+//! Nothing is issued until claimed. Two sources feed a claim:
+//!
+//! - **By age** (ADR 0026): every birthday of the holder since the last
+//!   claim pays an amount per completed year of age, all at once – if the
+//!   account was verified on that day. The first verification pays once as
+//!   well ([`crate::lifecycle::plan_attest`]).
+//! - **By rate**: the rate of the ladder step of the account, limited by
+//!   its cap. Between two claims the rate may change – a new parameter
+//!   version starts, a verification expires, the seniority ramp rises – so
+//!   the time is walked piece by piece and split wherever the rate changes.
+//!
+//! Both obey the claim window: what fell due longer ago lapses.
 
 use core::cmp::max;
 
@@ -29,7 +36,7 @@ use crate::errors::{ArithmeticError, CoreError};
 use crate::params::{check_sequence, in_force_at, next_change, Params, MAX_SEGMENTS};
 use crate::plan::{begin, next_op, require_active, require_settled, Plan};
 use crate::ports::{Event, LedgerOp, MintKind, TransferPurpose};
-use crate::types::{mul_div, Amount, Duration, Rate, Timestamp};
+use crate::types::{mul_div, Amount, Date, Duration, Rate, Timestamp};
 
 /// Verification level that counts at `t`: the attested level until it
 /// expires, afterwards none.
@@ -155,6 +162,69 @@ fn next_break(
         .filter(|b| *b < end))
 }
 
+/// `per_year` × `age`: what a person of that age receives.
+pub(crate) fn amount_for_age(per_year: Amount, age: u16) -> Result<Amount, CoreError> {
+    let cents = per_year
+        .cents()
+        .checked_mul(u64::from(age))
+        .ok_or(ArithmeticError::Overflow)?;
+    Ok(Amount::from_cents(cents))
+}
+
+/// What the birthdays of the holder pay that begin after `from` and not
+/// after `upto` (ADR 0026).
+///
+/// A birthday begins at 00:00 UTC of its day and pays the amount per year
+/// of age that is in force at that moment, times the age completed – if
+/// the account is verified at that moment. A birthday on which the
+/// verification had run out pays nothing, and never will.
+///
+/// The verification of the account must not have changed between `from`
+/// and `upto` other than by running out: every such change accounts the
+/// time before it first (`carry_forward`).
+pub fn birthdays_due(
+    state: &AccountState,
+    list: &[Params],
+    from: Timestamp,
+    upto: Timestamp,
+) -> Result<Amount, CoreError> {
+    let Some(born) = state.born else {
+        return Ok(Amount::ZERO);
+    };
+    let mut total = Amount::ZERO;
+    let mut age = born.age_on(Date::of(from)?);
+    let mut pieces: u32 = 0;
+    loop {
+        age = match age.checked_add(1) {
+            Some(next) => next,
+            None => break,
+        };
+        // No birthday that a timestamp cannot name lies after `from`.
+        let Some(day) = born.birthday(age).and_then(Date::start) else {
+            break;
+        };
+        if day > upto {
+            break;
+        }
+        pieces = pieces.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        if pieces > MAX_SEGMENTS {
+            return Err(CoreError::TooManySegments);
+        }
+        if day <= from {
+            // Not reached: the age on the day of `from` counts every
+            // birthday up to `from`. Kept so that none can pay twice.
+            continue;
+        }
+        let rules = &in_force_at(list, day)?.age;
+        if level_at(state, day) < rules.min_level {
+            continue;
+        }
+        let per_year = rules.per_year_in(state.residence.map(|r| r.country));
+        total = total.checked_add(amount_for_age(per_year, age)?)?;
+    }
+    Ok(total)
+}
+
 /// Result of [`accrue`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Accrued {
@@ -220,6 +290,7 @@ pub fn accrue(
     }
     let due = iss.rate.accrued(upto.duration_since(iss.anchor)?)?;
     total = total.checked_add(due.checked_sub(iss.paid_since_anchor)?)?;
+    total = total.checked_add(birthdays_due(state, list, from, upto)?)?;
     iss.paid_since_anchor = due;
     iss.paid_until = upto;
     Ok(Accrued {
@@ -232,9 +303,9 @@ pub fn accrue(
 /// Accounts everything accrued up to `now` under the present conditions and
 /// sets it aside (`carried`) for the next claim; a frozen account accrues
 /// nothing. Called before a step,
-/// level, residence or status changes, so that the change never reaches
-/// back in time. With ripening switched on, the amount set aside becomes
-/// mintable one ripening period after `now`.
+/// level, residence, date of birth or status changes, so that the change
+/// never reaches back in time. With ripening switched on, the amount set
+/// aside becomes mintable one ripening period after `now`.
 pub(crate) fn carry_forward(
     state: &mut AccountState,
     list: &[Params],
@@ -245,24 +316,72 @@ pub(crate) fn carry_forward(
     }
     let accrued = accrue(state, list, now)?;
     state.issuance = accrued.issuance;
-    if accrued.amount.is_zero() {
+    set_aside(state, in_force_at(list, now)?, accrued.amount, now)
+}
+
+/// Sets `amount` aside (`carried`) for the next claim. With ripening
+/// switched on it becomes mintable one ripening period after `now`.
+pub(crate) fn set_aside(
+    state: &mut AccountState,
+    params: &Params,
+    amount: Amount,
+    now: Timestamp,
+) -> Result<(), CoreError> {
+    if amount.is_zero() {
         return Ok(());
     }
-    let ripe_at = now.checked_add(in_force_at(list, now)?.ripening)?;
+    let ripe_at = now.checked_add(params.ripening)?;
     let iss = &mut state.issuance;
     iss.carried_ripe_at = if iss.carried.is_zero() {
         ripe_at
     } else {
         max(iss.carried_ripe_at, ripe_at)
     };
-    iss.carried = iss.carried.checked_add(accrued.amount)?;
+    iss.carried = iss.carried.checked_add(amount)?;
     Ok(())
+}
+
+/// Takes over the date of birth an identity service states and accounts
+/// the one-time amount of the first verification (ADR 0026): `age` ×
+/// `at_verification`, once per person, set aside for the next claim – a
+/// host pays it at once by claiming right after.
+///
+/// `state` already carries the level the statement gives. Whatever fell due
+/// under the old date of birth must have been accounted before
+/// (`carry_forward`). A statement without a date of birth leaves one stated
+/// earlier untouched.
+pub(crate) fn take_birth(
+    state: &mut AccountState,
+    params: &Params,
+    born: Option<Date>,
+    now: Timestamp,
+) -> Result<(), CoreError> {
+    if let Some(born) = born {
+        if born > Date::of(now)? {
+            return Err(CoreError::AttestationNotValid);
+        }
+        state.born = Some(born);
+    }
+    let rules = &params.age;
+    let Some(born) = state.born else {
+        return Ok(());
+    };
+    if state.first_payout_made
+        || rules.at_verification.is_zero()
+        || level_at(state, now) < rules.min_level
+    {
+        return Ok(());
+    }
+    let amount = amount_for_age(rules.at_verification, born.age_on(Date::of(now)?))?;
+    state.first_payout_made = true;
+    set_aside(state, params, amount, now)
 }
 
 /// Plans a claim of per-capita money.
 ///
-/// Mints the entitlement accrued since the last claim (up to `now` minus
-/// the ripening delay) plus anything set aside earlier that is ripe. While
+/// Mints the entitlement accrued since the last claim (birthdays and rate,
+/// up to `now` minus the ripening delay) plus anything set aside earlier
+/// that is ripe. While
 /// debt is recorded, `repayment_share` of the amount goes on to the lender.
 /// A claim with nothing to mint returns a plan without operations.
 ///

@@ -18,7 +18,7 @@
 //! Which claims count is tested in `capita-credential`.
 
 use capita_core::attributes::{AttrKey, AttrValue, Attribute, Residence, VerificationLevel};
-use capita_core::types::CountryCode;
+use capita_core::types::{CountryCode, Date};
 use capita_credential::check::person_id;
 use capita_credential::did::did_key;
 use capita_credential::types::{
@@ -113,6 +113,7 @@ fn presenting_a_claim_makes_a_member_with_a_level() {
         );
         assert_eq!(stated.level, VerificationLevel(2));
         assert_eq!(stated.residence, claim.residence);
+        assert_eq!(stated.born, None);
         assert_eq!(stated.attributes, claim.attributes);
         assert_eq!(stated.issued_at, ts(0));
         assert_eq!(stated.expires_at, Some(ts(365 * DAY)));
@@ -132,6 +133,48 @@ fn presenting_a_claim_makes_a_member_with_a_level() {
                 expires_at: Some(ts(365 * DAY)),
             }]
         );
+        check();
+    });
+}
+
+#[test]
+fn a_date_of_birth_reaches_the_rules_signed_and_not_from_the_future() {
+    new_test_ext().execute_with(|| {
+        // The test clock starts on 15 January 2027.
+        let mut dated = claim(1, 1, 1);
+        dated.born = Some(Date::new(1990, 5, 17).unwrap());
+        let signature = sign(1, &dated);
+
+        // The date is part of what the service signed.
+        let mut older = dated.clone();
+        older.born = Some(Date::new(1950, 5, 17).unwrap());
+        assert_noop!(
+            present_as(1, &older, signature, None),
+            Error::<Test>::BadSignature
+        );
+        let mut undated = dated.clone();
+        undated.born = None;
+        assert_noop!(
+            present_as(1, &undated, signature, None),
+            Error::<Test>::BadSignature
+        );
+        // Nobody is born after the day the claim was issued.
+        let mut unborn = dated.clone();
+        unborn.born = Some(Date::new(2027, 1, 16).unwrap());
+        assert_noop!(present(1, &unborn), Error::<Test>::BornAfterIssue);
+
+        assert_ok!(present_as(1, &dated, signature, None));
+        assert_eq!(world(|w| w.attested[&acct(1)].born), dated.born);
+        assert_eq!(Credentials::<Test>::get(acct(1)), Some(dated.clone()));
+        // The stored claim says the same when the membership is renewed.
+        world(|w| w.attested.remove(&acct(1)));
+        assert_ok!(call(signed(1), Call::renew {}));
+        assert_eq!(world(|w| w.attested[&acct(1)].born), dated.born);
+
+        // Born on the day of issue: fine.
+        let mut newborn = claim(2, 1, 2);
+        newborn.born = Some(Date::new(2027, 1, 15).unwrap());
+        assert_ok!(present(2, &newborn));
         check();
     });
 }

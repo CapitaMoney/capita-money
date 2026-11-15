@@ -23,7 +23,7 @@
 use blake2::digest::consts::U32;
 use blake2::{Blake2b, Digest};
 use capita_core::attributes::{AttrKey, AttrValue, Attribute, Residence, VerificationLevel};
-use capita_core::types::{AccountId, CountryCode, Duration, Timestamp};
+use capita_core::types::{AccountId, CountryCode, Date, Duration, Timestamp};
 use capita_credential::check::{
     attestation, check_claim, check_revocation, person_id, still_counts, Crypto,
 };
@@ -103,6 +103,7 @@ fn claim() -> Claim {
             country: CountryCode(*b"FR"),
             proven_at: at(-30),
         }),
+        born: Some(Date::new(1990, 5, 17).unwrap()),
         attributes: vec![Attribute {
             key: AttrKey(1),
             value: AttrValue(42),
@@ -149,7 +150,7 @@ fn the_signed_bytes_are_fixed() {
     // A test vector for issuers written in other languages.
     let bytes = claim_bytes(&AUDIENCE, &claim());
     let mut expected = Vec::new();
-    expected.extend_from_slice(b"capita-claim-v2");
+    expected.extend_from_slice(b"capita-claim-v3");
     expected.extend_from_slice(&[7; 32]); // audience
     expected.extend_from_slice(&[0, 0, 0, 3]); // issuer
     expected.extend_from_slice(&[9; 16]); // serial
@@ -160,6 +161,8 @@ fn the_signed_bytes_are_fixed() {
     expected.push(1); // residence present
     expected.extend_from_slice(b"FR");
     expected.extend_from_slice(&(NOW - 30 * DAY).to_be_bytes());
+    expected.push(1); // date of birth present
+    expected.extend_from_slice(&[0x07, 0xC6, 5, 17]); // 1990-05-17
     expected.extend_from_slice(&[0, 1]); // one attribute
     expected.extend_from_slice(&[0, 1]); // key 1
     expected.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 42]); // value 42
@@ -169,12 +172,13 @@ fn the_signed_bytes_are_fixed() {
     assert_eq!(bytes, expected);
     assert_eq!(
         bytes.len(),
-        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 11 + 2 + 10 + 8 + 9
+        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 11 + 5 + 2 + 10 + 8 + 9
     );
 
-    // without residence, attributes and expiry
+    // without residence, date of birth, attributes and expiry
     let bare = Claim {
         residence: None,
+        born: None,
         attributes: vec![],
         expires_at: None,
         ..claim()
@@ -182,11 +186,11 @@ fn the_signed_bytes_are_fixed() {
     let bytes = claim_bytes(&AUDIENCE, &bare);
     assert_eq!(
         bytes.len(),
-        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 1 + 2 + 8 + 1
+        15 + 32 + 4 + 16 + 32 + 32 + 1 + 1 + 1 + 1 + 2 + 8 + 1
     );
     assert_eq!(
-        &bytes[bytes.len() - 12..],
-        [&[0u8, 0, 0][..], &(NOW - DAY).to_be_bytes(), &[0]].concat()
+        &bytes[bytes.len() - 13..],
+        [&[0u8, 0, 0, 0][..], &(NOW - DAY).to_be_bytes(), &[0]].concat()
     );
 
     // a claim that replaces an earlier person key: 32 bytes more, after
@@ -425,6 +429,24 @@ fn an_issuer_states_no_more_than_it_is_trusted_for() {
         check(&later, &issuer),
         Err(CredentialError::ResidenceFromFuture)
     );
+    // date of birth: the day of issue at the latest (NOW is 2027-01-15,
+    // the claim was issued the day before)
+    let mut unborn = claim();
+    unborn.born = Some(Date::new(2027, 1, 15).unwrap());
+    assert_eq!(
+        check(&unborn, &issuer),
+        Err(CredentialError::BornAfterIssue)
+    );
+    let stated_birth = |claim: &Claim| {
+        check_claim::<Host>(claim, &signed(claim), ID, &issuer, &AUDIENCE, at(0))
+            .map(|stated| stated.born)
+    };
+    let mut newborn = claim();
+    newborn.born = Some(Date::new(2027, 1, 14).unwrap());
+    assert_eq!(stated_birth(&newborn), Ok(newborn.born));
+    let mut undated = claim();
+    undated.born = None;
+    assert_eq!(stated_birth(&undated), Ok(None));
     // attributes
     let mut other = claim();
     other.attributes = vec![Attribute {

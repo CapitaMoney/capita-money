@@ -80,7 +80,7 @@ sequenceDiagram
 ```
 1. Host loads account state, attestation and all parameter versions in force since the last claim.
 2. Core checks: account active, time not backwards, verification level still valid (expiry is a moment in time like any other change).
-3. Entitlement = rate(step) × time since anchor, rounded down, minus what was already paid; rate limited by the cap of the account; time limited by the claim window (older entitlement lapses). A change of parameters, an expiring verification or a step of the seniority ramp splits the period at that moment. A change of step, level, residence or status first sets aside what accrued so far (`carried`), so no change reaches back.
+3. Entitlement by age (ADR 0026) = every birthday of the holder since the last claim on which the account was verified: age completed × the amount per year of age in force that day. Entitlement by rate = rate(step) × time since anchor, rounded down, minus what was already paid; rate limited by the cap of the account; time limited by the claim window (older entitlement lapses). A change of parameters, an expiring verification or a step of the seniority ramp splits the period at that moment. A change of step, level, residence or status first sets aside what accrued so far (`carried`), so no change reaches back.
 4. With debt outstanding, a share of the claim (`repayment_share`) goes to repayment.
 5. Plan applied (section 3).
 
@@ -88,7 +88,7 @@ Offene Frage: B4 claim or automatic. Default claim; "automatic" is the host call
 Offene Frage: A1d ripening. Hook: issued money is minted only once ripe (delayed mint: a claim at `now` covers the time up to `now` − ripening), so no ledger needs a second balance. Default zero = at once. Unripe money is not on the ledger and so cannot be lent.
 
 ### Open an account, verify
-`plan_open`: lowest step of the ladder and the one-time start grant. The grant is earmarked (`start_grant_reserved`): it can be paid only to the verification service, for the verification of the account itself (`plan_spend_start_grant`) – not to anybody else, not as a loan, and no demurrage is charged on it. The identity adapter then reports what it found (`plan_attest`), and the holder moves up the ladder (`plan_set_tier`).
+`plan_open`: lowest step of the ladder and the one-time start grant. The grant is earmarked (`start_grant_reserved`): it can be paid only to the verification service, for the verification of the account itself (`plan_spend_start_grant`) – not to anybody else, not as a loan, and no demurrage is charged on it. The identity adapter then reports what it found (`plan_attest`) – with a date of birth, the first verification sets the age × `at_verification` aside, and the host claims it at once (ADR 0026) – and the holder moves up the ladder (`plan_set_tier`).
 
 ```mermaid
 sequenceDiagram

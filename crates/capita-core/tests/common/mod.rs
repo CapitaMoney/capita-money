@@ -33,7 +33,7 @@ use capita_core::account::AccountState;
 use capita_core::attributes::{Attestation, Residence, VerificationLevel};
 use capita_core::lifecycle::{plan_attest, plan_open};
 use capita_core::params::{
-    CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
+    AgeParams, CapParams, ClosedBalance, DemurrageParams, LadderStep, LoanParams, Params,
 };
 use capita_core::plan::Plan;
 use capita_core::ports::{Applied, Ledger, LedgerOp};
@@ -92,6 +92,7 @@ pub fn params() -> Params {
             step(1, 1, 1, MINUTE),
             step(2, 2, 3, MINUTE),
         ],
+        age: AgeParams::OFF,
         claim_window: secs(14 * DAY),
         caps: CapParams {
             period: Duration::MONTH,
@@ -138,6 +139,7 @@ pub fn attestation(
             country: CountryCode(*c),
             proven_at: issued_at,
         }),
+        born: None,
         attributes: vec![],
         issued_at,
         expires_at,

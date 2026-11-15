@@ -34,6 +34,15 @@ function exact(text, n, what) {
   return b;
 }
 const option = (value, encode) => (value === null || value === undefined ? Uint8Array.of(0) : concat(Uint8Array.of(1), encode(value)));
+/** A day "YYYY-MM-DD" as the chain's `Date`: year (u16), month, day. */
+function dateBytes(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text));
+  if (!m) throw new TypeError("date: YYYY-MM-DD");
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const real = new Date(Date.UTC(year, month - 1, day));
+  if (year < 1 || real.getUTCMonth() !== month - 1 || real.getUTCDate() !== day) throw new TypeError("date: not a day of the calendar");
+  return Uint8Array.of(year & 255, year >> 8, month, day);
+}
 
 // ---------------------------------------------------------------- calls
 
@@ -43,7 +52,8 @@ export const openAccount = () => Uint8Array.of(PALLETS.capita, CAPITA.open);
 /**
  * `Claim` in SCALE, from the JSON the identity service answers
  * (`capita_issuer::http::call_json`). The service sends no residence and no
- * attributes; a claim with either is refused here rather than guessed.
+ * attributes; a claim with either is refused here rather than guessed. The
+ * date of birth (`born`, "YYYY-MM-DD" or null) is part of what it signed.
  */
 export function claimBytes(c) {
   if (c.residence !== null && c.residence !== undefined) throw new TypeError("claim with residence");
@@ -56,6 +66,7 @@ export function claimBytes(c) {
     option(c.replaces, (r) => exact(r, 32, "replaces")),
     Uint8Array.of(c.level),
     Uint8Array.of(0), // residence: none
+    option(c.born, dateBytes), // date of birth: the ledger issues Capita by age
     compact(0), // attributes: none
     u64le(c.issuedAt),
     option(c.expiresAt, u64le),
@@ -155,7 +166,7 @@ export function decodeHomeClaim(bytes) {
   return { key: deviceKey(r), since: r.u64() };
 }
 
-/** `Credential::Credentials`: { level, issuedAt, expiresAt } of the claim held, or null. */
+/** `Credential::Credentials`: { level, born, issuedAt, expiresAt } of the claim held, or null. */
 export function decodeCredential(bytes) {
   if (!bytes) return null;
   const r = new Reader(bytes);
@@ -163,10 +174,15 @@ export function decodeCredential(bytes) {
   r.option(() => r.take(32)); // replaces
   const level = r.u8();
   r.option(() => r.take(2 + 8)); // residence: country, proven at
+  const born = r.option(() => {
+    const [low, high, month, day] = r.take(4);
+    const two = (n) => String(n).padStart(2, "0");
+    return `${String(low | (high << 8)).padStart(4, "0")}-${two(month)}-${two(day)}`;
+  });
   for (let n = r.compact(); n > 0; n--) r.take(2 + 8); // attributes
   const issuedAt = r.u64();
   const expiresAt = r.option(() => r.u64());
-  return { level, issuedAt, expiresAt };
+  return { level, born, issuedAt, expiresAt };
 }
 
 /** The kind of device a key stands for, in the words the screens use. */
