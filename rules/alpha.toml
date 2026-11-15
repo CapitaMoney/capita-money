@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.12 (2026-11-15)"
+diary = "rules diary v0.15 (2026-11-15; rule 3 change of v0.14 not yet mirrored)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -72,11 +72,11 @@ note = "Without a valid verification an account receives nothing."
 step = 1
 name = "verified person"
 min_level = 1
-amount = "5.00"
+amount = "0.00"
 per = "1 month"
-status = "example"
-source = "diary 4, 2discuss A, Y"
-note = "Placeholder (= age 30 from the second birthday: 2 x 30 = 60 per year) until register rule issuance-by-age is built; then the amount follows from age and this step only marks verified."
+status = "decided"
+source = "owner 2026-11-15, diary 4"
+note = "No monthly amount: Capita come only by age (register issuance-by-age, first-payout). This step only marks verified."
 
 # -------------------------------------------------------------------- caps
 
@@ -333,7 +333,7 @@ code = ["pallets/credential/src/lib.rs"]
 
 [[register]]
 id = "issuance-by-age"
-rule = "Capita per year = age factor x age in completed years, paid all at once on each birthday: on the first birthday after verification 1 x age, from the second birthday on 2 x age. The factor is one global value, changeable later, with an optional value per country. The same worldwide; no minimum age; age 0 gets nothing. Not built: the ladder amount above is used until then."
+rule = "Capita per year = age factor x age in completed years, paid all at once on each birthday; no monthly amount. The factor is one global value (2), changeable later, with an optional value per country. The same worldwide; no minimum age; age 0 gets nothing. Not built: until then a verified account receives nothing but its start grant."
 status = "decided"
 source = "owner 2026-11-15, diary 4, 19, 2discuss Y"
 planned = "pallets/credential (birth date in the claim), crates/capita-core issuance"
@@ -547,3 +547,10 @@ rule = "No fees. Every verified person may send a free number of transactions pe
 status = "decided"
 source = "owner 2026-11-15, diary 32, diary 12"
 planned = "runtime/src/nonce.rs (quota per person)"
+
+[[register]]
+id = "first-payout"
+rule = "Right at verification an account receives 1 x age at once, with the notice that from now on it gets its age in Capita every birthday (and the ask to allow notifications). From the first birthday on: 2 x age."
+status = "default"
+source = "owner 2026-11-15, diary 4 (whether the first birthday already gives 2 x age: open)"
+planned = "identity service and pallet-capita (payout at verification), app (notice, notification permission)"
