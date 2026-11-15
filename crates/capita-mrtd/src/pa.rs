@@ -175,6 +175,8 @@ pub struct Authenticated {
     pub signer: String,
     /// The data groups whose hashes were checked.
     pub groups: Vec<u8>,
+    /// Every data group the security object lists.
+    pub listed: Vec<u8>,
 }
 
 fn digest(oid: &[u8]) -> Result<(&'static str, MessageDigest), MrtdError> {
@@ -279,5 +281,6 @@ pub fn passive_authentication(
         algorithm,
         signer: format!("{:?}", signer.subject_name()),
         groups: checked,
+        listed: listed.iter().map(|(n, _)| *n).collect(),
     })
 }

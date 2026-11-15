@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-attest"
+description = "The phone check of Capita Money: Android key attestation and Apple App Attest, checked by the identity service without asking Google (ADR 0024)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# CBOR of Apple's attestation objects and assertions.
+ciborium = "0.2.2"
+# X.509 chains and signatures, as in capita-mrtd (libssl-dev to build).
+openssl = "0.10.73"
+

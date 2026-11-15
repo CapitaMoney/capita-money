@@ -21,15 +21,17 @@ export const yymmdd = (iso) => iso.slice(2, 4) + iso.slice(5, 7) + iso.slice(8, 
 /**
  * Waits for the document at the back of the phone and reads it.
  * key: { documentNumber, birthDate: "YYYY-MM-DD", expiryDate: "YYYY-MM-DD" } or { can: "123456" }.
- * Answers { sod, dg1, dg2, dg14?, dg15?, pace } in base64.
+ * chipNonce: the service's 8 bytes in base64; a chip with DG15 signs them
+ * (active authentication), a chip that offers chip authentication runs it (ADR 0024).
+ * Answers { sod, dg1, dg2, dg14?, dg15?, active?, chipAuthenticated, pace } in base64.
  */
-export async function readChip(key) {
+export async function readChip(key, chipNonce) {
   const p = plugin();
   if (!p) throw new Error("no chip reader");
   const arg = key.can
     ? { can: key.can }
     : { documentNumber: key.documentNumber.toUpperCase().replace(/[^A-Z0-9]/g, ""), birthDate: yymmdd(key.birthDate), expiryDate: yymmdd(key.expiryDate) };
-  return p.read(arg);
+  return p.read({ ...arg, chipNonce });
 }
 
 /** Stops waiting for a document. */

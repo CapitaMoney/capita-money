@@ -49,6 +49,10 @@ Passive authentication (ADR 0021) proves the data are the state's, not that the 
 5. The phone films and sends `POST /v1/document/finish`: chip files, chip answers, frames, attestation, signature of the session key over the request.
 6. The service checks phone, chip, face; signs the claim; keeps nothing.
 
+The session key (Android) or the App Attest key (iPhone, certified for SHA-256 of the nonce) signs the **request digest** `SHA-256("capita/document/v1" ‖ nonce ‖ SHA-256(session) ‖ SHA-256 of EF.SOD, DG1, DG2, DG14, DG15, chip answer – absent = empty ‖ chip authenticated, 1 byte ‖ number of frames, 4 bytes big-endian ‖ SHA-256 of each frame)` – `capita_issuer::phone::request_digest`, `app/native/phone.js`, one shared test vector.
+
+Built: `crates/capita-attest` (Android key attestation, App Attest), `capita_mrtd::check_chip` + `aa` (active authentication RSA ISO/IEC 9796-2 and ECDSA, chip authentication demanded where DG14 offers it), identity service routes `start` → `moves` → `finish`, roots in `services/issuer/trust/attestation/` (README: sources, fingerprints, Google's status list).
+
 ## Consequences
 + A phone's key cannot be stolen from a distance; no Google or Apple account is a way in.
 + "One person, one account" holds against faked films: they would need a real, unchanged phone running the Capita app.

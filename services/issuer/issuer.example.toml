@@ -40,6 +40,24 @@ test = false
 # client_secret_file = "secrets/challenger-client-secret"
 # redirect_uri = "https://id.example.org/v1/challenger/callback"
 
+# The document check: chip of a passport or ID card + filmed head movements
+# (ADR 0021), only from a checked phone (ADR 0024). Remove the comment signs
+# to switch it on.
+# [checks.document]
+# trust = "trust/csca"                 # country signing certificates or an ICAO master list (.ml)
+# face_models = "models"               # services/face/fetch-models.sh models
+#
+# [checks.document.phone]
+# android_roots = "trust/attestation/google"
+# android_revoked = "trust/attestation/google-status.json"   # fetched by the operator, see trust/attestation/README.md
+# packages = ["com.capitamoney.app"]
+# # SHA-256 of the app's signing certificate (keytool -list -v, apksigner verify --print-certs).
+# # The alpha's development key is public (ADR 0023): replace it before real money.
+# signers = ["B4:12:63:E1:AA:6C:BE:53:83:D7:B0:01:7D:7D:76:D4:9A:0E:4D:5D:74:D9:66:C1:C1:BF:03:53:51:E1:70:EE"]   # app/android/dev-signing.jks
+# boot_keys = []                       # verified-boot keys of self-signed systems, e.g. GrapheneOS
+# apple_root = "trust/attestation/apple-app-attestation-root-ca.pem"
+# apple_app_ids = []                   # "<team id>.com.capitamoney.app" once the Apple account exists
+
 [payment]
 # One ticket code per line; each pays one verification. Without this line
 # the service does not check payment.

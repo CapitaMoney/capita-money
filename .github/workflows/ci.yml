@@ -103,6 +103,9 @@ jobs:
       # The chip check: passive authentication with OpenSSL (libssl-dev).
       - run: cargo clippy -p capita-mrtd --all-targets -- -D warnings
       - run: cargo test -p capita-mrtd
+      # The phone check: Android key attestation, Apple App Attest (ADR 0024).
+      - run: cargo clippy -p capita-attest --all-targets -- -D warnings
+      - run: cargo test -p capita-attest
   # The euro door: orders, vouchers, tickets, GNU Taler client, node client.
   door:
     runs-on: ubuntu-latest
