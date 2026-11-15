@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.7 (2026-11-14)"
+diary = "rules diary v0.8 (2026-11-15)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -340,9 +340,9 @@ planned = "pallets/credential (birth date in the claim), crates/capita-core issu
 
 [[register]]
 id = "move-without-debt"
-rule = "A frozen account, or one with a credit line or recorded debt, does not move."
-status = "default"
-source = "B5, C1"
+rule = "An account frozen by its own holder (stolen key) moves to the new key; one frozen by the authority, or one with a credit line or recorded debt, does not. Not built: the state does not record who froze, so every frozen account is refused for now."
+status = "decided"
+source = "owner 2026-11-15, diary 15, B5, C1"
 code = ["crates/capita-core/src/recovery.rs"]
 
 [[register]]
@@ -410,9 +410,9 @@ code = ["crates/capita-core/src/issuance.rs"]
 
 [[register]]
 id = "authorities"
-rule = "Who changes the rules, who attests persons, who sells Capita (the list of euro doors) and who grants credit lines: on the test chain one key (root)."
-status = "default"
-source = "E1, F3, C1"
+rule = "One authority changes the rules, keeps the list of identity services and of euro doors, freezes and closes accounts and upgrades the chain: in alpha the owner's key (test chain: root); after the association is founded its board (multisig, e.g. 2 of 3); later a vote (rule-changes). The single key is removed before real euro buying. No credit lines (no-debt). Not built: the multisig."
+status = "decided"
+source = "owner 2026-11-15, diary 22, E1, F3"
 code = ["runtime/src/configs.rs"]
 
 [[register]]
@@ -512,3 +512,31 @@ rule = "The yearly verification alternates between two check systems (own phone 
 status = "decided"
 source = "diary 26, F3"
 planned = "identity service (Didit adapter)"
+
+[[register]]
+id = "one-realm"
+rule = "All identity services share one person key: one realm. A service with another realm is never admitted, so a person can never hold two accounts through two realms."
+status = "decided"
+source = "owner 2026-11-15, diary 29, F3"
+planned = "pallets/credential (refuse an issuer outside realm 0)"
+
+[[register]]
+id = "verified-by-document"
+rule = "Only a document check makes an account verified. E-mail, phone or a letter alone give no step; a letter proves residence only."
+status = "decided"
+source = "owner 2026-11-15, diary 30, F3"
+planned = "list of identity services (highest step per service), identity service"
+
+[[register]]
+id = "nodes"
+rule = "Alpha runs on own servers. Before the public beta at least 4 nodes, at least 3 of them run by independent operators, admitted by the authority."
+status = "decided"
+source = "owner 2026-11-15, diary 31, 2discuss O"
+planned = "chain spec of the beta (set of block authors)"
+
+[[register]]
+id = "spam-quota"
+rule = "No fees. Every verified person may send a free number of transactions per day; a key without a person may only open an account and present its claim. The number is set when this is built."
+status = "decided"
+source = "owner 2026-11-15, diary 32, diary 12"
+planned = "runtime/src/nonce.rs (quota per person)"

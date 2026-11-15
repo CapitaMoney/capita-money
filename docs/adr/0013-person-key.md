@@ -50,4 +50,4 @@ After signing a claim the service keeps: person key, account, number of the clai
 ## Open
 Offene Frage: 2discuss K – the basis; which document check first; minimum age (`identity.minimum_age`, default none).
 Vermutung (Claude, ungeprüft): 24 and 12 letters are within every name field of identity documents; every document check (card, passport, EUDI wallet) yields name and date of birth – check both before real persons.
-Offene Frage: F3 – realms: issuers that share a secret form one; how realms are kept from overlapping.
+Realms: issuers that share a secret form one. Decided (owner 2026-11-15, diary 29): there is only one realm, so none can overlap.

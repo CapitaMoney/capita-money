@@ -86,7 +86,7 @@ small! {
     /// Within a realm one person is one person; across realms nothing links
     /// two person keys.
     ///
-    /// Offene Frage: F3 – how realms are kept from overlapping.
+    /// Decided (diary 29): one realm only – no other is admitted.
     pub struct Realm(u32);
 }
 

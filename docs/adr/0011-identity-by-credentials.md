@@ -35,12 +35,12 @@ The issuer signs fixed bytes: a tag (`capita-claim-v1`), the audience, then ever
 Per issuer: a decentralised identifier (DID), 1–8 keys (several while a key is replaced), a realm, the highest level it may state, whether it may state a residence, which attributes, the longest validity, a status. The limits say what a service is trusted for: one that checks e-mail addresses gets a low level, one that reads documents a higher one, one that sends letters a residence.
 - **Active / suspended / revoked.** Suspended: nothing new, what was stated stands. Revoked: what was stated counts no longer.
 - **DID.** A host cannot fetch documents, so it never resolves a DID. It trusts the keys on the list; whoever keeps the list checks that they are the keys of the DID document (`did:web`: the document on the web server of the service). `did:key` is the key itself as text; the host checks that one.
-- **Who keeps the list** is an origin of the runtime (`RegistryOrigin`). Test chain: root. Offene Frage: F3, E1.
+- **Who keeps the list** is an origin of the runtime (`RegistryOrigin`). Test chain: root. Decided (owner 2026-11-15, diary 22): the one authority – in alpha the owner's key, then the board of the association (multisig), later a vote.
 
 ### One person, one account
 The person identifier of the rules = BLAKE2b-256 of tag, realm and pseudonym. The rules refuse a second account for the same person and another person for the same account (`capita-core`).
 - A **realm** is a group of issuers that give the same person the same pseudonym. Within a realm a person is found again whichever issuer checks; across realms nothing links two pseudonyms.
-- Offene Frage: F3 – how issuers of one realm agree on a pseudonym (for example a keyed hash of document country and number, with the key shared inside the realm, or a common deduplication service), and how realms are kept apart (for example by country of the document). Until decided: one realm, or realms for disjoint groups of people. A person verified in two overlapping realms would hold two accounts.
+- Offene Frage: F3 – how issuers of one realm agree on a pseudonym (for example a keyed hash of document country and number, with the key shared inside the realm, or a common deduplication service), and how realms are kept apart (for example by country of the document). Decided (owner 2026-11-15, diary 29): one realm only; a service with another realm is never admitted, so realms cannot overlap. How the services of that realm share the person key: ADR 0013.
 
 ### One claim per account
 A later claim replaces the earlier one. Combining proofs of several services (document here, letter there) is the work of a service, off chain: it accepts the proof of another service and issues one claim. The chain stays simple and sees one statement.
