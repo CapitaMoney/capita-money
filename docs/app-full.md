@@ -71,7 +71,7 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 | 8 | hardware key on chain (`DeviceKey::Hardware`), ADR 0024 | Opus | built 2026-11-15 |
 | 9 | phone check in the identity service (Android key attestation, App Attest) + chip proof (active / chip authentication); new order start → moves → finish | Opus | built 2026-11-15 |
 | 10 | Android shell: hardware key, session key with attestation, chip authentication + active authentication | Opus | built 2026-11-15 (CI compiles; first phone test = owner) |
-| 11 | iPhone shell (Capacitor, Core NFC, Secure Enclave, App Attest), built by CI; tests by friends with Macs | Opus | next |
+| 11 | iPhone shell (Capacitor, Core NFC, Secure Enclave, App Attest), built by CI; tests by friends with Macs | Opus | built 2026-11-15 (CI builds for the simulator, unsigned; on a phone = Apple team) |
 | 12 | German eID adapter (`eid-de`), built and tested against a stand-in; certificate = owner | Opus | next |
 
 Tests the owner does: install the APK; verify with the German passport (chip + selfie); try the Personalausweis (expected: chip photo refused → eID later); the web app on the MX Linux laptop.
