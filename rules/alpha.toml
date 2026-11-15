@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.8 (2026-11-15)"
+diary = "rules diary v0.12 (2026-11-15)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -72,11 +72,11 @@ note = "Without a valid verification an account receives nothing."
 step = 1
 name = "verified person"
 min_level = 1
-amount = "10.00"
+amount = "5.00"
 per = "1 month"
 status = "example"
-source = "diary 4, 2discuss A"
-note = "Placeholder (= age 30: 4 x 30 = 120 per year) until register rule issuance-by-age is built; then the amount follows from age and this step only marks verified."
+source = "diary 4, 2discuss A, Y"
+note = "Placeholder (= age 30 from the second birthday: 2 x 30 = 60 per year) until register rule issuance-by-age is built; then the amount follows from age and this step only marks verified."
 
 # -------------------------------------------------------------------- caps
 
@@ -333,9 +333,9 @@ code = ["pallets/credential/src/lib.rs"]
 
 [[register]]
 id = "issuance-by-age"
-rule = "Capita per year = 4 x age in completed years, spread evenly over the year (daily, rounded down to the cent), leftover paid on the birthday over the year; the same worldwide; no minimum age; age 0 gets nothing. Not built: the ladder amount above is used until then."
+rule = "Capita per year = age factor x age in completed years, paid all at once on each birthday: on the first birthday after verification 1 x age, from the second birthday on 2 x age. The factor is one global value, changeable later, with an optional value per country. The same worldwide; no minimum age; age 0 gets nothing. Not built: the ladder amount above is used until then."
 status = "decided"
-source = "owner 2026-11-14, diary 4, 19"
+source = "owner 2026-11-15, diary 4, 19, 2discuss Y"
 planned = "pallets/credential (birth date in the claim), crates/capita-core issuance"
 
 [[register]]
@@ -515,7 +515,7 @@ planned = "identity service (country list after legal check P04.3)"
 
 [[register]]
 id = "alternate-checks"
-rule = "The yearly verification alternates between two check systems (own phone check, Didit). When one fails for a person, the other is used."
+rule = "Every verification tries the own phone check first; Didit is used only when the own check fails for a person."
 status = "decided"
 source = "diary 26, F3"
 planned = "identity service (Didit adapter)"
