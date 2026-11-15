@@ -175,6 +175,12 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20   /// Most euro cents one payment at the door may bring in\n\
          \x20   /// (`door.max_payment_eur`).\n\
          \x20   pub const DOOR_MAX_PAYMENT_EUR_CENTS: u64 = {max_payment};\n\
+         \x20   /// Most keys of one account (`keys.max_keys`).\n\
+         \x20   pub const KEYS_MAX_KEYS: u32 = {max_keys};\n\
+         \x20   /// How long a linked device waits before it becomes the home\n\
+         \x20   /// device (`keys.home_delay`).\n\
+         \x20   pub const KEYS_HOME_DELAY: capita_core::types::Duration =\n\
+         \x20       capita_core::types::Duration::from_secs({home_delay});\n\
          \n\
          \x20   /// The monetary rules as parameters of the core, in force from the\n\
          \x20   /// start of time. Checked when this crate was built: never `None`.\n\
@@ -195,6 +201,8 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
         price = set.verification.price_eur.value.0.cents(),
         rate = set.door.capita_per_euro.value.0.cents(),
         max_payment = set.door.max_payment_eur.value.0.cents(),
+        max_keys = u32::from(set.keys.max_keys.value),
+        home_delay = set.keys.home_delay.value.0.secs(),
         params = params_source(&params),
     );
     written.map_err(|e| Error(e.to_string()))?;

@@ -35,6 +35,8 @@ jobs:
       - run: cargo clippy -p capita-core -p capita-credential -p capita-door --all-targets -- -D warnings
       - run: cargo test -p capita-core -p capita-credential -p capita-door --all-features
       - run: cargo test -p capita-core -p capita-credential -p capita-door
+      - run: cargo clippy -p capita-keys --all-targets --all-features -- -D warnings
+      - run: cargo test -p capita-keys --all-features
       # the rules files: read, checked, compiled, run through the core
       - run: cargo clippy -p capita-rulefile -p capita-rules --all-targets --all-features -- -D warnings
       - run: cargo test -p capita-rulefile -p capita-rules --all-features
@@ -46,6 +48,13 @@ jobs:
       - run: cargo build -p capita-core --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-credential --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-door --features serde,scale --target thumbv7em-none-eabi
+      - run: cargo build -p capita-keys --features scale --target thumbv7em-none-eabi
+      # The lockfile as resolved in CI (new dependencies): compare and commit.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cargo-lock
+          path: Cargo.lock
   # The identity service: issuing logic, store, interface, Challenger client.
   issuer:
     runs-on: ubuntu-latest
@@ -83,15 +92,17 @@ jobs:
       # compiler errors and failed tests become annotations of the run
       - run: echo "::add-matcher::.github/rust-problem-matcher.json"
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy --target wasm32v1-none
-      - run: cargo clippy -p pallet-capita -p pallet-capita-credential -p pallet-capita-door --all-targets -- -D warnings
-      - run: cargo test -p pallet-capita -p pallet-capita-credential -p pallet-capita-door
+      - run: cargo clippy -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys --all-targets -- -D warnings
+      - run: cargo test -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys
       - run: cargo check -p pallet-capita --features try-runtime
       - run: cargo check -p pallet-capita-credential --features try-runtime
       - run: cargo check -p pallet-capita-door --features try-runtime
+      - run: cargo check -p pallet-capita-keys --features try-runtime
       # the form the pallets take inside a runtime: WebAssembly, no std
       - run: cargo check -p pallet-capita --no-default-features --target wasm32v1-none
       - run: cargo check -p pallet-capita-credential --no-default-features --target wasm32v1-none
       - run: cargo check -p pallet-capita-door --no-default-features --target wasm32v1-none
+      - run: cargo check -p pallet-capita-keys --no-default-features --target wasm32v1-none
   # The test chain, natively: genesis, signed transactions, invariants.
   runtime:
     runs-on: ubuntu-latest
@@ -174,3 +185,14 @@ jobs:
             echo "::error::the node did not judge the vouchers as expected (good=$good, bad=$bad)"
             exit 1
           fi
+      # The app's own bytes reach a real node: a device key and a passkey
+      # open their accounts through `keys.open` (ADR 0020); a forged
+      # signature and a passkey of another site are refused by the pool.
+      - name: the app's keys reach the chain
+        run: |
+          ./target/release/capita-node --dev --tmp --rpc-port 9977 --port 30377 > node-keys.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -s -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"chain_getBlockHash","params":[1]}' http://127.0.0.1:9977 | grep -q '"result":"0x' && break
+            sleep 2
+          done
+          node app/tests/chain-smoke.mjs http://127.0.0.1:9977 || { tail -n 40 node-keys.log; exit 1; }

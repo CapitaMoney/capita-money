@@ -213,6 +213,20 @@ status = "default"
 source = "owner 2026-11-14 (Claude's default), ADR 0018"
 note = "Most euro one payment at the euro door may bring in. A brake, not a judgement: buying again is possible."
 
+# -------------------------------------------------------------------- keys
+
+[keys.max_keys]
+value = 3
+status = "decided"
+source = "owner 2026-11-14 (linked devices), ADR 0020"
+note = "Most keys one account may have – one per device: passkeys and device keys. The first is the home key; only it removes the others."
+
+[keys.home_delay]
+value = "7 days"
+status = "default"
+source = "ADR 0020"
+note = "A linked device asks to become the home device (the phone with the home key is lost). It takes over after this long, unless the home device acts in between."
+
 # ---------------------------------------------------------------- register
 #
 # Rules that are behaviour, not numbers. They live in code; this list says
@@ -225,6 +239,13 @@ rule = "Capita can be bought with ordinary money. There is no way back: no funct
 status = "decided"
 source = "diary 3"
 code = ["crates/capita-core/src/issuance.rs", "pallets/door/src/lib.rs", "services/door/src/door.rs"]
+
+[[register]]
+id = "device-keys"
+rule = "An account is acted for by the keys of its holder's devices – passkeys, or keys the app makes where no passkey is possible. The first key is the home key: it removes other keys; a linked key removes only itself. No secret words."
+status = "decided"
+source = "owner 2026-11-14, ADR 0020"
+code = ["crates/capita-keys/src/check.rs", "pallets/keys/src/lib.rs", "app/chain/keys.js"]
 
 [[register]]
 id = "euro-door"

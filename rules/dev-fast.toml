@@ -168,3 +168,15 @@ value = "100.00"
 status = "example"
 source = "test chain"
 note = "Most euro one payment may bring in."
+
+[keys.max_keys]
+value = 3
+status = "example"
+source = "test chain"
+note = "Most keys one account may have."
+
+[keys.home_delay]
+value = "2 minutes"
+status = "example"
+source = "test chain"
+note = "How long a linked device waits before it becomes the home device."

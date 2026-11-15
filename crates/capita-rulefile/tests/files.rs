@@ -205,7 +205,7 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 21 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 23 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
