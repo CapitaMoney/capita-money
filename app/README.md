@@ -36,4 +36,8 @@ Signed with a **public development key** (`android/dev-signing.jks`, password `c
 
 `npm run web` copies what the app ships into `www/` – for the shell and for GitHub Pages (`.github/workflows/pages.yml`).
 
+## iPhone shell (ADR 0024)
+The same files in `ios/` (Capacitor, Swift Package Manager), with the three native pieces of the Android shell under the same names and calls, in the local package `plugins/capita-ios` (`npm run ios` links it): `CapitaKeyPlugin` – the money key in the Secure Enclave (P-256, each use confirmed by Face ID, Touch ID or the code; DER signatures like Android); `CapitaPhonePlugin` – App Attest: a fresh key per verification, certified for SHA-256 of the service's nonce, then an assertion over the request digest; `CapitaChipPlugin` – Core NFC with NFCPassportReader 3.0.0 (MIT): PACE or BAC, chip authentication, active authentication with the service's chip nonce. iPhones open a chip only with document number and dates, not with the card access number (`no-can`). Entitlements in `ios/App/App/App.entitlements` (NFC tags, App Attest).
+CI builds it for the simulator, unsigned (`ios` job, macOS). Running it on an iPhone, App Attest and the NFC entitlement need an Apple developer team (owner, after the e.V.); then the team id goes into the identity service's `apple_app_ids` (`TEAMID.com.capitamoney.app`). Local build (a Mac with Xcode): `npm ci && npm run ios && open ios/App/App.xcodeproj`.
+
 Alpha only: the shell allows plain-http requests (`android.allowMixedContent`), so that the app reaches the test chain and the identity service on a computer in the same network (creationHub). Before real use: both behind TLS, the setting off.

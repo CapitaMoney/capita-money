@@ -1,0 +1,12 @@
+{
+  "name": "capita-ios",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "The iPhone shell's native parts: money key in the Secure Enclave, App Attest, document chip (ADR 0024).",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

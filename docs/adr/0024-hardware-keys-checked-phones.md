@@ -51,7 +51,7 @@ Passive authentication (ADR 0021) proves the data are the state's, not that the 
 
 The session key (Android) or the App Attest key (iPhone, certified for SHA-256 of the nonce) signs the **request digest** `SHA-256("capita/document/v1" ‖ nonce ‖ SHA-256(session) ‖ SHA-256 of EF.SOD, DG1, DG2, DG14, DG15, chip answer – absent = empty ‖ chip authenticated, 1 byte ‖ number of frames, 4 bytes big-endian ‖ SHA-256 of each frame)` – `capita_issuer::phone::request_digest`, `app/native/phone.js`, one shared test vector.
 
-Built: `crates/capita-attest` (Android key attestation, App Attest), `capita_mrtd::check_chip` + `aa` (active authentication RSA ISO/IEC 9796-2 and ECDSA, chip authentication demanded where DG14 offers it), identity service routes `start` → `moves` → `finish`, roots in `services/issuer/trust/attestation/` (README: sources, fingerprints, Google's status list).
+Built: `crates/capita-attest` (Android key attestation, App Attest), `capita_mrtd::check_chip` + `aa` (active authentication RSA ISO/IEC 9796-2 and ECDSA, chip authentication demanded where DG14 offers it), identity service routes `start` → `moves` → `finish`, roots in `services/issuer/trust/attestation/` (README: sources, fingerprints, Google's status list). iPhone shell: `app/plugins/capita-ios` (Secure Enclave key, App Attest, chip reader; app/README.md).
 
 ## Consequences
 + A phone's key cannot be stolen from a distance; no Google or Apple account is a way in.

@@ -59,6 +59,26 @@ jobs:
           gh release create android-alpha capita-alpha.apk --prerelease --target "$GITHUB_SHA" \
             --title "Capita for Android – alpha, test money only" \
             --notes "Built from $GITHUB_SHA. Signed with the public development key (ADR 0023): test money only. Install: open the file on the phone and allow installing from this source."
+  # The iPhone shell: the web app plus Secure Enclave key, App Attest and
+  # chip reader (ADR 0024), built for the simulator. No signing: that needs
+  # an Apple developer team (owner, after the e.V.).
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: xcodebuild -version
+      - run: npm ci
+        working-directory: app
+      - run: npm run ios
+        working-directory: app
+      - run: >-
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+        working-directory: app/ios/App
   core:
     runs-on: ubuntu-latest
     steps:
