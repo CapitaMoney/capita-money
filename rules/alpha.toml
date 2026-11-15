@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.5 (2026-11-14)"
+diary = "rules diary v0.7 (2026-11-14)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -76,7 +76,7 @@ amount = "10.00"
 per = "1 month"
 status = "example"
 source = "diary 4, 2discuss A"
-note = "The same amount for every verified person, worldwide. The amount itself is not decided."
+note = "Placeholder (= age 30: 4 x 30 = 120 per year) until register rule issuance-by-age is built; then the amount follows from age and this step only marks verified."
 
 # -------------------------------------------------------------------- caps
 
@@ -183,15 +183,15 @@ note = "What makes a person one person for the identity services: \"name-birthda
 
 [identity.minimum_age]
 value = 0
-status = "default"
-source = "diary 2026-11-13, 2discuss C, K 5"
-note = "Youngest age in years at which a person is verified. 0: no minimum age."
+status = "decided"
+source = "owner 2026-11-14, diary 19, 2discuss C"
+note = "Youngest age in years at which a person is verified. 0: no minimum age; the amount grows with age (register issuance-by-age)."
 
 [identity.key_move_delay]
 value = "7 days"
-status = "default"
-source = "diary 15, 2discuss M"
-note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
+status = "decided"
+source = "owner 2026-11-14, diary 15, 2discuss M"
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. A stop freezes the account for both sides until a 2nd check decides (not built yet: today a stop only cancels). Off: at once."
 
 [verification.price_eur]
 value = "1.00"
@@ -326,10 +326,17 @@ code = ["crates/capita-core/src/recovery.rs", "pallets/credential/src/lib.rs", "
 
 [[register]]
 id = "key-move-stop"
-rule = "While a move waits, the old key can stop it, and whoever asked can withdraw it."
-status = "default"
-source = "2discuss M"
+rule = "While a move waits (7 days), the old key can stop it, and whoever asked can withdraw it. A stop freezes the account for both sides (nobody can spend) until a 2nd check decides: in alpha the Verein board after a video call and identity document, later a 2nd independent identity service. Not built: a stop now only cancels the move."
+status = "decided"
+source = "owner 2026-11-14, diary 15, 2discuss M"
 code = ["pallets/credential/src/lib.rs"]
+
+[[register]]
+id = "issuance-by-age"
+rule = "Capita per year = 4 x age in completed years, spread evenly over the year (daily, rounded down to the cent), leftover paid on the birthday over the year; the same worldwide; no minimum age; age 0 gets nothing. Not built: the ladder amount above is used until then."
+status = "decided"
+source = "owner 2026-11-14, diary 4, 19"
+planned = "pallets/credential (birth date in the claim), crates/capita-core issuance"
 
 [[register]]
 id = "move-without-debt"
@@ -369,8 +376,8 @@ code = ["crates/capita-core/src/lifecycle.rs", "pallets/capita/src/lib.rs"]
 [[register]]
 id = "frozen-account"
 rule = "A frozen account receives nothing and cannot claim; what it was owed before stays. Nothing is destroyed."
-status = "default"
-source = "B5"
+status = "decided"
+source = "B5, diary 20"
 code = ["crates/capita-core/src/lifecycle.rs"]
 
 [[register]]
@@ -463,3 +470,45 @@ rule = "Banned is what the law of the region or country bans."
 status = "decided"
 source = "diary 13"
 planned = "market (M5)"
+
+[[register]]
+id = "double-account"
+rule = "A second account of the same person, found later: the younger account is closed and its balance deleted; the older account stays untouched."
+status = "decided"
+source = "diary 21, B5"
+planned = "identity service, pallet-capita"
+
+[[register]]
+id = "rule-changes"
+rule = "Rules change in stages: in alpha the owner alone, with a public diary, announced ahead, never retroactive; then the board of the association; later a vote of verified members, one person one vote."
+status = "decided"
+source = "diary 22, E1"
+planned = "governance origin of the chain"
+
+[[register]]
+id = "public-ledger"
+rule = "Totals and every payment between addresses are public; no names."
+status = "decided"
+source = "diary 23, E3"
+planned = "statistics page (M5)"
+
+[[register]]
+id = "member-data"
+rule = "A member keeps own data, photos and later chats on own device; services keep only person key, account, day and kind of proof."
+status = "decided"
+source = "diary 24, E4"
+planned = "app (M5)"
+
+[[register]]
+id = "worldwide"
+rule = "Open worldwide from the first day, except countries the legal check excludes."
+status = "decided"
+source = "diary 25, F1"
+planned = "identity service (country list after legal check P04.3)"
+
+[[register]]
+id = "alternate-checks"
+rule = "The yearly verification alternates between two check systems (own phone check, Didit). When one fails for a person, the other is used."
+status = "decided"
+source = "diary 26, F3"
+planned = "identity service (Didit adapter)"
