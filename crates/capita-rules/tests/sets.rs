@@ -31,7 +31,7 @@ use capita_core::lifecycle::{plan_attest, plan_open, plan_set_tier};
 use capita_core::params::Params;
 use capita_core::plan::Plan;
 use capita_core::ports::{LedgerOp, NoGate};
-use capita_core::types::{AccountId, Duration, PersonId, Timestamp};
+use capita_core::types::{AccountId, Date, Duration, PersonId, Timestamp};
 
 const T0: u64 = 1_800_000_000;
 
@@ -96,6 +96,7 @@ fn a_person_goes_from_opening_to_claims_under_every_set() {
             person: PersonId([1; 32]),
             level: top,
             residence: None,
+            born: None,
             attributes: vec![],
             issued_at: t0,
             expires_at: None,
@@ -131,6 +132,83 @@ fn a_person_goes_from_opening_to_claims_under_every_set() {
             assert_eq!(minted(&again), 0, "{name}");
             state = claim.state;
         }
+    }
+}
+
+/// Money by age follows the file under every set: the first verification
+/// pays the age times `at_verification`, once; the next birthday pays the
+/// age times `per_year` on top of what the ladder gives.
+#[test]
+fn a_person_with_a_date_of_birth_gets_money_by_age_under_every_set() {
+    for (name, params) in sets() {
+        let list = [params.clone()];
+        let t0 = Timestamp::from_secs(T0);
+        let today = Date::of(t0).unwrap();
+        // Born 36 years and a day before the birthday that comes next.
+        let born = Date::new(today.year() - 37, 5, 17).unwrap();
+        let age = born.age_on(today);
+        let opened = plan_open(AccountId([1; 32]), &params, t0).unwrap();
+        let attestation = |born| Attestation {
+            replaces: None,
+            person: PersonId([1; 32]),
+            level: params.age.min_level,
+            residence: None,
+            born,
+            attributes: vec![],
+            issued_at: t0,
+            expires_at: None,
+        };
+
+        // without a date of birth: nothing by age
+        let undated = plan_attest(&opened.state, &list, Some(&attestation(None)), None, t0);
+        let undated = plan_claim(&undated.unwrap().state, &list, t0).unwrap();
+        assert_eq!(minted(&undated), 0, "{name}");
+
+        let verified = plan_attest(
+            &opened.state,
+            &list,
+            Some(&attestation(Some(born))),
+            None,
+            t0,
+        );
+        let first = plan_claim(&verified.unwrap().state, &list, t0).unwrap();
+        assert_eq!(
+            minted(&first),
+            params.age.at_verification.cents() * u64::from(age),
+            "{name}"
+        );
+        // a second statement pays no second time
+        let again = plan_attest(
+            &first.state,
+            &list,
+            Some(&attestation(Some(born))),
+            None,
+            t0,
+        );
+        let again = plan_claim(&again.unwrap().state, &list, t0).unwrap();
+        assert_eq!(minted(&again), 0, "{name}");
+
+        // the birthday: the amount by age, plus at most what the ladder
+        // gives within the claim window
+        let birthday = born.birthday(age + 1).and_then(Date::start).unwrap();
+        let eve = plan_claim(
+            &first.state,
+            &list,
+            birthday.checked_sub(Duration::DAY).unwrap(),
+        );
+        let day = plan_claim(&eve.unwrap().state, &list, birthday).unwrap();
+        let by_age = params.age.per_year.cents() * u64::from(age + 1);
+        let by_rate = params
+            .ladder
+            .iter()
+            .map(|s| s.rate.accrued(Duration::DAY).unwrap().cents())
+            .max()
+            .unwrap();
+        let issued = minted(&day);
+        assert!(
+            (by_age..=by_age + by_rate).contains(&issued),
+            "{name}: {issued} for {by_age} by age"
+        );
     }
 }
 

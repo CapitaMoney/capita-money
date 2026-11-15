@@ -44,7 +44,7 @@
     <p class="kicker" id="gift-hello">Welcome</p>
     <div class="amount huge glow" aria-label="1.00 Capita"><span>1.00</span><small>Capita</small></div>
     <p class="lead">Your first Capita. A gift – everyone gets one.</p>
-    <p>It pays for your verification. After that, Capita arrives every month.</p>
+    <p>It pays for your verification. Then you receive your age in Capita – and twice your age on every birthday.</p>
     <div class="grow"></div>
     <button class="btn primary" data-go="home">Open Capita</button>
   </section>
@@ -75,7 +75,8 @@
     <p>We check that you are a real person with only one account. Then the check forgets you: no copy of your documents is kept.</p>
     <div class="card">
       <p class="label">You receive</p>
-      <p class="amount mid"><span id="verify-rate">10.00</span><small>Capita a month</small></p>
+      <p class="amount mid"><span>Your age</span><small>in Capita, at once</small></p>
+      <p>And twice your age on every birthday.</p>
       <p class="label">It costs</p>
       <p>Your welcome gift. Nothing else.</p>
     </div>
@@ -123,6 +124,19 @@
     <button class="btn primary" id="check-done" hidden>Done</button>
     <button class="btn" id="check-again" hidden>Try again</button>
     <button class="link" id="check-cancel">Cancel</button>
+  </section>
+
+  <!-- the moment after a verification: the age in Capita, at once (ADR 0026) -->
+  <section class="screen center" data-screen="verified">
+    <div class="tick" aria-hidden="true">✓</div>
+    <p class="kicker">Verified</p>
+    <div class="amount huge glow" id="verified-amount"><span id="verified-cents">0.00</span><small>Capita</small></div>
+    <p class="lead" id="verified-lead"></p>
+    <p id="verified-next"></p>
+    <div class="grow"></div>
+    <button class="btn" id="verified-notify" hidden>Allow notifications</button>
+    <p class="sub" id="verified-notify-note" hidden>So Capita can tell you when your birthday Capita arrive.</p>
+    <button class="btn primary" data-go="home">Done</button>
   </section>
 
   <!-- a device that cannot check hands the check to a phone (ADR 0024, 0025) -->

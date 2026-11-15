@@ -14,10 +14,11 @@
 //! Per-account state kept by the core rules.
 //!
 //! The ledger holds balances; this state holds everything the rules need in
-//! addition. It contains no personal data.
+//! addition. Of a person it holds two facts: the person key and, for issuance
+//! by age, the date of birth (ADR 0026).
 
 use crate::attributes::{Residence, VerificationLevel};
-use crate::types::{AccountId, Amount, PersonId, Rate, TierId, Timestamp};
+use crate::types::{AccountId, Amount, Date, PersonId, Rate, TierId, Timestamp};
 
 /// Life cycle of an account.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -160,6 +161,12 @@ pub struct AccountState {
     pub level_until: Option<Timestamp>,
     /// Proven residence, if any (source of the country cap).
     pub residence: Option<Residence>,
+    /// Date of birth of the holder, as an identity service stated it:
+    /// the basis of issuance by age (ADR 0026). `None` until stated.
+    pub born: Option<Date>,
+    /// Whether the one-time amount at the first verification was accounted.
+    /// Once per person: it follows the person to a new key.
+    pub first_payout_made: bool,
     /// Seniority ramp of the cap.
     pub cap_ramp: CapRamp,
     /// Start grant received and not yet spent. Earmarked: it can be paid

@@ -279,6 +279,216 @@ impl Timestamp {
     }
 }
 
+/// Days from 0001-01-01 to 1970-01-01.
+const DAYS_TO_EPOCH: u64 = 719_162;
+/// Days in 400 years of the Gregorian calendar.
+const DAYS_PER_400_YEARS: u64 = 146_097;
+/// Seconds of a day.
+const SECS_PER_DAY: u64 = 86_400;
+
+/// A day of the calendar (Gregorian, UTC), in the years 1 to 9999.
+///
+/// The one place where the core knows a calendar: a birthday is a day, not
+/// a number of seconds (ADR 0026). A day begins at 00:00 UTC everywhere;
+/// the core knows no time zones.
+///
+/// Only days the calendar has can exist: the constructor and both decoders
+/// refuse the others.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "DateParts", into = "DateParts")
+)]
+#[cfg_attr(
+    feature = "scale",
+    derive(codec::Encode, codec::MaxEncodedLen, scale_info::TypeInfo)
+)]
+pub struct Date {
+    year: u16,
+    month: u8,
+    day: u8,
+}
+
+/// [`Date`] as it is written in JSON, before it is checked.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct DateParts {
+    year: u16,
+    month: u8,
+    day: u8,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<DateParts> for Date {
+    type Error = CoreError;
+
+    fn try_from(parts: DateParts) -> Result<Self, CoreError> {
+        Self::new(parts.year, parts.month, parts.day)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl From<Date> for DateParts {
+    fn from(date: Date) -> Self {
+        Self {
+            year: date.year,
+            month: date.month,
+            day: date.day,
+        }
+    }
+}
+
+#[cfg(feature = "scale")]
+impl codec::Decode for Date {
+    fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+        let (year, month, day) = <(u16, u8, u8)>::decode(input)?;
+        Self::new(year, month, day).map_err(|_| codec::Error::from("not a day of the calendar"))
+    }
+}
+
+#[cfg(feature = "scale")]
+impl codec::DecodeWithMemTracking for Date {}
+
+/// `true` for a leap year of the Gregorian calendar.
+const fn is_leap(year: u16) -> bool {
+    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
+}
+
+/// Days of `month` in `year`; zero for a month the calendar does not have.
+const fn days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+impl Date {
+    /// A day, if the calendar has it (years 1 to 9999).
+    pub const fn new(year: u16, month: u8, day: u8) -> Result<Self, CoreError> {
+        if year == 0 || year > 9999 || day == 0 || day > days_in_month(year, month) {
+            return Err(CoreError::OutOfRange("not a day of the calendar"));
+        }
+        Ok(Self { year, month, day })
+    }
+
+    /// The year.
+    #[must_use]
+    pub const fn year(self) -> u16 {
+        self.year
+    }
+
+    /// The month, 1 to 12.
+    #[must_use]
+    pub const fn month(self) -> u8 {
+        self.month
+    }
+
+    /// The day of the month, 1 to 31.
+    #[must_use]
+    pub const fn day(self) -> u8 {
+        self.day
+    }
+
+    /// Days from 0001-01-01 to this day. Nothing here can overflow: the
+    /// largest value, for 9999-12-31, is 3 652 058.
+    fn days_since_year_one(self) -> u64 {
+        let y = u64::from(self.year).saturating_sub(1);
+        let before_year = y
+            .saturating_mul(365)
+            .saturating_add(y / 4)
+            .saturating_sub(y / 100)
+            .saturating_add(y / 400);
+        let before_month: u64 = (1..self.month)
+            .map(|m| u64::from(days_in_month(self.year, m)))
+            .sum();
+        before_year
+            .saturating_add(before_month)
+            .saturating_add(u64::from(self.day).saturating_sub(1))
+    }
+
+    /// The day the moment `t` falls on (UTC); an error after the year 9999.
+    pub fn of(t: Timestamp) -> Result<Self, CoreError> {
+        const LATE: CoreError = CoreError::OutOfRange("time after the year 9999");
+        // Days since 0000-03-01: a year that starts in March has its leap
+        // day at the end, which makes the rest plain division.
+        let z = (t.secs() / SECS_PER_DAY)
+            .checked_add(DAYS_TO_EPOCH)
+            .and_then(|days| days.checked_add(306))
+            .ok_or(LATE)?;
+        let era = z / DAYS_PER_400_YEARS;
+        let day_of_era = z % DAYS_PER_400_YEARS;
+        let year_of_era = day_of_era
+            .saturating_sub(day_of_era / 1_460)
+            .saturating_add(day_of_era / 36_524)
+            .saturating_sub(day_of_era / 146_096)
+            / 365;
+        let day_of_year = day_of_era.saturating_sub(
+            year_of_era
+                .saturating_mul(365)
+                .saturating_add(year_of_era / 4)
+                .saturating_sub(year_of_era / 100),
+        );
+        let march_month = day_of_year.saturating_mul(5).saturating_add(2) / 153;
+        let day = day_of_year
+            .saturating_sub(march_month.saturating_mul(153).saturating_add(2) / 5)
+            .saturating_add(1);
+        let (month, carry) = if march_month < 10 {
+            (march_month.saturating_add(3), 0)
+        } else {
+            (march_month.saturating_sub(9), 1)
+        };
+        let year = era
+            .checked_mul(400)
+            .and_then(|years| years.checked_add(year_of_era))
+            .and_then(|years| years.checked_add(carry))
+            .ok_or(LATE)?;
+        Self::new(
+            u16::try_from(year).map_err(|_| LATE)?,
+            u8::try_from(month).map_err(|_| LATE)?,
+            u8::try_from(day).map_err(|_| LATE)?,
+        )
+        .map_err(|_| LATE)
+    }
+
+    /// The moment this day begins (00:00 UTC); `None` for a day before
+    /// 1970, which no [`Timestamp`] can name.
+    #[must_use]
+    pub fn start(self) -> Option<Timestamp> {
+        self.days_since_year_one()
+            .checked_sub(DAYS_TO_EPOCH)?
+            .checked_mul(SECS_PER_DAY)
+            .map(Timestamp)
+    }
+
+    /// The age, in completed years, that a person born on this day has on
+    /// the day `today`. Zero if `today` is earlier.
+    #[must_use]
+    pub fn age_on(self, today: Self) -> u16 {
+        let years = today.year.saturating_sub(self.year);
+        if (today.month, today.day) < (self.month, self.day) {
+            years.saturating_sub(1)
+        } else {
+            years
+        }
+    }
+
+    /// The day a person born on this day completes `age` years: the same
+    /// day of the same month, `age` years later. Born on 29 February, the
+    /// birthday of a year without that day is 1 March. `None` after the
+    /// year 9999.
+    #[must_use]
+    pub fn birthday(self, age: u16) -> Option<Self> {
+        let year = self.year.checked_add(age)?;
+        Self::new(year, self.month, self.day)
+            .or_else(|_| Self::new(year, 3, 1))
+            .ok()
+    }
+}
+
 /// An issuance rate: `amount` per `per`, for example 1 cent per minute.
 ///
 /// A rational number, so no rate needs a float (ADR 0003).

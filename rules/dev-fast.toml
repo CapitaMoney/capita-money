@@ -31,6 +31,27 @@ status = "example"
 source = "test chain"
 note = "Issued Capita is usable at once."
 
+# Money by age as in the alpha rules, so that a verification on a test
+# chain shows what a person will see; the ladder below adds money by the
+# minute, which the alpha rules do not have.
+[issuance.age.per_year]
+value = "2.00"
+status = "example"
+source = "test chain"
+note = "Capita per completed year of age on each birthday."
+
+[issuance.age.at_verification]
+value = "1.00"
+status = "example"
+source = "test chain"
+note = "Capita per completed year of age, once, at the first verification."
+
+[issuance.age.min_level]
+value = 1
+status = "example"
+source = "test chain"
+note = "Verification level needed for money by age."
+
 [[issuance.ladder]]
 step = 0
 name = "not verified"

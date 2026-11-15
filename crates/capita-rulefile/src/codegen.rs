@@ -79,6 +79,24 @@ fn params_source(p: &Params) -> String {
             })
             .collect(),
     );
+    let age_by_country = list(
+        p.age
+            .by_country
+            .iter()
+            .map(|c| {
+                let [first, second] = c.country.0;
+                format!(
+                    "                capita_core::params::CountryAge {{\n\
+                     \x20                   country: capita_core::types::CountryCode([{}, {}]),\n\
+                     \x20                   per_year: {},\n\
+                     \x20               }},\n",
+                    first,
+                    second,
+                    amount(c.per_year.cents()),
+                )
+            })
+            .collect(),
+    );
     let sponsor_keys = list(
         p.sponsor_keys
             .iter()
@@ -100,6 +118,12 @@ fn params_source(p: &Params) -> String {
          \x20           valid_from: capita_core::types::Timestamp::from_secs({valid_from}),\n\
          \x20           start_grant: {start_grant},\n\
          \x20           ladder: {ladder},\n\
+         \x20           age: capita_core::params::AgeParams {{\n\
+         \x20               min_level: capita_core::attributes::VerificationLevel({age_level}),\n\
+         \x20               per_year: {age_per_year},\n\
+         \x20               at_verification: {age_at_verification},\n\
+         \x20               by_country: {age_by_country},\n\
+         \x20           }},\n\
          \x20           claim_window: {claim_window},\n\
          \x20           caps: capita_core::params::CapParams {{\n\
          \x20               period: {cap_period},\n\
@@ -124,6 +148,9 @@ fn params_source(p: &Params) -> String {
         version = p.version.0,
         valid_from = p.valid_from.secs(),
         start_grant = amount(p.start_grant.cents()),
+        age_level = p.age.min_level.0,
+        age_per_year = amount(p.age.per_year.cents()),
+        age_at_verification = amount(p.age.at_verification.cents()),
         claim_window = span(p.claim_window.secs()),
         cap_period = span(p.caps.period.secs()),
         global_cap = amount(p.caps.global_cap.cents()),
@@ -165,7 +192,7 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20   /// (`identity.key_move_delay`).\n\
          \x20   pub const KEY_MOVE_DELAY: capita_core::types::Duration =\n\
          \x20       capita_core::types::Duration::from_secs({delay});\n\
-         \x20   /// The highest verification level a step of the ladder asks for.\n\
+         \x20   /// The highest verification level the rules ask for.\n\
          \x20   pub const TOP_LEVEL: capita_core::attributes::VerificationLevel =\n\
          \x20       capita_core::attributes::VerificationLevel({top_level});\n\
          \x20   /// Price of one verification in euro cents (`verification.price_eur`).\n\

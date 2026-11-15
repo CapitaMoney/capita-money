@@ -29,12 +29,15 @@
 //! { "call": "credential.present",
 //!   "from": null,
 //!   "claim": { "issuer": 0, "serial": "0x…", "subject": "0x…", "subjectRef": "0x…",
-//!              "replaces": null, "level": 1, "issuedAt": 1800000000, "expiresAt": 1831536000 },
+//!              "replaces": null, "level": 1, "born": "1990-05-17",
+//!              "issuedAt": 1800000000, "expiresAt": 1831536000 },
 //!   "signature": "0x…" }
 //! ```
 //!
 //! `call` is `credential.requestMove` when the person holds another
-//! account (a lost key); `from` then names it.
+//! account (a lost key); `from` then names it. `born` is the date of birth
+//! a document check read (`null` without one): the ledger issues money by
+//! age (ADR 0026).
 //!
 //! The service is meant to stand behind a web server that speaks TLS. It
 //! writes no personal data to its log.
@@ -266,6 +269,9 @@ pub fn call_json(issued: &Issued) -> Value {
             "replaces": claim.replaces.map(|key| format!("0x{}", hex(&key.0))),
             "level": claim.level.0,
             "residence": Value::Null,
+            "born": claim.born.map(|born| {
+                format!("{:04}-{:02}-{:02}", born.year(), born.month(), born.day())
+            }),
             "attributes": [],
             "issuedAt": claim.issued_at.secs(),
             "expiresAt": claim.expires_at.map(capita_core::types::Timestamp::secs),

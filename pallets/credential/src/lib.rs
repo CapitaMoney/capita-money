@@ -445,6 +445,8 @@ pub mod pallet {
         ResidenceNotAllowed,
         /// The residence was proven after the claim was issued.
         ResidenceFromFuture,
+        /// The date of birth lies after the day the claim was issued.
+        BornAfterIssue,
         /// The issuer may not state this attribute.
         AttributeNotAllowed,
         /// More attributes than a claim may carry.
@@ -472,6 +474,7 @@ pub mod pallet {
                 CredentialError::LevelNotAllowed => Self::LevelNotAllowed,
                 CredentialError::ResidenceNotAllowed => Self::ResidenceNotAllowed,
                 CredentialError::ResidenceFromFuture => Self::ResidenceFromFuture,
+                CredentialError::BornAfterIssue => Self::BornAfterIssue,
                 CredentialError::AttributeNotAllowed => Self::AttributeNotAllowed,
                 CredentialError::TooManyAttributes => Self::TooManyAttributes,
                 CredentialError::InvalidDid => Self::InvalidDid,

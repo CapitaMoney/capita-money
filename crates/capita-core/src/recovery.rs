@@ -41,7 +41,7 @@ use alloc::vec::Vec;
 use crate::account::{AccountState, AccountStatus, LoanState};
 use crate::attributes::{Attestation, VerificationLevel};
 use crate::errors::CoreError;
-use crate::issuance::carry_forward;
+use crate::issuance::{carry_forward, take_birth};
 use crate::params::{check_sequence, in_force_at, Params};
 use crate::plan::{begin, next_op, require_active, require_settled};
 use crate::ports::{Event, LedgerOp, TransferPurpose};
@@ -71,10 +71,10 @@ pub struct MovePlan {
 ///   opened with the new key.
 /// - Neither account may have a credit line or recorded debt.
 ///
-/// `to` takes over person, verification as stated, residence, step,
-/// seniority, the balance, an unspent start grant and everything accrued
-/// under the old key up to `now` (set aside for the next claim; the claim
-/// window applies as always). `from` is closed for good.
+/// `to` takes over person, verification as stated, residence, date of
+/// birth, step, seniority, the balance, an unspent start grant and
+/// everything accrued under the old key up to `now` (set aside for the next
+/// claim; the claim window applies as always). `from` is closed for good.
 pub fn plan_move(
     from: &AccountState,
     from_balance: Balance,
@@ -158,10 +158,16 @@ pub fn plan_move(
     new.cap_ramp = from.cap_ramp;
     new.tier = from.tier;
     new.tier_since = from.tier_since;
+    // The date of birth and the one-time amount follow the person: a new
+    // key earns no second one.
+    new.born = from.born;
+    new.first_payout_made = from.first_payout_made || to.first_payout_made;
+    take_birth(&mut new, params, attestation.born, now)?;
 
     old.person = None;
     old.level = VerificationLevel(0);
     old.level_until = None;
+    old.born = None;
     old.status = AccountStatus::Closed;
 
     events.extend(vec![

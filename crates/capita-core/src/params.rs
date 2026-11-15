@@ -113,6 +113,82 @@ pub struct CapParams {
     pub ramp: Duration,
 }
 
+/// Another birthday amount for the people of one country.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        codec::MaxEncodedLen,
+        scale_info::TypeInfo
+    )
+)]
+pub struct CountryAge {
+    /// The country.
+    pub country: CountryCode,
+    /// Paid on each birthday per completed year of age, instead of
+    /// [`AgeParams::per_year`].
+    pub per_year: Amount,
+}
+
+/// Issuance by age (ADR 0026): on each birthday an account receives an
+/// amount per completed year of its holder's age, all at once; and once,
+/// right at the first verification, an amount per year of age as well.
+///
+/// The date of birth comes from the identity service
+/// (`Attestation::born`). An account without one receives nothing by age.
+///
+/// Offene Frage: whether the first birthday after the verification already
+/// pays the full amount (built: yes). Offene Frage: the country of a
+/// country amount – residence (built) or the country of the document.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "scale",
+    derive(
+        codec::Encode,
+        codec::Decode,
+        codec::DecodeWithMemTracking,
+        scale_info::TypeInfo
+    )
+)]
+pub struct AgeParams {
+    /// Verification level an account needs, on the day itself, for a
+    /// birthday or a first verification to pay.
+    pub min_level: VerificationLevel,
+    /// Paid on each birthday, per completed year of age (the "age
+    /// factor"). Zero = off.
+    pub per_year: Amount,
+    /// Paid once per person, right at the first verification, per completed
+    /// year of age. Zero = off.
+    pub at_verification: Amount,
+    /// Other birthday amounts per country of residence. Empty = the same
+    /// worldwide.
+    pub by_country: Vec<CountryAge>,
+}
+
+impl AgeParams {
+    /// No issuance by age.
+    pub const OFF: Self = Self {
+        min_level: VerificationLevel(1),
+        per_year: Amount::ZERO,
+        at_verification: Amount::ZERO,
+        by_country: Vec::new(),
+    };
+
+    /// The birthday amount per year of age for a person living in
+    /// `country`.
+    #[must_use]
+    pub fn per_year_in(&self, country: Option<CountryCode>) -> Amount {
+        country
+            .and_then(|c| self.by_country.iter().find(|entry| entry.country == c))
+            .map_or(self.per_year, |entry| entry.per_year)
+    }
+}
+
 /// Rules of interest-free lending. There is no interest field on purpose.
 ///
 /// Offene Frage: C1 who lends (peer, pool), C2 fees (default none), C3
@@ -210,6 +286,8 @@ pub struct Params {
     pub start_grant: Amount,
     /// The incentive ladder, lowest step first.
     pub ladder: Vec<LadderStep>,
+    /// Issuance by age: birthdays and the first verification.
+    pub age: AgeParams,
     /// How far back a claim may reach; older entitlement lapses.
     pub claim_window: Duration,
     /// Issuance caps.
@@ -259,6 +337,15 @@ impl Params {
         }
         if self.claim_window.is_zero() {
             return Err(CoreError::InvalidParams("claim window is zero"));
+        }
+        for (i, entry) in self.age.by_country.iter().enumerate() {
+            if !entry.country.0.iter().all(u8::is_ascii_uppercase) {
+                return Err(CoreError::InvalidParams("country code not upper-case"));
+            }
+            let later = self.age.by_country.iter().skip(i.saturating_add(1));
+            if later.into_iter().any(|c| c.country == entry.country) {
+                return Err(CoreError::InvalidParams("country listed twice"));
+            }
         }
         if self.caps.period.is_zero() {
             return Err(CoreError::InvalidParams("cap period is zero"));

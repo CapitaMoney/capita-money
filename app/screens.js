@@ -69,8 +69,7 @@ export function install({ go, toast, getState, onVerified }) {
         para("With your passport: your phone reads its chip and films your face – about two minutes. This demo is not connected to a network, so it verifies at a tap."),
         button("Verify (demo)", true, () => {
           if (!onVerified(false)) return toast("Not enough Capita to pay the verification.");
-          toast("Verified. Capita now arrives every month.");
-          go("home", true);
+          go("verified", true);
         }),
       );
       return;
@@ -160,9 +159,10 @@ export function install({ go, toast, getState, onVerified }) {
       } else {
         say("Almost there …", "wait");
         await D.present(answer);
-        onVerified(true);
-        say("Verified", "ok");
-        $("#check-sub").textContent = "Capita now arrives every month.";
+        onVerified(true, answer.claim.born);
+        // The ledger paid the age at once: say so, and what comes next.
+        stop();
+        return go("verified", true);
       }
       $("#check-icon").textContent = "✓";
       checkView({ done: true, cancel: false });
@@ -191,9 +191,9 @@ export function install({ go, toast, getState, onVerified }) {
       if (!answer) { $("#handover-state").textContent = "The code ran out. Go back and try again."; return; }
       $("#handover-state").textContent = "Checked. Confirm on this device …";
       await D.present(answer);
-      onVerified(true);
-      toast("Verified. Capita now arrives every month.");
-      go("home", true);
+      onVerified(true, answer.claim.born);
+      stop();
+      go("verified", true);
     } catch (e) {
       const why = plain(e);
       if (why && !signal.aborted) $("#handover-state").textContent = why;

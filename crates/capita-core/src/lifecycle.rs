@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use crate::account::{AccountState, AccountStatus, CapRamp, IssuanceState, LoanState};
 use crate::attributes::{Attestation, VerificationLevel};
 use crate::errors::CoreError;
-use crate::issuance::{cap_at, carry_forward, effective_rate, level_at};
+use crate::issuance::{cap_at, carry_forward, effective_rate, level_at, take_birth};
 use crate::params::{check_sequence, in_force_at, ClosedBalance, Params};
 use crate::plan::{begin, next_op, require_active, require_settled, Plan};
 use crate::ports::{BurnReason, Event, LedgerOp, MintKind, TierGate};
@@ -46,6 +46,8 @@ pub fn plan_open(id: AccountId, params: &Params, now: Timestamp) -> Result<Plan,
         level: VerificationLevel(0),
         level_until: None,
         residence: None,
+        born: None,
+        first_payout_made: false,
         cap_ramp: CapRamp {
             from: Rate::new(params.caps.global_cap, params.caps.period)?,
             since: now,
@@ -108,6 +110,11 @@ pub fn plan_open(id: AccountId, params: &Params, now: Timestamp) -> Result<Plan,
 /// reached so far: to a poorer country the local cap applies at once, to a
 /// richer one the difference is ramped up from the day of the move.
 ///
+/// A statement with a date of birth starts issuance by age (ADR 0026): the
+/// first one that verifies the account sets its one-time amount aside, and
+/// birthdays count from `now`. The host pays the amount at once by planning
+/// a claim right after. A date of birth after `now` is refused.
+///
 /// Offene Frage: A2b – details of residence and localisation. An attestation
 /// without residence leaves a residence proven earlier untouched.
 pub fn plan_attest(
@@ -150,7 +157,8 @@ pub fn plan_attest(
         (None, Some(_)) => true,
         (_, None) => false,
     };
-    if moved || level_at(state, now) != att.level {
+    let born_changed = att.born.is_some_and(|born| state.born != Some(born));
+    if moved || born_changed || level_at(state, now) != att.level {
         carry_forward(&mut next, list, now)?;
     }
     if state.residence.is_some() && moved {
@@ -165,6 +173,7 @@ pub fn plan_attest(
     if att.residence.is_some() {
         next.residence = att.residence;
     }
+    take_birth(&mut next, params, att.born, now)?;
     Ok(Plan::of(next))
 }
 

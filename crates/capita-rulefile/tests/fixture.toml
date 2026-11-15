@@ -32,6 +32,24 @@ status = "decided"
 source = "diary, reconsider later (A1d)"
 note = "Delay before issued Capita can be used. Off: usable at once."
 
+[issuance.age.per_year]
+value = "3.00"
+status = "example"
+source = "fixture"
+note = "Capita per year of age on each birthday."
+
+[issuance.age.at_verification]
+value = "1.50"
+status = "example"
+source = "fixture"
+note = "Capita per year of age at the first verification."
+
+[issuance.age.min_level]
+value = 1
+status = "example"
+source = "fixture"
+note = "Level needed for money by age."
+
 # The steps an account can stand on, lowest first. A new account stands on
 # the first step. The incentive ladder with many steps was dropped for now
 # (diary 2026-11-13); what remains is: not verified, verified.

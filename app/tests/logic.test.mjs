@@ -37,29 +37,68 @@ test("no debt: nothing can be sent beyond what is there", () => {
   assert.throws(() => L.send(r, "Dana", 1.5, T0), /amount/);
 });
 
-test("a verified person collects 10.00 a month, lazily", () => {
-  let s = L.verify(L.newAccount("Eva", T0), T0);
-  const month = L.RULES.monthMs;
-  // Ten collections of a tenth of a month each sum to the month, no cent lost.
-  let total = 0;
-  for (let i = 1; i <= 10; i++) {
-    const r = L.collect(s, T0 + Math.round((month * i) / 10));
-    s = r.state;
-    total += r.collected;
-  }
-  assert.ok(total === 1000 || total === 999, `total ${total}`);
-  const next = L.collect(s, T0 + month + 1000);
-  assert.ok(total + next.collected === 1000 || total + next.collected === 999);
+const BORN = "1990-05-17"; // 36 on T0 (14 November 2026)
+const at = (y, m, d, h = 0) => Date.UTC(y, m - 1, d, h);
+
+test("age and birthdays follow the calendar, in UTC", () => {
+  assert.equal(L.ageAt(BORN, T0), 36);
+  assert.equal(L.ageAt(BORN, at(2027, 5, 16, 23)), 36);
+  assert.equal(L.ageAt(BORN, at(2027, 5, 17)), 37);
+  assert.equal(L.ageAt(BORN, at(1980, 1, 1)), 0);
+  assert.equal(L.birthdayAt(BORN, 37), at(2027, 5, 17));
+  // Born on 29 February: 1 March in a year without that day.
+  assert.equal(L.birthdayAt("1996-02-29", 31), at(2027, 3, 1));
+  assert.equal(L.birthdayAt("1996-02-29", 32), at(2028, 2, 29));
+  assert.equal(L.ageAt("1996-02-29", at(2027, 2, 28, 23)), 30);
+  assert.equal(L.ageAt("1996-02-29", at(2027, 3, 1)), 31);
+  assert.ok(L.isDate("2028-02-29"));
+  for (const no of ["2027-02-29", "1990-13-01", "17.05.1990", "", null]) assert.ok(!L.isDate(no), String(no));
 });
 
-test("money older than the claim window lapses", () => {
-  const s = L.verify(L.newAccount("Finn", T0), T0);
-  const r = L.collect(s, T0 + 30 * DAY);
-  // 14 days collected, 16 days lapsed.
-  const perDay = 1000 / (365.25 / 12);
-  assert.ok(Math.abs(r.collected - 14 * perDay) <= 1, `collected ${r.collected}`);
-  assert.ok(Math.abs(r.lapsed - 16 * perDay) <= 1, `lapsed ${r.lapsed}`);
-  assert.equal(r.state.balanceCents, r.collected);
+test("the first verification brings the age in Capita, once", () => {
+  const s = L.verify(L.newAccount("Eva", T0), T0, BORN);
+  assert.equal(s.balanceCents, 3600);
+  assert.equal(s.born, BORN);
+  assert.ok(s.firstPaid);
+  assert.deepEqual(s.history.at(-1), { t: T0, kind: "age", cents: 3600 });
+  // Verified again a year later (paid from the balance): no second time.
+  const later = T0 + 366 * DAY;
+  const again = L.verify(L.collect(s, later).state, later, BORN);
+  assert.equal(again.history.filter((h) => h.kind === "age").length, 1);
+});
+
+test("without a date of birth nothing comes by age, until one is known", () => {
+  let s = L.verify(L.newAccount("Noa", T0), T0);
+  assert.equal(s.balanceCents, 0);
+  assert.equal(L.collect(s, T0 + 300 * DAY).collected, 0);
+  assert.equal(L.nextBirthday(s, T0), null);
+  // The passport check comes later, while still verified: free, and it pays.
+  s = L.verify(s, T0 + 10 * DAY, BORN);
+  assert.equal(s.balanceCents, 3600);
+});
+
+test("each birthday brings twice the age, all at once", () => {
+  let s = L.verify(L.newAccount("Finn", T0), T0, BORN);
+  assert.deepEqual(L.nextBirthday(s, T0), { t: at(2027, 5, 17), age: 37, cents: 7400 });
+  let r = L.collect(s, at(2027, 5, 16, 23));
+  assert.equal(r.collected, 0);
+  r = L.collect(r.state, at(2027, 5, 17));
+  assert.equal(r.collected, 7400);
+  assert.equal(r.state.balanceCents, 3600 + 7400);
+  assert.deepEqual(r.state.history.at(-1), { t: at(2027, 5, 17), kind: "birthday", cents: 7400 });
+  // Never twice.
+  assert.equal(L.collect(r.state, at(2027, 5, 18)).collected, 0);
+});
+
+test("a birthday older than the claim window lapses", () => {
+  const s = L.verify(L.newAccount("Gil", T0), T0, BORN);
+  const inTime = L.collect(s, at(2027, 5, 17) + 14 * DAY - 1);
+  assert.equal(inTime.collected, 7400);
+  const late = L.collect(s, at(2027, 5, 17) + 14 * DAY);
+  assert.equal(late.collected, 0);
+  assert.equal(late.lapsed, 7400);
+  assert.equal(late.state.balanceCents, 3600);
+  assert.equal(L.collect(late.state, at(2027, 6, 30)).lapsed, 0, "lapsed once");
 });
 
 test("an unverified account collects nothing", () => {
@@ -69,13 +108,19 @@ test("an unverified account collects nothing", () => {
   assert.equal(r.state, s);
 });
 
-test("nothing accrues after the verification has run out", () => {
-  let s = L.verify(L.newAccount("Hana", T0), T0);
-  s = L.collect(s, T0 + 360 * DAY).state;
-  const a = L.collect(s, T0 + 365 * DAY).collected;
-  const b = L.collect(s, T0 + 400 * DAY).collected;
-  assert.equal(a, b);
-  assert.ok(!L.isVerified(s, T0 + 366 * DAY));
+test("a birthday after the verification has run out brings nothing", () => {
+  // Verified one day after the birthday: the next one is 364 days on, in time.
+  const start = at(2026, 5, 18);
+  const s = L.verify(L.newAccount("Hana", start), start, BORN);
+  assert.equal(L.collect(s, at(2027, 5, 17)).collected, 7400);
+  // Verified two days before the birthday: a year later it has run out
+  // one day before the next birthday.
+  const early = at(2026, 5, 15);
+  const t = L.verify(L.newAccount("Ida", early), early, BORN);
+  const first = L.collect(t, at(2026, 5, 17));
+  assert.equal(first.collected, 7200);
+  assert.ok(!L.isVerified(first.state, at(2027, 5, 17)));
+  assert.equal(L.collect(first.state, at(2027, 5, 17)).collected, 0);
 });
 
 test("renewal a year later is paid from the balance", () => {
@@ -89,11 +134,13 @@ test("renewal a year later is paid from the balance", () => {
   assert.throws(() => L.verify(poor, later), /funds/);
 });
 
-test("collections on one day show as one line", () => {
-  let s = L.verify(L.newAccount("Lea", T0), T0);
-  s = L.collect(s, T0 + 2 * 3600000).state;
-  s = L.collect(s, T0 + 5 * 3600000).state;
-  assert.equal(s.history.filter((h) => h.kind === "monthly").length, 1);
+test("the demo without a network verifies a person of 30", () => {
+  const born = L.demoBorn(T0);
+  assert.equal(born, "1996-11-14");
+  assert.equal(L.ageAt(born, T0), 30);
+  assert.equal(L.demoBorn(at(2028, 2, 29, 12)), "1998-03-01");
+  const s = L.verify(L.newAccount("Lea", T0), T0, born);
+  assert.equal(s.balanceCents, 3000);
 });
 
 test("amounts: parse and format", () => {
@@ -112,4 +159,6 @@ test("amounts: parse and format", () => {
 test("history speaks plain words, never codes", () => {
   assert.equal(L.describe({ kind: "in", who: "Anna" }), "From Anna");
   assert.equal(L.describe({ kind: "gift" }), "Welcome gift");
+  assert.equal(L.describe({ kind: "age" }), "Your age in Capita");
+  assert.equal(L.describe({ kind: "birthday" }), "Birthday");
 });

@@ -179,6 +179,18 @@ impl Date {
         self.year
     }
 
+    /// The month, 1 to 12.
+    #[must_use]
+    pub const fn month(self) -> u8 {
+        self.month
+    }
+
+    /// The day of the month, 1 to 31.
+    #[must_use]
+    pub const fn day(self) -> u8 {
+        self.day
+    }
+
     /// Whole years from this date to `today`: the age of a person born on
     /// this date. Zero if `today` is earlier.
     #[must_use]

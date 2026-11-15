@@ -14,7 +14,7 @@
 //! The check: does a claim count, and what does it say to the rules?
 
 use capita_core::attributes::{Attestation, VerificationLevel};
-use capita_core::types::{PersonId, Timestamp};
+use capita_core::types::{Date, PersonId, Timestamp};
 
 use crate::did::check_did;
 use crate::encoding::{claim_bytes, person_bytes, revocation_bytes};
@@ -75,7 +75,8 @@ pub fn person_id<C: Crypto>(realm: Realm, subject_ref: &SubjectRef) -> PersonId 
 /// - the issuer is active and signed exactly these bytes for this host;
 /// - `now` lies between issue and expiry;
 /// - the validity is within what the issuer may state;
-/// - level, residence and attributes are within what the issuer may state.
+/// - level, residence and attributes are within what the issuer may state;
+/// - a date of birth is not later than the day of issue.
 ///
 /// Not checked here, because it needs the state of the host: that the claim
 /// is presented by its subject, that it was not revoked or presented before,
@@ -132,6 +133,12 @@ pub fn check_claim<C: Crypto>(
             return Err(CredentialError::ResidenceFromFuture);
         }
     }
+    if let Some(born) = claim.born {
+        // A day of issue the calendar cannot name is later than any birth.
+        if Date::of(claim.issued_at).is_ok_and(|issued| born > issued) {
+            return Err(CredentialError::BornAfterIssue);
+        }
+    }
     if claim
         .attributes
         .iter()
@@ -154,6 +161,7 @@ pub fn attestation<C: Crypto>(claim: &Claim, realm: Realm) -> Attestation {
             .map(|previous| person_id::<C>(realm, previous)),
         level: claim.level,
         residence: claim.residence,
+        born: claim.born,
         attributes: claim.attributes.clone(),
         issued_at: claim.issued_at,
         expires_at: claim.expires_at,

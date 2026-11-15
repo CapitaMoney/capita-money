@@ -151,6 +151,10 @@ fn a_file_becomes_the_parameters_of_the_core() {
     assert!(p.ladder[0].rate.is_zero());
     assert_eq!(p.ladder[1].rate.amount(), Amount::from_cents(1_000));
     assert_eq!(p.ladder[1].rate.per(), Duration::MONTH);
+    assert_eq!(p.age.per_year, Amount::from_cents(300));
+    assert_eq!(p.age.at_verification, Amount::from_cents(150));
+    assert_eq!(p.age.min_level.0, 1);
+    assert!(p.age.by_country.is_empty());
     assert_eq!(p.claim_window.secs(), 14 * 86_400);
     assert_eq!(p.caps.global_cap, Amount::from_cents(100_000_000));
     assert_eq!(p.loans.repayment_share.ppm(), 500_000);
@@ -187,6 +191,55 @@ fn caps_per_country_are_read() {
 }
 
 #[test]
+fn age_amounts_per_country_are_read() {
+    let with_country = "[[issuance.age.country]]\ncountry = \"IN\"\nper_year = \"4.00\"\n\
+        status = \"example\"\nsource = \"2discuss Y\"\nnote = \"n\"\n\n[lending.max_credit_line]";
+    let set = fixture_with("[lending.max_credit_line]", with_country).unwrap();
+    let p = set.params().unwrap();
+    assert_eq!(p.age.by_country.len(), 1);
+    assert_eq!(p.age.by_country[0].country.0, *b"IN");
+    assert_eq!(p.age.by_country[0].per_year, Amount::from_cents(400));
+    assert_eq!(
+        p.age.per_year_in(Some(p.age.by_country[0].country)).cents(),
+        400
+    );
+    assert_eq!(p.age.per_year_in(None).cents(), 300);
+    let source = codegen::module(&set).unwrap();
+    assert!(source.contains("CountryAge"));
+    assert!(source.contains("CountryCode([73, 78])"));
+    assert!(set
+        .lines()
+        .iter()
+        .any(|l| l.path == "issuance.age.country IN" && l.value == "4.00 per year of age"));
+    let problem = fixture_with(
+        "[lending.max_credit_line]",
+        &with_country.replace("IN", "India"),
+    );
+    assert!(problem.unwrap_err().contains("two capital letters"));
+    // listed twice
+    let twice = with_country.replace("[lending.max_credit_line]", "") + with_country;
+    let problem = fixture_with("[lending.max_credit_line]", &twice);
+    assert!(problem.unwrap_err().contains("country listed twice"));
+}
+
+#[test]
+fn money_by_age_needs_a_verified_person() {
+    let problem = fixture_with(
+        "value = 1\nstatus = \"example\"\nsource = \"fixture\"\nnote = \"Level needed",
+        "value = 0\nstatus = \"example\"\nsource = \"fixture\"\nnote = \"Level needed",
+    )
+    .unwrap_err();
+    assert!(problem.contains("issuance.age.min_level"), "{problem}");
+    // The level of money by age counts for the highest level of the set.
+    let set = fixture_with(
+        "value = 1\nstatus = \"example\"\nsource = \"fixture\"\nnote = \"Level needed",
+        "value = 3\nstatus = \"example\"\nsource = \"fixture\"\nnote = \"Level needed",
+    )
+    .unwrap();
+    assert_eq!(set.top_level(), 3);
+}
+
+#[test]
 fn the_register_names_files_that_exist() {
     let set = alpha();
     assert!(!set.register.is_empty());
@@ -205,11 +258,14 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 23 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 26 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
     assert_eq!(line("issuance.claim_window").value, "2 weeks");
+    assert_eq!(line("issuance.age.per_year").value, "3.00");
+    assert_eq!(line("issuance.age.at_verification").value, "1.50");
+    assert_eq!(line("issuance.age.min_level").value, "1");
     assert_eq!(line("identity.membership_period").value, "365 days");
     assert_eq!(line("demurrage.rate").value, "off");
     assert_eq!(line("door.max_payment_eur").value, "100.00");
