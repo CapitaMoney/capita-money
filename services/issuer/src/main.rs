@@ -54,10 +54,16 @@ fn run() -> Result<(), String> {
                     "capita-issuer: the TEST CHECK is on – this service verifies nobody. Test chains only."
                 );
             }
-            serve(
-                &App::new(service, config.checks.test, challenger),
-                &config.listen,
-            )
+            let mut app = App::new(service, config.checks.test, challenger);
+            if let Some(document) = &config.checks.document {
+                let check = capita_issuer::document::DocumentCheck::load(document)?;
+                eprintln!(
+                    "capita-issuer: document check on – {} country signing certificates",
+                    check.countries()
+                );
+                app = app.with_document(check);
+            }
+            serve(&app, &config.listen)
         }
         (Some("key"), _) => {
             let key = service.public_key();

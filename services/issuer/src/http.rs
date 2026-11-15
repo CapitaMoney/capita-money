@@ -47,6 +47,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::checks::{unescape, Challenger, Stated};
+use crate::document::{ChipData, DocumentCheck};
 use crate::issue::{Action, Issued, Person, Refusal, Request, Service};
 use crate::store::Store;
 use crate::{hex, unhex_n};
@@ -55,6 +56,10 @@ use crate::{hex, unhex_n};
 const MAX_BODY: u64 = 16 * 1024;
 /// How long a person has to come back from Challenger, in seconds.
 const SESSION_SECS: u64 = 3 * 3_600;
+/// Longest request of a document check: chip data and frames, in base64.
+const DOCUMENT_MAX_BODY: u64 = 16 * 1024 * 1024;
+/// How long a document check may take from start to finish, in seconds.
+const DOCUMENT_SECS: u64 = 10 * 60;
 /// Most checks by code open at a time.
 const MAX_SESSIONS: usize = 10_000;
 
@@ -88,6 +93,39 @@ pub struct App<K: KeyService, S: Store> {
     test_check: bool,
     challenger: Option<Challenger>,
     sessions: Mutex<BTreeMap<String, Session>>,
+    document: Option<DocumentCheck>,
+    documents: Mutex<BTreeMap<String, Session>>,
+}
+
+/// What `POST /v1/document/finish` accepts: the chip data and the frames of
+/// the head movements, in base64 (frames may be `data:` addresses).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Finish {
+    /// The session `POST /v1/document/start` answered.
+    pub session: String,
+    /// EF.SOD.
+    pub sod: String,
+    /// DG1.
+    pub dg1: String,
+    /// DG2.
+    pub dg2: String,
+    /// DG14, if the chip has it (not checked yet).
+    #[serde(default)]
+    pub dg14: Option<String>,
+    /// DG15, if the chip has it (not checked yet).
+    #[serde(default)]
+    pub dg15: Option<String>,
+    /// JPEG or PNG pictures: straight, the movements, straight again.
+    pub frames: Vec<String>,
+}
+
+fn unbase64(text: &str) -> Option<Vec<u8>> {
+    use base64::Engine;
+    let data = text.split_once("base64,").map_or(text, |(_, d)| d);
+    base64::engine::general_purpose::STANDARD
+        .decode(data.trim())
+        .ok()
 }
 
 /// An answer: HTTP status and JSON body.
@@ -141,7 +179,16 @@ impl<K: KeyService, S: Store> App<K, S> {
             test_check,
             challenger,
             sessions: Mutex::new(BTreeMap::new()),
+            document: None,
+            documents: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// The service with the document check (chip + face) as well.
+    #[must_use]
+    pub fn with_document(mut self, document: DocumentCheck) -> Self {
+        self.document = Some(document);
+        self
     }
 
     fn info(&self) -> Answer {
@@ -155,6 +202,9 @@ impl<K: KeyService, S: Store> App<K, S> {
         }
         if self.challenger.is_some() {
             checks.push("challenger");
+        }
+        if self.document.is_some() {
+            checks.push("document");
         }
         (
             200,
@@ -303,6 +353,91 @@ impl<K: KeyService, S: Store> App<K, S> {
         )
     }
 
+    fn document_start(&self, body: &[u8], now: u64) -> Answer {
+        let Some(document) = &self.document else {
+            return refuse(404, "not-found", "no such check");
+        };
+        let (ask, account) = match parse(body) {
+            Ok(parsed) => parsed,
+            Err(answer) => return answer,
+        };
+        let former = match self.former(&ask) {
+            Ok(former) => former,
+            Err(answer) => return answer,
+        };
+        let (id, moves) = match document.start() {
+            Ok(challenge) => challenge,
+            Err(e) => return refuse(500, "system", &e),
+        };
+        let Ok(mut sessions) = self.documents.lock() else {
+            return refuse(500, "system", "service unavailable");
+        };
+        sessions.retain(|_, s| now.saturating_sub(s.opened) < DOCUMENT_SECS);
+        if sessions.len() >= MAX_SESSIONS {
+            return refuse(503, "busy", "too many checks open; try again later");
+        }
+        sessions.insert(
+            id.clone(),
+            Session {
+                account,
+                former,
+                ticket: ask.ticket,
+                opened: now,
+            },
+        );
+        (
+            200,
+            json!({ "session": id, "moves": moves, "validSeconds": DOCUMENT_SECS }),
+        )
+    }
+
+    fn document_finish(&self, body: &[u8], now: u64) -> Answer {
+        let Some(document) = &self.document else {
+            return refuse(404, "not-found", "no such check");
+        };
+        let finish: Finish = match serde_json::from_slice(body) {
+            Ok(finish) => finish,
+            Err(e) => return refuse(400, "request", &e.to_string()),
+        };
+        let session = match self.documents.lock() {
+            Ok(mut sessions) => sessions.remove(&finish.session),
+            Err(_) => return refuse(500, "system", "service unavailable"),
+        };
+        let Some(session) = session else {
+            return refuse(404, "session", "unknown or used session; start again");
+        };
+        let (Some(sod), Some(dg1), Some(dg2)) = (
+            unbase64(&finish.sod),
+            unbase64(&finish.dg1),
+            unbase64(&finish.dg2),
+        ) else {
+            return refuse(400, "request", "chip data: base64");
+        };
+        let Some(frames) = finish
+            .frames
+            .iter()
+            .map(|f| unbase64(f))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return refuse(400, "request", "frames: base64 pictures");
+        };
+        let chip = ChipData { sod, dg1, dg2 };
+        let person = match document.finish(&finish.session, &chip, &frames, now) {
+            Ok(person) => person,
+            Err(why) => return refuse(422, why.code(), &why.message()),
+        };
+        self.issue(
+            Request {
+                account: session.account,
+                person,
+                proof: "document-chip".into(),
+                former: session.former,
+                ticket: session.ticket,
+            },
+            now,
+        )
+    }
+
     /// Answers one request. `target` is path and query as sent.
     pub fn handle(&self, method: &str, target: &str, body: &[u8], now: u64) -> Answer {
         let (path, query) = target.split_once('?').unwrap_or((target, ""));
@@ -311,6 +446,8 @@ impl<K: KeyService, S: Store> App<K, S> {
             ("POST", "/v1/test-check") => self.test_check(body, now),
             ("POST", "/v1/challenger/start") => self.challenger_start(body, now),
             ("GET", "/v1/challenger/callback") => self.challenger_callback(query, now),
+            ("POST", "/v1/document/start") => self.document_start(body, now),
+            ("POST", "/v1/document/finish") => self.document_finish(body, now),
             _ => refuse(404, "not-found", "no such address"),
         }
     }
@@ -332,6 +469,19 @@ pub fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+/// Headers that let the app call the service from its own origin.
+fn cors() -> Vec<tiny_http::Header> {
+    [
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+        ("Access-Control-Allow-Headers", "content-type"),
+        ("Access-Control-Max-Age", "600"),
+    ]
+    .iter()
+    .filter_map(|(k, v)| tiny_http::Header::from_bytes(k.as_bytes(), v.as_bytes()).ok())
+    .collect()
+}
+
 /// Listens on `listen` and answers requests until the process ends.
 pub fn serve<K, S>(app: &App<K, S>, listen: &str) -> Result<(), String>
 where
@@ -344,13 +494,29 @@ where
         for _ in 0..4 {
             scope.spawn(|| {
                 while let Ok(mut request) = server.recv() {
+                    let limit = if request.url().starts_with("/v1/document/finish") {
+                        DOCUMENT_MAX_BODY
+                    } else {
+                        MAX_BODY
+                    };
                     let mut body = Vec::new();
                     let read = request
                         .as_reader()
-                        .take(MAX_BODY.saturating_add(1))
+                        .take(limit.saturating_add(1))
                         .read_to_end(&mut body);
+                    // The app runs on another origin (app.capitamoney.com, the
+                    // Android shell): it may call the service; no cookies,
+                    // no credentials, so any origin.
+                    if request.method() == &tiny_http::Method::Options {
+                        let mut response = tiny_http::Response::empty(204);
+                        for header in cors() {
+                            response.add_header(header);
+                        }
+                        let _ = request.respond(response);
+                        continue;
+                    }
                     let (status, answer) = match read {
-                        Ok(_) if body.len() as u64 > MAX_BODY => {
+                        Ok(_) if body.len() as u64 > limit => {
                             refuse(413, "request", "request too long")
                         }
                         Ok(_) => {
@@ -368,6 +534,9 @@ where
                         &b"Content-Type"[..],
                         &b"application/json; charset=utf-8"[..],
                     ) {
+                        response.add_header(header);
+                    }
+                    for header in cors() {
                         response.add_header(header);
                     }
                     let _ = request.respond(response);

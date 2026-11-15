@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-mrtd"
+description = "The chip of a passport or identity card (ICAO 9303) as an identity service reads it: passive authentication up to the country's signing certificate, the machine-readable zone, the photo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The system's OpenSSL: CMS, X.509 and every curve states use – brainpool
+# included, which RustCrypto lacks. Build needs libssl-dev (Debian, Ubuntu).
+openssl = "0.10.73"
