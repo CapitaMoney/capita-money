@@ -63,6 +63,8 @@ dependencies {
     // document chips (ICAO 9303): JMRTD (LGPL-3.0) and SCUBA (LGPL-3.0)
     implementation 'org.jmrtd:jmrtd:0.8.1'
     implementation 'net.sf.scuba:scuba-sc-android:0.0.26'
+    // fingerprint, face or screen lock before the money key signs (ADR 0024)
+    implementation "androidx.biometric:biometric:$androidxBiometricVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

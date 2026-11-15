@@ -18,6 +18,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(CapitaChipPlugin.class);
+        registerPlugin(CapitaKeyPlugin.class);
+        registerPlugin(CapitaPhonePlugin.class);
         super.onCreate(savedInstanceState);
         WebView view = getBridge().getWebView();
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
