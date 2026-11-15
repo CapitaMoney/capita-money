@@ -71,10 +71,14 @@ export function base64url(bytes) {
 
 // ---------------------------------------------------------------- keys
 
-/** `DeviceKey` in SCALE: 0 ‖ Ed25519 key (32) or 1 ‖ compressed P-256 key (33). */
+/**
+ * `DeviceKey` in SCALE: 0 ‖ Ed25519 key (32), 1 ‖ compressed P-256 passkey (33)
+ * or 2 ‖ compressed P-256 hardware key of the phone shell (33, ADR 0024).
+ */
 export function keyBytes(key) {
   if (key.kind === "ed25519" && key.public.length === 32) return concat(Uint8Array.of(0), key.public);
   if (key.kind === "passkey" && key.public.length === 33) return concat(Uint8Array.of(1), key.public);
+  if (key.kind === "hardware" && key.public.length === 33) return concat(Uint8Array.of(2), key.public);
   throw new TypeError("unknown key");
 }
 
@@ -94,6 +98,7 @@ export function proofBytes(proof) {
   if (proof.kind === "passkey") {
     return concat(Uint8Array.of(1), bytesVec(proof.authenticatorData), bytesVec(proof.clientDataJSON), proof.signature);
   }
+  if (proof.kind === "hardware" && proof.signature.length === 64) return concat(Uint8Array.of(2), proof.signature);
   throw new TypeError("unknown proof");
 }
 

@@ -93,7 +93,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("capita-test"),
     impl_name: alloc::borrow::Cow::Borrowed("capita-test"),
     authoring_version: 1,
-    spec_version: 5,
+    spec_version: 6,
     impl_version: 1,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 1,

@@ -28,11 +28,17 @@ pub enum DeviceKey {
     /// A passkey: a P-256 public key in compressed SEC1 form.
     #[cfg_attr(feature = "scale", codec(index = 1))]
     Passkey([u8; 33]),
+    /// A key made inside the security chip of a phone (Android StrongBox or
+    /// trusted environment, Apple Secure Enclave) by the Capita app: P-256,
+    /// compressed SEC1 form. It cannot leave the chip and is never synced
+    /// (ADR 0024).
+    #[cfg_attr(feature = "scale", codec(index = 2))]
+    Hardware([u8; 33]),
 }
 
 impl DeviceKey {
-    /// The key as bytes: `0 ‖ key` (Ed25519) or `1 ‖ key` (passkey) – the
-    /// same bytes as its SCALE encoding.
+    /// The key as bytes: `0 ‖ key` (Ed25519), `1 ‖ key` (passkey) or
+    /// `2 ‖ key` (hardware key) – the same bytes as its SCALE encoding.
     #[must_use]
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(34);
@@ -43,6 +49,10 @@ impl DeviceKey {
             }
             Self::Passkey(key) => {
                 out.push(1);
+                out.extend_from_slice(key);
+            }
+            Self::Hardware(key) => {
+                out.push(2);
                 out.extend_from_slice(key);
             }
         }
@@ -89,6 +99,10 @@ pub enum Proof {
     /// A passkey assertion whose challenge is the challenge.
     #[cfg_attr(feature = "scale", codec(index = 1))]
     Passkey(PasskeyProof),
+    /// A hardware key's ECDSA signature (P-256, SHA-256) over the 32 bytes
+    /// of the challenge, as 64 bytes `r ‖ s`.
+    #[cfg_attr(feature = "scale", codec(index = 2))]
+    Hardware([u8; 64]),
 }
 
 /// Who a signature is for: the hash of the first block of one chain.
@@ -98,7 +112,7 @@ pub struct Audience(pub [u8; 32]);
 /// Why a proof does not count.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyError {
-    /// A passkey proof for an Ed25519 key, or the other way round.
+    /// A proof of one kind of key for a key of another kind.
     KindMismatch,
     /// The signature does not fit key and challenge.
     BadSignature,

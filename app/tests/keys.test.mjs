@@ -100,6 +100,31 @@ test("passkey vectors: account, client data, signatures", async () => {
   assert.equal(K.hex(K.openCall(key, remark, proof, V.mock_keys_pallet)), v.open_call);
 });
 
+test("hardware vectors: account, calls, signatures (ADR 0024)", async () => {
+  const v = V.hardware;
+  const aud = H(V.audience);
+  const remark = H(V.remark_call);
+  const key = { kind: "hardware", public: H(v.public) };
+  assert.deepEqual(K.compressP256(H(v.uncompressed)), key.public);
+  const account = K.accountOf(key);
+  assert.equal(K.hex(account), v.account);
+  assert.notEqual(K.hex(K.accountOf({ kind: "passkey", public: key.public })), v.account);
+  assert.equal(K.hex(K.actChallenge(aud, account, 0, remark)), v.open_challenge);
+  const pub = await subtle.importKey("raw", H(v.uncompressed), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+  assert.ok(await subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, H(v.open.signature), H(v.open_challenge)));
+  const open = { kind: "hardware", signature: H(v.open.signature) };
+  assert.equal(K.hex(K.openCall(key, remark, open, V.mock_keys_pallet)), v.open_call);
+  const act = { kind: "hardware", signature: H(v.act.signature) };
+  assert.equal(K.hex(K.actCall(account, key, remark, 1, act, V.mock_keys_pallet)), v.act_call);
+  const laptop = { kind: "passkey", public: H(v.add_passkey) };
+  assert.equal(K.hex(K.addChallenge(aud, account, laptop)), v.add_challenge);
+  const possession = { kind: "passkey", authenticatorData: H(v.add_possession.authenticator_data), clientDataJSON: enc.encode(v.add_possession.client_data_json), signature: H(v.add_possession.signature) };
+  const addCall = K.addKeyCall(laptop, possession, V.mock_keys_pallet);
+  assert.equal(K.hex(addCall), v.add_key_call);
+  assert.equal(K.hex(K.actCall(account, key, addCall, 2, { kind: "hardware", signature: H(v.add_act.signature) }, V.mock_keys_pallet)), v.add_act_call);
+  assert.throws(() => K.proofBytes({ kind: "hardware", signature: new Uint8Array(63) }), TypeError);
+});
+
 test("a transaction without signer", () => {
   assert.equal(K.hex(K.bareExtrinsic(Uint8Array.of(1, 2))), "0c040102");
 });

@@ -1,6 +1,6 @@
 # ADR 0023 – App shells, phone check, hosting
 
-Status: accepted for the alpha (owner 2026-11-14: "PWA + Android APK", "app.capitamoney.com", phone check "when available", server creationHub, CI builds). Extends ADR 0015. Concept: [app-full.md](../app-full.md).
+Status: accepted for the alpha (owner 2026-11-14: "PWA + Android APK", "app.capitamoney.com", phone check "when available", server creationHub, CI builds). Extends ADR 0015. Changed by [ADR 0024](0024-hardware-keys-checked-phones.md) (owner 2026-11-15): the phone check is required and uses no Google service (key attestation instead of Play Integrity); the shells keep the money key in the security chip. Concept: [app-full.md](../app-full.md).
 
 ## Context
 ADR 0015: one web app first, store listings as thin wrappers later. The full app needs three things no browser on a phone gives: reading a document chip by NFC (web NFC reads tags, not passports; none on iPhone), passkeys inside an installed app with the app's identity, and asking the phone maker whether app and phone are genuine.
