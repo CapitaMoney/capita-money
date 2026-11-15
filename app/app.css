@@ -24,6 +24,8 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+/* `hidden` wins over the display of cards, buttons and rows. */
+[hidden]{display:none!important}
 html,body{margin:0;height:100%}
 body{
   background:

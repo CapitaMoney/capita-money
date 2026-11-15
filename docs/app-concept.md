@@ -1,6 +1,6 @@
 # The Capita app – concept
 
-Status: alpha concept, 2026-11-14. Prototype: [`app/`](../app) (clickable, installable, demo money only). Decision on the form: [ADR 0015](adr/0015-app-web-first.md).
+Status: alpha concept, 2026-11-14. Prototype: [`app/`](../app) (clickable, installable; a demo on its own, the ledger's money on a test network – [ADR 0027](adr/0027-money-on-chain-in-the-app.md)). Decision on the form: [ADR 0015](adr/0015-app-web-first.md).
 
 ## What the app must do
 A person who has never heard of Capita opens the app and, within one minute, holds Capita and knows what to do next. Everything else waits.

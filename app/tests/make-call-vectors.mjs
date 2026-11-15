@@ -24,6 +24,8 @@ export function vectors() {
     account: h(account),
     calls: {
       open: h(C.openAccount()),
+      claim: h(C.claim()),
+      transfer: { to: h(account), cents: 1250, call: h(C.transfer(account, 1250)) },
       present: { answer: present, call: h(C.claimCall(present)) },
       requestMove: { answer: moved, call: h(C.claimCall(moved)) },
       addKey: { key: h(ed), possession: h(edProof), call: h(C.addKeyRaw(ed, edProof)) },
@@ -39,6 +41,9 @@ export function vectors() {
       keyOwner: h(C.at.keyOwner(hardware)),
       credential: h(C.at.credential(account)),
       capitaAccount: h(C.at.capitaAccount(account)),
+      balance: h(C.at.balance(account)),
+      movedTo: h(C.at.movedTo(account)),
+      rules: h(C.at.rules()),
     },
   };
 }

@@ -65,7 +65,7 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 | 2 | keys on chain: passkey and device keys, three devices, home device (`capita-keys`, `pallet-capita-keys`); in the app: making keys, signing, the same bytes as the chain | Opus | next |
 | 3 | document check in the identity service: chip data, state signature, master list, age, expiry, face (`capita-mrtd`, issuer routes) | Opus | next |
 | 4 | Android shell: chip reading (NFC), passkeys in the shell, camera; APK built by CI; web app on GitHub Pages | Opus | next |
-| 5 | screens: verify (chip, laptop → phone, helper), devices, test network; hand-over box (ADR 0025) | Opus | built 2026-11-15 (CI runs the device calls on the chain; first phone test = owner). Not yet: assisted payment (`assisted.pay`, owner questions of ADR 0022), money on chain (balance, send) |
+| 5 | screens: verify (chip, laptop → phone, helper), devices, test network; hand-over box (ADR 0025) | Opus | built 2026-11-15 (CI runs the device calls on the chain; first phone test = owner). Not yet: assisted payment (`assisted.pay`, owner questions of ADR 0022) |
 | 6 | eID adapters (German eID, EU wallet, Estonia), after the e.V. | Opus | later |
 | 7 | iPhone shell, store listings | Sonnet | after e.V. + Apple account |
 | 8 | hardware key on chain (`DeviceKey::Hardware`), ADR 0024 | Opus | built 2026-11-15 |
@@ -74,6 +74,7 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 | 11 | iPhone shell (Capacitor, Core NFC, Secure Enclave, App Attest), built by CI; tests by friends with Macs | Opus | built 2026-11-15 (CI builds for the simulator, unsigned; on a phone = Apple team) |
 | 12 | German eID adapter (`eid-de`), built and tested against a stand-in; certificate = owner | Opus | next |
 | 13 | Capita by age (ADR 0026): date of birth in the claim, the age at the first verification, twice the age on each birthday; screen "Verified" with the amount and the ask for notifications; demo money by age | Fable | built 2026-11-15 (not yet: the reminder itself, the real balance in the app) |
+| 14 | money on chain in the app: balance, send by code, receive, birthdays claimed on opening ([ADR 0027](adr/0027-money-on-chain-in-the-app.md)) | Fable | built 2026-11-16 (CI pays on the chain; first phone test = owner) |
 
 Tests the owner does: install the APK; verify with the German passport (chip + selfie); try the Personalausweis (expected: chip photo refused → eID later); the web app on the MX Linux laptop.
 
