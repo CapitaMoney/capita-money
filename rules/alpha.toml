@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.14 (2026-11-15)"
+diary = "rules diary v0.15 (2026-11-15; rule 3 change of v0.14 not yet mirrored)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
