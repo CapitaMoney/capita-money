@@ -33,4 +33,5 @@ An assisted account has **no device key at all**. It is bound to the person key 
 - Offene Frage: a face template kept at the service, by her consent, as a second way when the document is taken – breaks "keeps nothing"; owner decision (and GDPR Art. 9, P04.3).
 - Offene Frage: who may be a helper – anybody, or listed by an identity service.
 - Offene Frage: switching an assisted account to a phone later (proposal: yes, verify on the phone, the account gets a key).
-- Not built in the alpha's first steps: assisted accounts need a call `assisted.pay` in `pallet-capita-keys` and the authorisation in the identity service (build plan, step 5).
+- Built 2026-11-15 (build plan step 5, ADR 0025): helper mode for people with the app – "Help someone verify" scans their code; the identity service stores the helper's account with the claim (`helper`, proof kind `via-helper`).
+- Not built: assisted accounts need a call `assisted.pay` in `pallet-capita-keys` and the authorisation in the identity service – after the owner's answers to the open questions above.

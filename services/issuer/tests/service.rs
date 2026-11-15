@@ -125,6 +125,7 @@ fn request(account: u8, person: Person) -> Request {
         proof: "test".into(),
         former: None,
         ticket: None,
+        helper: None,
     }
 }
 
@@ -794,4 +795,81 @@ fn a_letter_with_a_code_through_challenger() {
     }
     assert_eq!(seen[2], "GET /info [Bearer TOKEN] ");
     let _ = SubjectRef([0; 32]);
+}
+
+#[test]
+fn a_check_on_a_helpers_phone_is_remembered_with_the_helper() {
+    let mut service = service(settings(Basis::NameBirthdate));
+    let helper = hex(&[9; 32]);
+    service
+        .issue(
+            Request {
+                proof: "via-helper".into(),
+                helper: Some(helper.clone()),
+                ..request(1, person("Kim", "Min", "1980-01-01"))
+            },
+            NOW,
+        )
+        .unwrap();
+    service
+        .issue(request(2, person("Lee", "Ann", "1985-02-03")), NOW)
+        .unwrap();
+    let helped = service.store().by_account(&hex(&[1; 32])).unwrap();
+    assert_eq!(
+        (helped.proof.as_str(), helped.helper),
+        ("via-helper", Some(helper))
+    );
+    assert_eq!(
+        service.store().by_account(&hex(&[2; 32])).unwrap().helper,
+        None
+    );
+}
+
+#[test]
+fn two_devices_hand_words_over_through_a_box() {
+    let app = App::new(service(settings(Basis::NameBirthdate)), true, None);
+    assert_eq!(app.handle("GET", "/v1/info", b"", NOW).1["handover"], true);
+    let post = |path: &str, body: Value, now: u64| {
+        app.handle("POST", path, body.to_string().as_bytes(), now)
+    };
+    let name = "0x00112233445566778899aabbccddeeff";
+    let (status, empty) = post(
+        "/v1/relay/take",
+        json!({ "box": name, "slot": "claim" }),
+        NOW,
+    );
+    assert_eq!((status, &empty["data"]), (200, &Value::Null));
+    let word = json!({ "call": "credential.present" }).to_string();
+    let (status, _) = post(
+        "/v1/relay/put",
+        json!({ "box": name, "slot": "claim", "data": word }),
+        NOW,
+    );
+    assert_eq!(status, 200);
+    let (_, got) = post(
+        "/v1/relay/take",
+        json!({ "box": name, "slot": "claim" }),
+        NOW + 1,
+    );
+    assert_eq!(got["data"], word);
+    // taken words are gone
+    let (_, again) = post(
+        "/v1/relay/take",
+        json!({ "box": name, "slot": "claim" }),
+        NOW + 2,
+    );
+    assert_eq!(again["data"], Value::Null);
+    // wrong names and missing words say why
+    let (status, no) = post(
+        "/v1/relay/put",
+        json!({ "box": "0x01", "slot": "claim", "data": "" }),
+        NOW,
+    );
+    assert_eq!((status, no["error"].as_str()), (400, Some("request")));
+    let (status, _) = post(
+        "/v1/relay/put",
+        json!({ "box": name, "slot": "claim" }),
+        NOW,
+    );
+    assert_eq!(status, 400);
 }

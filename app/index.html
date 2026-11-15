@@ -22,7 +22,9 @@
     <p class="lead">Money everyone receives, equally.</p>
     <div class="grow"></div>
     <button class="btn primary" data-go="name">Start</button>
+    <button class="link" data-go="link" id="welcome-link" hidden>I already use Capita on another device</button>
     <p class="fine">An experiment. No sign-up, no e-mail, no password.</p>
+    <button class="link fine" data-go="network">Test network</button>
   </section>
 
   <!-- 10–25 s: the only thing we ask -->
@@ -77,13 +79,127 @@
       <p class="label">It costs</p>
       <p>Your welcome gift. Nothing else.</p>
     </div>
-    <div class="card muted">
-      <p class="label">How</p>
-      <p>Your identity card or a letter to your address – about two minutes. <em>Not built yet: this prototype verifies at the tap of a button.</em></p>
-    </div>
     <div class="grow"></div>
-    <button class="btn primary" id="verify-go">Verify (demo)</button>
+    <div class="ways" id="verify-ways"></div>
     <button class="link" data-back>Not now</button>
+  </section>
+
+  <!-- verification: the document, then the chip, then the face (ADR 0021, 0024) -->
+  <section class="screen" data-screen="doc">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow" id="doc-title">Your document</h2>
+    <p class="sub" id="doc-for" hidden></p>
+    <div class="row seg" role="group" aria-label="Document">
+      <button class="btn small" type="button" data-doc="passport" aria-pressed="true">Passport</button>
+      <button class="btn small" type="button" data-doc="card" aria-pressed="false">ID card</button>
+    </div>
+    <form id="doc-form" autocomplete="off">
+      <div class="fields" data-fields="mrz">
+        <label class="label" for="doc-number">Document number</label>
+        <input id="doc-number" class="field small" autocapitalize="characters" maxlength="12" spellcheck="false" required>
+        <label class="label" for="doc-born">Date of birth</label>
+        <input id="doc-born" class="field small" type="date" required>
+        <label class="label" for="doc-expiry">Valid until</label>
+        <input id="doc-expiry" class="field small" type="date" required>
+      </div>
+      <div class="fields" data-fields="can" hidden>
+        <label class="label" for="doc-can">The six digits on the front</label>
+        <input id="doc-can" class="field small" inputmode="numeric" maxlength="6" pattern="[0-9]{6}">
+        <button type="button" class="link" id="doc-mrz">Use the numbers on the back instead</button>
+      </div>
+      <p class="fine">Only to open the chip. Not kept, not sent.</p>
+      <p class="fine warn" id="doc-note" hidden>A German ID card does not let anyone but the authorities read its photo. Use a passport – the ID card with its PIN comes later.</p>
+      <div class="grow"></div>
+      <button class="btn primary" type="submit">Continue</button>
+    </form>
+  </section>
+
+  <section class="screen center" data-screen="check">
+    <div class="cam" id="check-cam" hidden><video id="check-video" playsinline muted></video></div>
+    <div class="tick" id="check-icon" aria-hidden="true">◎</div>
+    <h2 class="glow" id="check-say">One moment …</h2>
+    <p class="sub" id="check-sub"></p>
+    <div class="grow"></div>
+    <button class="btn primary" id="check-done" hidden>Done</button>
+    <button class="btn" id="check-again" hidden>Try again</button>
+    <button class="link" id="check-cancel">Cancel</button>
+  </section>
+
+  <!-- a device that cannot check hands the check to a phone (ADR 0024, 0025) -->
+  <section class="screen center" data-screen="handover">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Verify with a phone</h2>
+    <p>On a phone with Capita – your own or a helper's – open Settings, choose “Help someone verify” and scan this code.</p>
+    <div class="qr" id="handover-qr" role="img" aria-label="Code for the phone"></div>
+    <p class="sub" id="handover-state">Waiting for the phone …</p>
+  </section>
+
+  <section class="screen" data-screen="helper">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Help someone verify</h2>
+    <p>Your phone reads their passport and films their face. The identity service checks both and forgets them – your phone keeps nothing either.</p>
+    <div class="card">
+      <p class="label">They have Capita</p>
+      <p>They open Verify and choose “Use a phone”. Scan the code they show – it can be your own laptop too.</p>
+      <button class="btn primary" id="helper-scan">Scan their code</button>
+    </div>
+    <div class="card muted">
+      <p class="label">They have no phone</p>
+      <p>Coming later: an account they use by showing their passport and face at a helper, each time.</p>
+    </div>
+    <p class="fine" id="helper-note"></p>
+  </section>
+
+  <section class="screen center" data-screen="scan">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow" id="scan-title">Scan the code</h2>
+    <div class="cam"><video id="scan-video" playsinline muted></video></div>
+    <p class="sub" id="scan-sub"></p>
+  </section>
+
+  <!-- devices of one account (ADR 0020, 0024) -->
+  <section class="screen" data-screen="devices">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Your devices</h2>
+    <ul class="list" id="devices-list"><li class="empty">One moment …</li></ul>
+    <div class="card" id="devices-claim" hidden></div>
+    <button class="btn" id="devices-add">Use Capita on another device</button>
+    <div class="card" id="devices-lost"></div>
+    <p class="fine">Up to three devices. Removing Capita from a device removes its key.</p>
+  </section>
+
+  <section class="screen" data-screen="adddevice">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Add this device?</h2>
+    <p id="add-what">It will pay from your account, like this phone.</p>
+    <p class="sub" id="add-state">Waiting for the other device …</p>
+    <div class="grow"></div>
+    <button class="btn primary" id="add-go" disabled>Add</button>
+    <button class="link" data-back>Not now</button>
+  </section>
+
+  <section class="screen center" data-screen="link">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Join your account</h2>
+    <p>On your phone: Settings → Your devices → “Use Capita on another device”. Then scan this code.</p>
+    <div class="qr" id="link-qr" role="img" aria-label="Code for your phone"></div>
+    <p class="sub" id="link-state">Waiting for your phone …</p>
+  </section>
+
+  <section class="screen" data-screen="network">
+    <button class="back" data-back aria-label="Back">‹</button>
+    <h2 class="glow">Test network</h2>
+    <p>For testing with the people who build Capita: a test chain and an identity service on a computer near you. Test money only.</p>
+    <form id="net-form" autocomplete="off">
+      <label class="label" for="net-node">Chain address</label>
+      <input id="net-node" class="field small" inputmode="url" spellcheck="false" placeholder="http://192.168.1.20:9944" required>
+      <label class="label" for="net-service">Identity service address</label>
+      <input id="net-service" class="field small" inputmode="url" spellcheck="false" placeholder="http://192.168.1.20:8787" required>
+      <p class="sub" id="net-state"></p>
+      <div class="grow"></div>
+      <button class="btn primary" type="submit">Connect</button>
+    </form>
+    <button class="link" id="net-leave" hidden>Leave the test network</button>
   </section>
 
   <section class="screen center" data-screen="receive">
@@ -138,7 +254,13 @@
       <label class="label" for="rename">Your name</label>
       <input id="rename" class="field small" maxlength="40">
     </div>
-    <div class="card">
+    <div class="card" id="settings-net" hidden>
+      <div class="row wrap">
+        <button class="btn small" data-go="devices">Your devices</button>
+        <button class="btn small" data-go="helper">Help someone verify</button>
+      </div>
+    </div>
+    <div class="card" id="settings-lost">
       <p class="label">Lost your phone?</p>
       <p>Install Capita on the new one and verify again. Your Capita move over after a week – no passwords or secret words to keep.</p>
     </div>
@@ -155,6 +277,7 @@
         <button class="btn small" id="demo-reset">Start again</button>
       </div>
     </div>
+    <button class="link fine" data-go="network">Test network</button>
   </section>
 
 </main>

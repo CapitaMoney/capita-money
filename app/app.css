@@ -125,3 +125,16 @@ form{display:flex;flex-direction:column;flex:1;gap:14px}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);
   max-width:400px;width:calc(100% - 40px);background:rgba(4,28,16,.96);border:1px solid var(--line-2);border-radius:12px;
   padding:12px 16px;color:var(--ink);box-shadow:var(--shadow);text-align:center;font-size:15px}
+
+/* verification, hand-over, devices */
+.ways{display:flex;flex-direction:column;gap:10px}
+.ways p{color:var(--ink-3);font-size:15px}
+.seg .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.fields{display:flex;flex-direction:column;gap:6px}
+.fields .label{margin-top:8px}
+.warn{color:var(--warn)}
+.cam{border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:3/4;max-height:52vh}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+#check-cam video{transform:scaleX(-1)}
+.list li .tag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-left:8px}
+.list li .btn.small{min-height:36px;padding:0 12px}

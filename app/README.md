@@ -23,11 +23,24 @@ Tests cover `logic.js`: start grant, verification, monthly Capita, claim window,
 | `app.css` | look (P02 sci-fi colours and type, reduced) |
 | `app.js` | screens, navigation, storage |
 | `logic.js` | the rules as far as the app shows them; mirrors `rules/alpha.toml` |
+| `device.js` | this device on a test network: its key, its account, acting on the chain, the hand-over box (ADR 0025) |
+| `screens.js` | verify (own phone, another phone, helper), devices, linking, test network |
+| `scan.js` | reading QR codes with the camera (the browser's detector, else `vendor/jsQR.js`) |
+| `chain/calls.js`, `chain/xxhash.js` | the calls these screens send and the chain state they read; vectors `tests/call-vectors.json`, checked by the runtime |
 | `sw.js`, `manifest.webmanifest`, `icons/` | install and offline |
 | `vendor/qrcode.mjs` | QR code generator, MIT, Kazuhiko Arase |
+| `vendor/jsQR.js` | QR code reader jsQR 1.4.0, Apache-2.0, Cosmo Wolfe (licence beside it) |
 | `fonts/` | Chakra Petch, IBM Plex Sans (SIL OFL 1.1, licences beside them) |
 
 Changing a rule value: change it in `rules/alpha.toml` and in `RULES` in `logic.js`.
+
+## Test network (build plan step 5)
+Without one the app is the demo above. Settings → *Test network* (or a link `…/?node=http://HOST:9944&service=http://HOST:8787`) joins a test chain (`capita-node --dev --rpc-cors all`) and an identity service (`capita-issuer`, with `[checks.document]` for passports) on a computer in the same network. Then:
+- the device makes its money key (security chip in the phone apps, else a passkey, else a key the browser keeps) and opens its account on the chain;
+- **Verify**: on a checked phone with NFC – passport number, birth and expiry date (or the six digits of an ID card), the chip, the face; elsewhere – a QR code for a phone (own or a helper's);
+- **Help someone verify** (Settings): scan their code, their document, their face; the claim goes back to their device;
+- **Your devices** (Settings): the account's devices, "Use Capita on another device" (the new device chooses "I already use Capita on another device" and shows a code), remove, "Make this the main device" after a lost phone, "Keep this phone as main".
+Money shown is still the demo's. `tests/chain-smoke.mjs` runs the device calls against the real chain in CI.
 
 ## Android shell (ADR 0023, ADR 0024)
 The same files, wrapped by Capacitor (`android/`), plus three native pieces (ADR 0023, ADR 0024): the chip reader (`CapitaChipPlugin`, JMRTD – PACE/BAC, chip authentication, active authentication with the service's chip nonce), the money key in the phone's security chip (`CapitaKeyPlugin`: P-256 in StrongBox or the trusted environment, each signature confirmed by fingerprint, face or screen lock; `chain/keys.js` `createHardwareKey`, `hardwareProof`), and the phone check (`CapitaPhonePlugin`: a fresh session key whose attestation carries the service's nonce; `native/phone.js`). Passkeys still work inside the shell, for accounts that started in a browser. CI builds the APK (`android` job) and, on `main`, puts it on the pre-release `android-alpha`. Local build (needs the Android SDK): `npm ci && npm run android && cd android && ./gradlew assembleDebug`.
