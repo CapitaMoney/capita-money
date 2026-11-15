@@ -379,7 +379,7 @@ fn the_test_chain_has_the_audience_of_the_vectors() {
 fn transactions_the_app_made_run() {
     new_test_ext().execute_with(|| {
         let v = vectors();
-        for kind in ["ed25519", "passkey"] {
+        for kind in ["ed25519", "passkey", "hardware"] {
             for name in ["open_call", "act_call"] {
                 let call = app_call(&v, kind, name);
                 assert_eq!(validate(&call), Ok(()), "{kind} {name}");
@@ -408,5 +408,37 @@ fn transactions_the_app_made_run() {
                 .unwrap(),
         );
         assert_eq!(KeyOwner::<Test>::get(added), Some(account));
+    });
+}
+
+#[test]
+fn a_phone_hardware_key_links_a_laptop_passkey() {
+    new_test_ext().execute_with(|| {
+        let v = vectors();
+        for name in ["open_call", "act_call", "add_act_call"] {
+            let call = app_call(&v, "hardware", name);
+            assert_eq!(validate(&call), Ok(()), "{name}");
+            assert_ok!(call.dispatch(RuntimeOrigin::none()));
+            assert_eq!(last_result(), Some(Ok(())), "{name}");
+        }
+        let account = AccountId32::new(
+            hex(v["hardware"]["account"].as_str().unwrap())
+                .try_into()
+                .unwrap(),
+        );
+        let phone = DeviceKey::Hardware(
+            hex(v["hardware"]["public"].as_str().unwrap())
+                .try_into()
+                .unwrap(),
+        );
+        let laptop = DeviceKey::Passkey(
+            hex(v["hardware"]["add_passkey"].as_str().unwrap())
+                .try_into()
+                .unwrap(),
+        );
+        // The phone's key came first: it is the home key, the laptop linked.
+        assert_eq!(keys_of(&account), vec![phone, laptop]);
+        assert_eq!(KeyOwner::<Test>::get(laptop), Some(account.clone()));
+        assert_eq!(Nonce::<Test>::get(&account), 3);
     });
 }

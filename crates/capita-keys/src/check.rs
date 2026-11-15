@@ -68,6 +68,9 @@ pub fn verify_proof<V: Verify>(
             relying_parties,
             origin_allowed,
         ),
+        (DeviceKey::Hardware(public), Proof::Hardware(signature)) => {
+            verify_hardware(public, challenge, signature)
+        }
         _ => Err(KeyError::KindMismatch),
     }
 }
@@ -114,13 +117,43 @@ pub fn verify_passkey(
     if json_value(client, b"crossOrigin").is_some_and(|v| v.starts_with(b"true")) {
         return Err(KeyError::CrossOrigin);
     }
-    let key = VerifyingKey::from_sec1_bytes(public).map_err(|_| KeyError::BadKey)?;
+    let key = p256_key(public)?;
     let signature = Signature::from_slice(&proof.signature).map_err(|_| KeyError::BadSignature)?;
     let signature = signature.normalize_s().unwrap_or(signature);
     let mut message = Vec::with_capacity(data.len().saturating_add(32));
     message.extend_from_slice(data);
     message.extend_from_slice(&sha256(client));
     key.verify(&message, &signature)
+        .map_err(|_| KeyError::BadSignature)
+}
+
+/// A P-256 public key in the one form the chain lists: compressed SEC1,
+/// first byte 2 or 3. Other forms of the same point (SEC1 "compact", tag 5)
+/// are refused, so one key never stands under two names in the key lists.
+fn p256_key(public: &[u8; 33]) -> Result<VerifyingKey, KeyError> {
+    if !matches!(public.first(), Some(2 | 3)) {
+        return Err(KeyError::BadKey);
+    }
+    VerifyingKey::from_sec1_bytes(public).map_err(|_| KeyError::BadKey)
+}
+
+/// Checks a hardware key's signature: ECDSA on P-256 with SHA-256 over the
+/// 32 bytes of the challenge – what Android's `SHA256withECDSA` and Apple's
+/// `ecdsaSignatureMessageX962SHA256` produce, turned into `r ‖ s`. High `s`
+/// is accepted and normalised, as for passkeys.
+///
+/// # Errors
+/// [`KeyError::BadKey`] for a point off the curve, else
+/// [`KeyError::BadSignature`].
+pub fn verify_hardware(
+    public: &[u8; 33],
+    challenge: &[u8; 32],
+    signature: &[u8; 64],
+) -> Result<(), KeyError> {
+    let key = p256_key(public)?;
+    let signature = Signature::from_slice(signature).map_err(|_| KeyError::BadSignature)?;
+    let signature = signature.normalize_s().unwrap_or(signature);
+    key.verify(challenge, &signature)
         .map_err(|_| KeyError::BadSignature)
 }
 

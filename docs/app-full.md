@@ -1,9 +1,9 @@
 # The full Capita app – every device, keys, verification
 
-Status: concept for the alpha, 2026-11-15. Owner decisions of 2026-11-14 are marked *(owner)*. Builds on [the app concept](app-concept.md) (first sixty seconds, words, principles) and [ADR 0015](adr/0015-app-web-first.md) (one web app first). Decisions: [ADR 0020](adr/0020-keys-passkeys-linked-devices.md) keys, [ADR 0021](adr/0021-verification-ways.md) verification, [ADR 0022](adr/0022-helper-stations.md) helper stations, [ADR 0023](adr/0023-app-shells-and-hosting.md) shells and hosting.
+Status: concept for the alpha, 2026-11-15. Owner decisions of 2026-11-14 are marked *(owner)*. Builds on [the app concept](app-concept.md) (first sixty seconds, words, principles) and [ADR 0015](adr/0015-app-web-first.md) (one web app first). Decisions: [ADR 0020](adr/0020-keys-passkeys-linked-devices.md) keys, [ADR 0024](adr/0024-hardware-keys-checked-phones.md) hardware keys + phone check (changes 0020, 0021, 0023, owner 2026-11-15), [ADR 0021](adr/0021-verification-ways.md) verification, [ADR 0022](adr/0022-helper-stations.md) helper stations, [ADR 0023](adr/0023-app-shells-and-hosting.md) shells and hosting.
 
 ## In one paragraph
-One app, *Capita*, the same code on every device. It runs as a web app at `app.capitamoney.com` on every system – Android, iPhone, Windows, macOS, Linux – and is wrapped in a thin native shell where a phone must do what a browser cannot: read the chip of a passport, keep a passkey inside the app, ask the phone maker whether the phone is genuine. A person's money key is a **passkey** – a fingerprint or a look at the phone confirms a payment – with a key kept by the app where a phone has no passkeys. One account may live on up to **three devices**. A person is verified in whichever way they can: their own phone reading their passport, a helper's phone, an electronic ID of their country, a letter. None of these ways is the only one *(owner)*, so that nobody is left out because their country has no electronic ID.
+One app, *Capita*, the same code on every device. It runs as a web app at `app.capitamoney.com` on every system – Android, iPhone, Windows, macOS, Linux – and is wrapped in a thin native shell where a phone must do what a browser cannot: read the chip of a passport, keep the money key inside the phone's security chip, prove that phone and app are genuine. A person's money key lives in that chip and never leaves it – a fingerprint or a look at the phone confirms a payment; a laptop joins as a second device with a passkey *(owner 2026-11-15)*. One account may live on up to **three devices**. A person is verified in whichever way they can: their own phone reading their passport, a helper's phone, an electronic ID of their country, a letter. None of these ways is the only one *(owner)*, so that nobody is left out because their country has no electronic ID.
 
 ## What runs where
 | | Web app (browser) | Android shell | iPhone shell |
@@ -11,20 +11,20 @@ One app, *Capita*, the same code on every device. It runs as a web app at `app.c
 | Where from | `app.capitamoney.com`, "Install" in the browser | APK on GitHub releases now; F-Droid prepared; Google Play after the e.V. | after the e.V. and an Apple account *(owner)* |
 | Systems | Android, iPhone, Windows, macOS, Linux (Chrome, Edge, Brave, Firefox, Safari) | Android 9 and later | iOS 16 and later |
 | Receive, send, history | yes | yes | yes |
-| Passkey | yes | yes (Credential Manager) | yes |
+| Money key | passkey, else a key the browser keeps | hardware key (StrongBox / trusted environment) | hardware key (Secure Enclave) |
 | Read a passport chip (NFC) | no – browsers cannot | yes | yes (Core NFC) |
-| Selfie with head movements | yes (camera in the browser) | yes | yes |
+| Selfie with head movements | no – a checked phone films (ADR 0024) | yes | yes |
 | Electronic ID / EU wallet | yes – hands over to the ID app and back | yes | yes |
-| Phone check (genuine app and phone) | no | Play Integrity, where present | App Attest |
+| Phone check (genuine app and phone), required to verify | no | key attestation, no Google service | App Attest (needs Apple account) |
 
 A laptop is a web app, never a separate program *(owner: app and website for every system)*. What a laptop cannot do itself – read a chip – it hands to a phone by a QR code.
 
-## Keys (ADR 0020)
-- **The passkey is the key.** The app asks the phone for a passkey for `app.capitamoney.com`. The phone keeps it in its secure chip and, if the person uses one, in their password manager (Google, Apple, Bitwarden, KeePassXC …), which carries it to a new phone. Every payment asks for the fingerprint, face or screen lock – nothing to remember, nothing to write down.
-- **Where no passkey is possible** (an old phone, a phone without Google services and without a password manager), the app makes its own key inside the browser storage, which never leaves it. The person sees no difference, except that a lost phone then means verifying again.
-- **The account is made from the first key.** No name, no e-mail, no password. The chain checks the passkey's signature itself; nobody can move money without the device.
+## Keys (ADR 0020, ADR 0024)
+- **On a phone the key lives in the security chip** *(owner 2026-11-15)*. The Capita app asks the chip (Android StrongBox or trusted environment, Apple Secure Enclave) to make a key that can never be read out, copied or synced. Every payment asks for the fingerprint, face or screen lock – nothing to remember, nothing to write down, no Google or Apple account involved.
+- **In a browser** (a laptop, or an iPhone until the iPhone app is out) the key is a passkey; where no passkey is possible, a key the browser keeps and never lets out. A browser key is a second device of the phone's account; a person who starts in a browser links the app later, and its chip key becomes the home key after seven days.
+- **The account is made from the first key.** No name, no e-mail, no password. The chain checks every signature itself; nobody can move money without the device.
 - **Up to three devices.** "Use Capita on another device": the new device shows a QR code, the phone scans it and confirms. The first device is the *home* device: only it can remove the others. Linked devices can remove only themselves.
-- **Lost phone:** with a second device – it becomes the home device after seven days, unless the old phone objects. With a synced passkey – sign in to the password manager on the new phone, done. With neither – verify again; the account moves to the new key (ADR 0013, seven days).
+- **Lost phone:** with a second device – it becomes the home device after seven days, unless the old phone objects. Without – verify again; the account moves to the new phone's key (ADR 0013, seven days). Removing the app from a phone removes its key; Settings says so.
 - What the person sees: "Confirm with your fingerprint", "Use Capita on another device", "Your devices" (phone, laptop – with the day each was added), "Lost your phone?". Never: key, passkey, credential, signature.
 
 ## Verification (ADR 0021)
@@ -34,7 +34,7 @@ Every way ends the same: an identity service signs a claim *this account belongs
 |---|---|---|---|
 | **Own phone: chip + selfie** (base) | the state's signature on the document data; the face in front of the camera is the face on the chip, alive | phone with NFC (Android shell now, iPhone shell later); a passport or ID card whose chip photo may be read | alpha |
 | **Helper's phone** | the same, on someone else's phone | a helper with the app; the person and their document present | alpha |
-| **Own laptop** | the same: the laptop shows a QR code, a phone (own or helper's) reads the chip; the selfie is taken by the laptop camera | laptop camera; any NFC phone | alpha |
+| **Own laptop** | the same: the laptop shows a QR code, a checked phone (own or helper's) reads the chip and films the face (ADR 0024) | any checked NFC phone | alpha |
 | **Electronic ID of a country** (Germany, Estonia, others) | the state's own check, by card and PIN | the country's ID app; a certificate or contract with an eID provider | after the e.V. |
 | **EU wallet** (EUDI, person data "PID") | the same, through one interface for every EU state | registration as relying party (German seat → e.V.); German wallet from about 2 January 2027 | test now, live 2027 |
 | **Letter** | a postal address where the person receives mail | postage per letter | alpha (exists as "Challenger letter") |
@@ -51,8 +51,8 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 - "Taking out money" is a payment from her account to whoever gives her goods or cash for it – often the station. Capita stays Capita; the station is a shop.
 - Offene Frage: a person whose document is taken from her cannot pay (neither can the one who took it). A second way – a face template she agrees to keep at the identity service – would break "keeps nothing"; owner decision.
 
-## Phone check (ADR 0023)
-During a verification the Android shell asks Google (Play Integrity) and the iPhone shell asks Apple (App Attest) whether app and phone are genuine – a defence against faked camera pictures. Where a phone has no such service (F-Droid, phones without Google), the head-movement test is longer and stricter instead. Never a condition *(owner: "when available")*. Vermutung (Claude, ungeprüft): Play Integrity needs a Google Cloud project of the operator – owner, later.
+## Phone check (ADR 0024)
+*(owner 2026-11-15: required, no Google service)* A verification counts only from a phone that proved it is a real phone with an unchanged system, running the Capita app – the defence against faked camera pictures. Android proves it with **key attestation**: the phone's security chip signs a statement about the phone and the app; the identity service checks it against Google's published root certificates – the phone itself contacts nobody, so phones without Google services pass. The iPhone proves it with **App Attest** (needs the owner's Apple developer account). Laptops cannot prove it; they hand the check to a phone. Phones that fail (unlocked bootloader, unknown system, emulator) verify at a helper. Where the chip can prove itself (active or chip authentication), copied chip data are refused too.
 
 ## Addresses and servers
 - App: `app.capitamoney.com` (GitHub Pages). The passkey belongs to that name; it must never change once real people use it. DNS: a `CNAME` record `app` → `capitamoney.github.io` (owner).
@@ -68,6 +68,11 @@ During a verification the Android shell asks Google (Play Integrity) and the iPh
 | 5 | screens: verify (chip, laptop → phone, helper), devices, assisted payment; connection to the test chain | Sonnet | later |
 | 6 | eID adapters (German eID, EU wallet, Estonia), after the e.V. | Opus | later |
 | 7 | iPhone shell, store listings | Sonnet | after e.V. + Apple account |
+| 8 | hardware key on chain (`DeviceKey::Hardware`), ADR 0024 | Opus | built 2026-11-15 |
+| 9 | phone check in the identity service (Android key attestation, App Attest) + chip proof (active / chip authentication); new order start → moves → finish | Opus | next |
+| 10 | Android shell: hardware key, session key with attestation, chip authentication + active authentication | Opus | next |
+| 11 | iPhone shell (Capacitor, Core NFC, Secure Enclave, App Attest), built by CI; tests by friends with Macs | Opus | next |
+| 12 | German eID adapter (`eid-de`), built and tested against a stand-in; certificate = owner | Opus | next |
 
 Tests the owner does: install the APK; verify with the German passport (chip + selfie); try the Personalausweis (expected: chip photo refused → eID later); the web app on the MX Linux laptop.
 

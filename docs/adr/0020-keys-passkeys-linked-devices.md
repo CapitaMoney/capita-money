@@ -1,6 +1,6 @@
 # ADR 0020 – Keys: passkeys, device keys, up to three devices
 
-Status: accepted for the alpha (owner 2026-11-14: "passkey + fallback", "linked devices"). Concept: [app-full.md](../app-full.md).
+Status: accepted for the alpha (owner 2026-11-14: "passkey + fallback", "linked devices"). Changed by [ADR 0024](0024-hardware-keys-checked-phones.md) (owner 2026-11-15): the phone apps use a hardware key (`DeviceKey::Hardware`); passkeys and browser keys remain for browsers and laptops. Concept: [app-full.md](../app-full.md).
 
 ## Context
 The app must work without secret words (app concept, principle 6), on phone and laptop, and survive a lost phone. The chain so far knows accounts as Substrate keys (sr25519, ed25519) signed by a wallet – which a browser can only imitate with a key in its storage. A **passkey** (WebAuthn, FIDO2) is a key the phone keeps in its secure chip, unlocked by fingerprint, face or screen lock, optionally carried to new devices by the person's password manager. It signs with ECDSA on the curve P-256 in a format of its own: the signature covers `authenticatorData ‖ SHA-256(clientDataJSON)`, where `clientDataJSON` contains our challenge and the web origin. No Substrate wallet produces or checks that.

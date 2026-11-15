@@ -14,8 +14,10 @@
 //! # pallet-capita-keys
 //!
 //! Accounts acted for by the keys of a person's devices
-//! (`docs/adr/0020-keys-passkeys-linked-devices.md`): passkeys (WebAuthn,
-//! P-256) and device keys (Ed25519), up to [`Config::MaxKeys`] per account.
+//! (`docs/adr/0020-keys-passkeys-linked-devices.md`,
+//! `docs/adr/0024-hardware-keys-checked-phones.md`): hardware keys of the
+//! phone apps (P-256 in the security chip), passkeys (WebAuthn, P-256) and
+//! browser keys (Ed25519), up to [`Config::MaxKeys`] per account.
 //!
 //! - [`Pallet::open`]: the first key opens the account derived from it
 //!   (`capita_keys::encoding::account_of`) and acts once.

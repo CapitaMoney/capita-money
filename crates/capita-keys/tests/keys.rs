@@ -153,6 +153,110 @@ fn passkeys_sign_what_the_app_signs() {
     );
 }
 
+#[test]
+fn hardware_keys_sign_what_the_app_signs() {
+    let v = vectors();
+    let audience = Audience(arr(text(&v, &["audience"])));
+    let remark = hex(text(&v, &["remark_call"]));
+    let public: [u8; 33] = arr(text(&v, &["hardware", "public"]));
+    let key = DeviceKey::Hardware(public);
+    let account = account_of(&key);
+    assert_eq!(account.to_vec(), hex(text(&v, &["hardware", "account"])));
+    // The same point as a passkey is another key and another account.
+    assert_ne!(account_of(&DeviceKey::Passkey(public)), account);
+
+    let open = act_challenge(&audience, &account, 0, &blake2_256(&remark));
+    assert_eq!(
+        open.to_vec(),
+        hex(text(&v, &["hardware", "open_challenge"]))
+    );
+    let signature: [u8; 64] = arr(text(&v, &["hardware", "open", "signature"]));
+    assert_eq!(check(&key, &open, &Proof::Hardware(signature)), Ok(()));
+    let other: [u8; 64] = arr(text(&v, &["hardware", "open_other_s"]));
+    assert_eq!(check(&key, &open, &Proof::Hardware(other)), Ok(()));
+
+    let act = act_challenge(&audience, &account, 1, &blake2_256(&remark));
+    assert_eq!(act.to_vec(), hex(text(&v, &["hardware", "act_challenge"])));
+    assert_eq!(
+        check(&key, &act, &Proof::Hardware(signature)),
+        Err(KeyError::BadSignature)
+    );
+    let signature: [u8; 64] = arr(text(&v, &["hardware", "act", "signature"]));
+    assert_eq!(check(&key, &act, &Proof::Hardware(signature)), Ok(()));
+
+    // A hardware signature never counts for a passkey or an Ed25519 key,
+    // and the other way round.
+    assert_eq!(
+        check(
+            &DeviceKey::Passkey(public),
+            &act,
+            &Proof::Hardware(signature)
+        ),
+        Err(KeyError::KindMismatch)
+    );
+    assert_eq!(
+        check(&key, &act, &Proof::Ed25519(signature)),
+        Err(KeyError::KindMismatch)
+    );
+    // The same point in SEC1 "compact" form (tag 5) is not a listed form.
+    let mut compact = public;
+    compact[0] = 5;
+    assert_eq!(
+        check(
+            &DeviceKey::Hardware(compact),
+            &act,
+            &Proof::Hardware(signature)
+        ),
+        Err(KeyError::BadKey)
+    );
+    let mut off_curve = public;
+    off_curve[1..].fill(0xff);
+    assert_eq!(
+        check(
+            &DeviceKey::Hardware(off_curve),
+            &act,
+            &Proof::Hardware(signature)
+        ),
+        Err(KeyError::BadKey)
+    );
+}
+
+#[test]
+fn a_phone_links_a_laptop_passkey() {
+    let v = vectors();
+    let audience = Audience(arr(text(&v, &["audience"])));
+    let account: [u8; 32] = arr(text(&v, &["hardware", "account"]));
+    let laptop = DeviceKey::Passkey(arr(text(&v, &["hardware", "add_passkey"])));
+    let challenge = add_challenge(&audience, &account, &laptop);
+    assert_eq!(
+        challenge.to_vec(),
+        hex(text(&v, &["hardware", "add_challenge"]))
+    );
+    let possession = PasskeyProof {
+        authenticator_data: hex(text(
+            &v,
+            &["hardware", "add_possession", "authenticator_data"],
+        )),
+        client_data_json: text(&v, &["hardware", "add_possession", "client_data_json"])
+            .as_bytes()
+            .to_vec(),
+        signature: arr(text(&v, &["hardware", "add_possession", "signature"])),
+    };
+    assert_eq!(
+        check(&laptop, &challenge, &Proof::Passkey(possession)),
+        Ok(())
+    );
+    let call = hex(text(&v, &["hardware", "add_key_call"]));
+    let act = act_challenge(&audience, &account, 2, &blake2_256(&call));
+    assert_eq!(
+        act.to_vec(),
+        hex(text(&v, &["hardware", "add_act_challenge"]))
+    );
+    let phone = DeviceKey::Hardware(arr(text(&v, &["hardware", "public"])));
+    let signature: [u8; 64] = arr(text(&v, &["hardware", "add_act", "signature"]));
+    assert_eq!(check(&phone, &act, &Proof::Hardware(signature)), Ok(()));
+}
+
 struct Phone {
     key: SigningKey,
 }

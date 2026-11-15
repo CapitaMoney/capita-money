@@ -1,6 +1,6 @@
 # ADR 0021 – Ways to verify; the document check
 
-Status: accepted for the alpha (owner 2026-11-14: all ways offered, none mandatory). Builds on rule 18 (document check first: chip + selfie), ADR 0013 (person key), ADR 0014 (identity service), ADR 0017 (face check). Concept: [app-full.md](../app-full.md).
+Status: accepted for the alpha (owner 2026-11-14: all ways offered, none mandatory). Changed by [ADR 0024](0024-hardware-keys-checked-phones.md) (owner 2026-11-15): a document check counts only from a checked phone; the laptop hands chip *and* film to a phone; active and chip authentication are required where the document has them; new order start → moves → finish. Builds on rule 18 (document check first: chip + selfie), ADR 0013 (person key), ADR 0014 (identity service), ADR 0017 (face check). Concept: [app-full.md](../app-full.md).
 
 ## Context
 One person, one account: an identity service must establish name and date of birth (the person key, rule 17) and that the person is present. People differ in what they have: a passport, an ID card, a phone with NFC, a laptop, an electronic ID of their state, an address that receives mail – or little of this. The owner: take every way a country offers, make none mandatory, "else people in countries without eID are left out".
