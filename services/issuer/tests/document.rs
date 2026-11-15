@@ -25,13 +25,22 @@ const IN_2011: u64 = 1_306_886_400;
 const IN_2026: u64 = 1_794_700_800;
 
 fn chip() -> capita_mrtd::Chip {
-    let trust = TrustList::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/capita-mrtd/tests/fixtures/csca.pem")).unwrap();
+    let trust = TrustList::load(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/capita-mrtd/tests/fixtures/csca.pem"),
+    )
+    .unwrap();
     read_chip(SOD, DG1, DG2, &trust).unwrap()
 }
 
 #[test]
 fn a_valid_document_names_its_holder() {
-    let Person::NameBirthdate { name, born, place_of_birth } = person_of(&chip(), IN_2011).unwrap() else {
+    let Person::NameBirthdate {
+        name,
+        born,
+        place_of_birth,
+    } = person_of(&chip(), IN_2011).unwrap()
+    else {
         panic!("name and date of birth");
     };
     assert_eq!(name.family, "ERIKSSON");

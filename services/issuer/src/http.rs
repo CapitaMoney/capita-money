@@ -123,7 +123,9 @@ pub struct Finish {
 fn unbase64(text: &str) -> Option<Vec<u8>> {
     use base64::Engine;
     let data = text.split_once("base64,").map_or(text, |(_, d)| d);
-    base64::engine::general_purpose::STANDARD.decode(data.trim()).ok()
+    base64::engine::general_purpose::STANDARD
+        .decode(data.trim())
+        .ok()
 }
 
 /// An answer: HTTP status and JSON body.
@@ -404,10 +406,19 @@ impl<K: KeyService, S: Store> App<K, S> {
         let Some(session) = session else {
             return refuse(404, "session", "unknown or used session; start again");
         };
-        let (Some(sod), Some(dg1), Some(dg2)) = (unbase64(&finish.sod), unbase64(&finish.dg1), unbase64(&finish.dg2)) else {
+        let (Some(sod), Some(dg1), Some(dg2)) = (
+            unbase64(&finish.sod),
+            unbase64(&finish.dg1),
+            unbase64(&finish.dg2),
+        ) else {
             return refuse(400, "request", "chip data: base64");
         };
-        let Some(frames) = finish.frames.iter().map(|f| unbase64(f)).collect::<Option<Vec<_>>>() else {
+        let Some(frames) = finish
+            .frames
+            .iter()
+            .map(|f| unbase64(f))
+            .collect::<Option<Vec<_>>>()
+        else {
             return refuse(400, "request", "frames: base64 pictures");
         };
         let chip = ChipData { sod, dg1, dg2 };

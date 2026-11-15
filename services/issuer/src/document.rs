@@ -112,7 +112,10 @@ impl DocumentCheck {
     pub fn load(config: &DocumentConfig) -> Result<Self, String> {
         let trust = TrustList::load(&config.trust).map_err(|e| e.to_string())?;
         if trust.is_empty() {
-            return Err(format!("{}: no country signing certificate", config.trust.display()));
+            return Err(format!(
+                "{}: no country signing certificate",
+                config.trust.display()
+            ));
         }
         let mut settings = Settings::default();
         if let Some(same) = config.same_person {
@@ -137,7 +140,10 @@ impl DocumentCheck {
     /// If no random numbers are available.
     pub fn start(&self) -> Result<(String, Vec<&'static str>), String> {
         let challenge = self.face.challenge().map_err(|e| format!("{e:?}"))?;
-        Ok((challenge.id, challenge.moves.iter().map(|m| m.word()).collect()))
+        Ok((
+            challenge.id,
+            challenge.moves.iter().map(|m| m.word()).collect(),
+        ))
     }
 
     /// Checks chip and film. Answers the person the chip names.
@@ -151,12 +157,16 @@ impl DocumentCheck {
         frames: &[Vec<u8>],
         now: u64,
     ) -> Result<Person, DocumentRefusal> {
-        let read = read_chip(&chip.sod, &chip.dg1, &chip.dg2, &self.trust).map_err(DocumentRefusal::Chip)?;
+        let read = read_chip(&chip.sod, &chip.dg1, &chip.dg2, &self.trust)
+            .map_err(DocumentRefusal::Chip)?;
         let person = person_of(&read, now)?;
         let photo = photo_of(&read)?;
         let mut pictures = Vec::with_capacity(frames.len());
         for frame in frames {
-            pictures.push(capita_face::picture_from_bytes(frame).map_err(|e| DocumentRefusal::Picture(format!("{e:?}")))?);
+            pictures.push(
+                capita_face::picture_from_bytes(frame)
+                    .map_err(|e| DocumentRefusal::Picture(format!("{e:?}")))?,
+            );
         }
         match self.face.check(challenge, &photo, &pictures) {
             Ok(Ok(_passed)) => Ok(person),
@@ -171,7 +181,9 @@ fn face_words(refusal: &FaceRefusal) -> String {
         FaceRefusal::Challenge => "the movements were asked for too long ago; start again".into(),
         FaceRefusal::FrameCount => "too few or too many pictures".into(),
         FaceRefusal::DocumentPhoto => "the photo on the chip shows no single face".into(),
-        FaceRefusal::NotLive(fault) => format!("the film does not show the movements in one take ({fault:?})"),
+        FaceRefusal::NotLive(fault) => {
+            format!("the film does not show the movements in one take ({fault:?})")
+        }
         FaceRefusal::NotSamePerson { .. } => "the face is not the face of the document".into(),
     }
 }
@@ -189,8 +201,12 @@ pub fn person_of(chip: &Chip, now: u64) -> Result<Person, DocumentRefusal> {
     if expiry < today {
         return Err(DocumentRefusal::Expired);
     }
-    let born = Date::new(mrz.birth.birth_year(today.year()), mrz.birth.mm, mrz.birth.dd)
-        .map_err(|_| DocumentRefusal::BadDate)?;
+    let born = Date::new(
+        mrz.birth.birth_year(today.year()),
+        mrz.birth.mm,
+        mrz.birth.dd,
+    )
+    .map_err(|_| DocumentRefusal::BadDate)?;
     Ok(Person::NameBirthdate {
         name: Name {
             family: mrz.family_name.clone(),
@@ -203,9 +219,8 @@ pub fn person_of(chip: &Chip, now: u64) -> Result<Person, DocumentRefusal> {
 
 fn photo_of(chip: &Chip) -> Result<image::RgbImage, DocumentRefusal> {
     match chip.photo_format {
-        ImageFormat::Jpeg => {
-            capita_face::picture_from_bytes(&chip.photo).map_err(|e| DocumentRefusal::Picture(format!("{e:?}")))
-        }
+        ImageFormat::Jpeg => capita_face::picture_from_bytes(&chip.photo)
+            .map_err(|e| DocumentRefusal::Picture(format!("{e:?}"))),
         ImageFormat::Jpeg2000 => {
             let image = jpeg2k::Image::from_bytes(&chip.photo)
                 .map_err(|e| DocumentRefusal::Picture(format!("JPEG 2000: {e}")))?;
