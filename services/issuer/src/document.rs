@@ -18,14 +18,16 @@
 
 use std::path::PathBuf;
 
+use capita_attest::AttestError;
 use capita_face::{FaceCheck, Refusal as FaceRefusal, Settings};
 use capita_mrtd::groups::ImageFormat;
 use capita_mrtd::pa::TrustList;
-use capita_mrtd::{read_chip, Chip, MrtdError};
+use capita_mrtd::{check_chip, Chip, ChipFiles, ChipProof, MrtdError};
 use capita_person_key::canonical::{Date, Name};
 use serde::Deserialize;
 
 use crate::issue::Person;
+use crate::phone::{request_digest, DigestParts, PhoneCheck, PhoneConfig, PhoneProof};
 
 /// `[checks.document]` of the configuration.
 #[derive(Clone, Debug, Deserialize)]
@@ -39,15 +41,21 @@ pub struct DocumentConfig {
     /// Same person from this likeness on (default of `capita-face`).
     #[serde(default)]
     pub same_person: Option<f32>,
-    /// Head movements per challenge (default of `capita-face`). More where
-    /// no phone check is possible (ADR 0023).
+    /// Head movements per challenge (default of `capita-face`).
     #[serde(default)]
     pub moves: Option<usize>,
+    /// The phone check (ADR 0024). Required: a document check counts only
+    /// from a checked phone.
+    #[serde(default)]
+    pub phone: Option<PhoneConfig>,
 }
 
 /// Why a document check fails.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DocumentRefusal {
+    /// The phone that read the chip and filmed the face did not pass the
+    /// phone check (ADR 0024).
+    Phone(AttestError),
     /// The chip data are not genuine, or not readable.
     Chip(MrtdError),
     /// The document has expired.
@@ -67,6 +75,7 @@ impl DocumentRefusal {
     #[must_use]
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Phone(_) => "phone",
             Self::Chip(_) => "chip",
             Self::Expired => "expired",
             Self::BadDate => "chip",
@@ -80,6 +89,7 @@ impl DocumentRefusal {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::Phone(e) => e.to_string(),
             Self::Chip(e) => e.to_string(),
             Self::Expired => "the document has expired".into(),
             Self::BadDate => "a date on the chip is not a day of the calendar".into(),
@@ -92,6 +102,7 @@ impl DocumentRefusal {
 pub struct DocumentCheck {
     trust: TrustList,
     face: FaceCheck,
+    phone: PhoneCheck,
 }
 
 /// What the phone read from the chip.
@@ -102,6 +113,25 @@ pub struct ChipData {
     pub dg1: Vec<u8>,
     /// DG2.
     pub dg2: Vec<u8>,
+    /// DG14, if the chip has it.
+    pub dg14: Option<Vec<u8>>,
+    /// DG15, if the chip has it.
+    pub dg15: Option<Vec<u8>>,
+    /// The chip's answer to the chip nonce (active authentication).
+    pub active: Option<Vec<u8>>,
+    /// Whether the phone ran chip authentication successfully.
+    pub chip_authenticated: bool,
+}
+
+/// What one document check session holds: its id, the 32-byte nonce of the
+/// phone check and the 8-byte nonce for the chip.
+pub struct Nonces<'a> {
+    /// The session id.
+    pub session: &'a str,
+    /// The phone check's nonce.
+    pub phone: &'a [u8; 32],
+    /// The chip's nonce (active authentication).
+    pub chip: &'a [u8; 8],
 }
 
 impl DocumentCheck {
@@ -124,14 +154,23 @@ impl DocumentCheck {
         if let Some(moves) = config.moves {
             settings.moves = moves;
         }
+        let phone = PhoneCheck::load(config.phone.as_ref().ok_or(
+            "document check without [checks.document.phone]: a verification counts only from a checked phone (ADR 0024)",
+        )?)?;
         let face = FaceCheck::load(&config.face_models, settings).map_err(|e| format!("{e:?}"))?;
-        Ok(Self { trust, face })
+        Ok(Self { trust, face, phone })
     }
 
     /// How many country signing certificates the trust list holds.
     #[must_use]
     pub fn countries(&self) -> usize {
         self.trust.len()
+    }
+
+    /// The kinds of phones the service can check.
+    #[must_use]
+    pub fn phones(&self) -> Vec<&'static str> {
+        self.phone.kinds()
     }
 
     /// A new challenge: its id and the head movements, as words.
@@ -146,19 +185,53 @@ impl DocumentCheck {
         ))
     }
 
-    /// Checks chip and film. Answers the person the chip names.
+    /// Checks phone, chip and film, in this order. Answers the person the
+    /// chip names.
     ///
     /// # Errors
     /// Why the check fails ([`DocumentRefusal`]).
     pub fn finish(
         &self,
+        nonces: &Nonces<'_>,
         challenge: &str,
         chip: &ChipData,
+        phone: &PhoneProof,
         frames: &[Vec<u8>],
         now: u64,
     ) -> Result<Person, DocumentRefusal> {
-        let read = read_chip(&chip.sod, &chip.dg1, &chip.dg2, &self.trust)
-            .map_err(DocumentRefusal::Chip)?;
+        let digest = request_digest(
+            nonces.phone,
+            nonces.session,
+            &DigestParts {
+                sod: &chip.sod,
+                dg1: &chip.dg1,
+                dg2: &chip.dg2,
+                dg14: chip.dg14.as_deref(),
+                dg15: chip.dg15.as_deref(),
+                active: chip.active.as_deref(),
+                chip_authenticated: chip.chip_authenticated,
+                frames,
+            },
+        );
+        self.phone
+            .check(phone, nonces.phone, &digest, now)
+            .map_err(DocumentRefusal::Phone)?;
+        let read = check_chip(
+            &ChipFiles {
+                sod: &chip.sod,
+                dg1: &chip.dg1,
+                dg2: &chip.dg2,
+                dg14: chip.dg14.as_deref(),
+                dg15: chip.dg15.as_deref(),
+            },
+            &ChipProof {
+                nonce: nonces.chip,
+                active: chip.active.as_deref(),
+                chip_authenticated: chip.chip_authenticated,
+            },
+            &self.trust,
+        )
+        .map_err(DocumentRefusal::Chip)?;
         let person = person_of(&read, now)?;
         let photo = photo_of(&read)?;
         let mut pictures = Vec::with_capacity(frames.len());

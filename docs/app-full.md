@@ -69,7 +69,7 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 | 6 | eID adapters (German eID, EU wallet, Estonia), after the e.V. | Opus | later |
 | 7 | iPhone shell, store listings | Sonnet | after e.V. + Apple account |
 | 8 | hardware key on chain (`DeviceKey::Hardware`), ADR 0024 | Opus | built 2026-11-15 |
-| 9 | phone check in the identity service (Android key attestation, App Attest) + chip proof (active / chip authentication); new order start → moves → finish | Opus | next |
+| 9 | phone check in the identity service (Android key attestation, App Attest) + chip proof (active / chip authentication); new order start → moves → finish | Opus | built 2026-11-15 |
 | 10 | Android shell: hardware key, session key with attestation, chip authentication + active authentication | Opus | next |
 | 11 | iPhone shell (Capacitor, Core NFC, Secure Enclave, App Attest), built by CI; tests by friends with Macs | Opus | next |
 | 12 | German eID adapter (`eid-de`), built and tested against a stand-in; certificate = owner | Opus | next |

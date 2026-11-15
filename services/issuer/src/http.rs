@@ -47,8 +47,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::checks::{unescape, Challenger, Stated};
-use crate::document::{ChipData, DocumentCheck};
+use crate::document::{ChipData, DocumentCheck, Nonces};
 use crate::issue::{Action, Issued, Person, Refusal, Request, Service};
+use crate::phone::PhoneProof;
 use crate::store::Store;
 use crate::{hex, unhex_n};
 
@@ -58,8 +59,10 @@ const MAX_BODY: u64 = 16 * 1024;
 const SESSION_SECS: u64 = 3 * 3_600;
 /// Longest request of a document check: chip data and frames, in base64.
 const DOCUMENT_MAX_BODY: u64 = 16 * 1024 * 1024;
-/// How long a document check may take from start to finish, in seconds.
-const DOCUMENT_SECS: u64 = 10 * 60;
+/// How long a document check may take from start to finish, in seconds:
+/// holding a document to the phone may take a while; the head movements are
+/// asked for separately and hold one minute (`capita-face`).
+const DOCUMENT_SECS: u64 = 5 * 60;
 /// Most checks by code open at a time.
 const MAX_SESSIONS: usize = 10_000;
 
@@ -87,6 +90,15 @@ struct Session {
     opened: u64,
 }
 
+/// A document check under way (ADR 0024): the session, its nonces and the
+/// face challenge once asked for.
+struct DocumentSession {
+    base: Session,
+    phone_nonce: [u8; 32],
+    chip_nonce: [u8; 8],
+    challenge: Option<String>,
+}
+
 /// The service with its network side.
 pub struct App<K: KeyService, S: Store> {
     service: Mutex<Service<K, S>>,
@@ -94,7 +106,7 @@ pub struct App<K: KeyService, S: Store> {
     challenger: Option<Challenger>,
     sessions: Mutex<BTreeMap<String, Session>>,
     document: Option<DocumentCheck>,
-    documents: Mutex<BTreeMap<String, Session>>,
+    documents: Mutex<BTreeMap<String, DocumentSession>>,
 }
 
 /// What `POST /v1/document/finish` accepts: the chip data and the frames of
@@ -110,14 +122,85 @@ pub struct Finish {
     pub dg1: String,
     /// DG2.
     pub dg2: String,
-    /// DG14, if the chip has it (not checked yet).
+    /// DG14, if the chip has it.
     #[serde(default)]
     pub dg14: Option<String>,
-    /// DG15, if the chip has it (not checked yet).
+    /// DG15, if the chip has it.
     #[serde(default)]
     pub dg15: Option<String>,
+    /// The chip's signature of the chip nonce (active authentication), if
+    /// it has DG15.
+    #[serde(default)]
+    pub active: Option<String>,
+    /// Whether the phone ran chip authentication successfully.
+    #[serde(default, rename = "chipAuthenticated")]
+    pub chip_authenticated: bool,
     /// JPEG or PNG pictures: straight, the movements, straight again.
     pub frames: Vec<String>,
+    /// The phone check (ADR 0024).
+    pub phone: PhoneJson,
+}
+
+/// The phone check as the app sends it, in base64.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum PhoneJson {
+    /// Android key attestation: the session key's chain (key first) and
+    /// its signature over the request digest.
+    #[serde(rename = "android")]
+    Android {
+        /// The certificate chain, DER in base64.
+        chain: Vec<String>,
+        /// ECDSA signature (DER) over the request digest.
+        signature: String,
+    },
+    /// Apple App Attest: a fresh key, its attestation, its assertion.
+    #[serde(rename = "apple")]
+    Apple {
+        /// SHA-256 of the key's public point.
+        #[serde(rename = "keyId")]
+        key_id: String,
+        /// The attestation object.
+        attestation: String,
+        /// The assertion over the request digest.
+        assertion: String,
+    },
+}
+
+impl PhoneJson {
+    fn decode(&self) -> Option<PhoneProof> {
+        match self {
+            Self::Android { chain, signature } => Some(PhoneProof::Android {
+                chain: chain
+                    .iter()
+                    .map(|c| unbase64(c))
+                    .collect::<Option<Vec<_>>>()?,
+                signature: unbase64(signature)?,
+            }),
+            Self::Apple {
+                key_id,
+                attestation,
+                assertion,
+            } => Some(PhoneProof::Apple {
+                key_id: unbase64(key_id)?,
+                attestation: unbase64(attestation)?,
+                assertion: unbase64(assertion)?,
+            }),
+        }
+    }
+}
+
+/// What `POST /v1/document/moves` accepts.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Moves {
+    /// The session `POST /v1/document/start` answered.
+    pub session: String,
+}
+
+fn base64(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 fn unbase64(text: &str) -> Option<Vec<u8>> {
@@ -203,6 +286,7 @@ impl<K: KeyService, S: Store> App<K, S> {
         if self.challenger.is_some() {
             checks.push("challenger");
         }
+        let phones = self.document.as_ref().map(DocumentCheck::phones);
         if self.document.is_some() {
             checks.push("document");
         }
@@ -217,6 +301,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 "level": settings.rules.level,
                 "validitySeconds": settings.rules.validity,
                 "checks": checks,
+                "phones": phones.unwrap_or_default(),
             }),
         )
     }
@@ -354,9 +439,9 @@ impl<K: KeyService, S: Store> App<K, S> {
     }
 
     fn document_start(&self, body: &[u8], now: u64) -> Answer {
-        let Some(document) = &self.document else {
+        if self.document.is_none() {
             return refuse(404, "not-found", "no such check");
-        };
+        }
         let (ask, account) = match parse(body) {
             Ok(parsed) => parsed,
             Err(answer) => return answer,
@@ -365,30 +450,73 @@ impl<K: KeyService, S: Store> App<K, S> {
             Ok(former) => former,
             Err(answer) => return answer,
         };
-        let (id, moves) = match document.start() {
-            Ok(challenge) => challenge,
-            Err(e) => return refuse(500, "system", &e),
+        let mut random = [0u8; 56];
+        if getrandom::fill(&mut random).is_err() {
+            return refuse(500, "system", "no random numbers");
+        }
+        let (id, nonces) = random.split_at(16);
+        let (phone, chip) = nonces.split_at(32);
+        let (Ok(phone_nonce), Ok(chip_nonce)) =
+            (<[u8; 32]>::try_from(phone), <[u8; 8]>::try_from(chip))
+        else {
+            return refuse(500, "system", "no random numbers");
         };
+        let id = hex(id);
         let Ok(mut sessions) = self.documents.lock() else {
             return refuse(500, "system", "service unavailable");
         };
-        sessions.retain(|_, s| now.saturating_sub(s.opened) < DOCUMENT_SECS);
+        sessions.retain(|_, s| now.saturating_sub(s.base.opened) < DOCUMENT_SECS);
         if sessions.len() >= MAX_SESSIONS {
             return refuse(503, "busy", "too many checks open; try again later");
         }
         sessions.insert(
             id.clone(),
-            Session {
-                account,
-                former,
-                ticket: ask.ticket,
-                opened: now,
+            DocumentSession {
+                base: Session {
+                    account,
+                    former,
+                    ticket: ask.ticket,
+                    opened: now,
+                },
+                phone_nonce,
+                chip_nonce,
+                challenge: None,
             },
         );
         (
             200,
-            json!({ "session": id, "moves": moves, "validSeconds": DOCUMENT_SECS }),
+            json!({
+                "session": id,
+                "nonce": base64(&phone_nonce),
+                "chipNonce": base64(&chip_nonce),
+                "validSeconds": DOCUMENT_SECS,
+            }),
         )
+    }
+
+    fn document_moves(&self, body: &[u8], now: u64) -> Answer {
+        let Some(document) = &self.document else {
+            return refuse(404, "not-found", "no such check");
+        };
+        let moves: Moves = match serde_json::from_slice(body) {
+            Ok(moves) => moves,
+            Err(e) => return refuse(400, "request", &e.to_string()),
+        };
+        let Ok(mut sessions) = self.documents.lock() else {
+            return refuse(500, "system", "service unavailable");
+        };
+        let Some(session) = sessions
+            .get_mut(&moves.session)
+            .filter(|s| now.saturating_sub(s.base.opened) < DOCUMENT_SECS)
+        else {
+            return refuse(404, "session", "unknown or used session; start again");
+        };
+        let (challenge, words) = match document.start() {
+            Ok(challenge) => challenge,
+            Err(e) => return refuse(500, "system", &e),
+        };
+        session.challenge = Some(challenge);
+        (200, json!({ "moves": words, "validSeconds": 60 }))
     }
 
     fn document_finish(&self, body: &[u8], now: u64) -> Answer {
@@ -403,13 +531,28 @@ impl<K: KeyService, S: Store> App<K, S> {
             Ok(mut sessions) => sessions.remove(&finish.session),
             Err(_) => return refuse(500, "system", "service unavailable"),
         };
-        let Some(session) = session else {
+        let Some(session) = session.filter(|s| now.saturating_sub(s.base.opened) < DOCUMENT_SECS)
+        else {
             return refuse(404, "session", "unknown or used session; start again");
+        };
+        let Some(challenge) = &session.challenge else {
+            return refuse(409, "session", "ask for the movements first");
         };
         let (Some(sod), Some(dg1), Some(dg2)) = (
             unbase64(&finish.sod),
             unbase64(&finish.dg1),
             unbase64(&finish.dg2),
+        ) else {
+            return refuse(400, "request", "chip data: base64");
+        };
+        let optional = |field: &Option<String>| match field {
+            Some(text) => unbase64(text).map(Some),
+            None => Some(None),
+        };
+        let (Some(dg14), Some(dg15), Some(active)) = (
+            optional(&finish.dg14),
+            optional(&finish.dg15),
+            optional(&finish.active),
         ) else {
             return refuse(400, "request", "chip data: base64");
         };
@@ -421,18 +564,34 @@ impl<K: KeyService, S: Store> App<K, S> {
         else {
             return refuse(400, "request", "frames: base64 pictures");
         };
-        let chip = ChipData { sod, dg1, dg2 };
-        let person = match document.finish(&finish.session, &chip, &frames, now) {
+        let Some(phone) = finish.phone.decode() else {
+            return refuse(400, "request", "phone check: base64");
+        };
+        let chip = ChipData {
+            sod,
+            dg1,
+            dg2,
+            dg14,
+            dg15,
+            active,
+            chip_authenticated: finish.chip_authenticated,
+        };
+        let nonces = Nonces {
+            session: &finish.session,
+            phone: &session.phone_nonce,
+            chip: &session.chip_nonce,
+        };
+        let person = match document.finish(&nonces, challenge, &chip, &phone, &frames, now) {
             Ok(person) => person,
             Err(why) => return refuse(422, why.code(), &why.message()),
         };
         self.issue(
             Request {
-                account: session.account,
+                account: session.base.account,
                 person,
                 proof: "document-chip".into(),
-                former: session.former,
-                ticket: session.ticket,
+                former: session.base.former,
+                ticket: session.base.ticket,
             },
             now,
         )
@@ -447,6 +606,7 @@ impl<K: KeyService, S: Store> App<K, S> {
             ("POST", "/v1/challenger/start") => self.challenger_start(body, now),
             ("GET", "/v1/challenger/callback") => self.challenger_callback(query, now),
             ("POST", "/v1/document/start") => self.document_start(body, now),
+            ("POST", "/v1/document/moves") => self.document_moves(body, now),
             ("POST", "/v1/document/finish") => self.document_finish(body, now),
             _ => refuse(404, "not-found", "no such address"),
         }

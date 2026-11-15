@@ -39,6 +39,7 @@ pub mod config;
 pub mod document;
 pub mod http;
 pub mod issue;
+pub mod phone;
 pub mod store;
 
 /// Bytes as lower-case hexadecimal text.

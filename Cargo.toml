@@ -3,6 +3,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/capita-attest",
     "crates/capita-core",
     "crates/capita-credential",
     "crates/capita-door",
@@ -25,6 +26,7 @@ members = [
 # pallets pull in all of it: `cargo test -p pallet-capita`,
 # `-p pallet-capita-credential`, `-p capita-runtime`, `-p capita-node`.
 default-members = [
+    "crates/capita-attest",
     "crates/capita-core",
     "crates/capita-credential",
     "crates/capita-door",
@@ -45,6 +47,7 @@ authors = ["Capita Money contributors"]
 
 # One place for every outside source of the chain side (docs/adr/0010).
 [workspace.dependencies]
+capita-attest = { path = "crates/capita-attest" }
 capita-core = { path = "crates/capita-core", default-features = false }
 capita-credential = { path = "crates/capita-credential", default-features = false }
 capita-door = { path = "crates/capita-door", default-features = false }
