@@ -157,7 +157,7 @@ fn rsa_answer(
 ) -> Vec<u8> {
     let k = rsa.size() as usize;
     let m1: Vec<u8> = (0..k - 1 - md.size() - trailer.len())
-        .map(|i| (i * 7 + 3) as u8)
+        .map(|i| i.to_le_bytes()[0].wrapping_mul(7).wrapping_add(3))
         .collect();
     let mut message = m1.clone();
     message.extend_from_slice(nonce);
@@ -178,7 +178,8 @@ fn dg15_of(rsa: &Rsa<openssl::pkey::Private>) -> Vec<u8> {
         .unwrap()
         .public_key_to_der()
         .unwrap();
-    let mut out = vec![0x6f, 0x82, (spki.len() >> 8) as u8, spki.len() as u8];
+    let [hi, lo] = u16::try_from(spki.len()).unwrap().to_be_bytes();
+    let mut out = vec![0x6f, 0x82, hi, lo];
     out.extend_from_slice(&spki);
     out
 }
