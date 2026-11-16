@@ -9,7 +9,8 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
-    clippy::arithmetic_side_effects
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation
 )]
 
 use capita_mrtd::aa::{active_authentication, needs_chip_authentication};
