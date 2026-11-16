@@ -169,6 +169,7 @@ fn params_source(p: &Params) -> String {
 pub fn module(set: &RuleSet) -> Result<String, Error> {
     set.check()?;
     let params = set.params()?;
+    let goods = set.goods.params()?;
     let mut out = String::new();
     let written = write!(
         out,
@@ -218,6 +219,24 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20   /// (`spam.new_keys_per_block`).\n\
          \x20   pub const SPAM_NEW_KEYS_PER_BLOCK: u32 = {new_keys_per_block};\n\
          \n\
+         \x20   /// The goods rules (`[goods]`) as parameters of `capita-goods`.\n\
+         \x20   /// Checked when this crate was built: never `None`.\n\
+         \x20   #[must_use]\n\
+         \x20   pub fn goods() -> Option<capita_goods::GoodsParams> {{\n\
+         \x20       Some(capita_goods::GoodsParams {{\n\
+         \x20           ban_months: {g_ban},\n\
+         \x20           reset_after: capita_core::types::Duration::from_secs({g_reset}),\n\
+         \x20           compensation_factor: {g_comp},\n\
+         \x20           finder_reward_factor: {g_finder},\n\
+         \x20           max_downloads: {g_dl},\n\
+         \x20           answer_time: capita_core::types::Duration::from_secs({g_answer}),\n\
+         \x20           earnings_hold: capita_core::types::Duration::from_secs({g_hold}),\n\
+         \x20           match_threshold: capita_core::types::Share::from_ppm({g_match}).ok()?,\n\
+         \x20           gift: {g_gift},\n\
+         \x20           resale: {g_resale},\n\
+         \x20       }})\n\
+         \x20   }}\n\
+         \n\
          \x20   /// The monetary rules as parameters of the core, in force from the\n\
          \x20   /// start of time. Checked when this crate was built: never `None`.\n\
          \x20   #[must_use]\n\
@@ -243,6 +262,16 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
         new_key_per_day = set.spam.new_key_per_day.value,
         new_keys_per_block = set.spam.new_keys_per_block.value,
         params = params_source(&params),
+        g_ban = goods.ban_months,
+        g_reset = goods.reset_after.secs(),
+        g_comp = goods.compensation_factor,
+        g_finder = goods.finder_reward_factor,
+        g_dl = goods.max_downloads,
+        g_answer = goods.answer_time.secs(),
+        g_hold = goods.earnings_hold.secs(),
+        g_match = goods.match_threshold.ppm(),
+        g_gift = goods.gift,
+        g_resale = goods.resale,
     );
     written.map_err(|e| Error(e.to_string()))?;
     Ok(out)

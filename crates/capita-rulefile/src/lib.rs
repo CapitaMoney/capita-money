@@ -364,6 +364,54 @@ pub struct SpamRules {
     pub new_keys_per_block: Rule<u32>,
 }
 
+/// Sold digital goods (rules diary 27 and 28, ADR 0019): the sanction
+/// ladder, compensation, the work registry, downloads and gifts. Read by the
+/// market service and the chain (`capita-goods`), not by the core.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GoodsRules {
+    /// Length of one ban, in calendar months.
+    pub ban_months: Rule<u8>,
+    /// Time without a violation after which the ladder starts again.
+    pub reset_after: Rule<Span>,
+    /// Compensation for the seller, as a multiple of the price.
+    pub compensation_factor: Rule<u8>,
+    /// Reward for whoever finds a stolen work, as a multiple of the price.
+    pub finder_reward_factor: Rule<u8>,
+    /// Downloads one sale gives.
+    pub max_downloads: Rule<u8>,
+    /// Time an accused member has to answer before the decision.
+    pub answer_time: Rule<Span>,
+    /// Time the earnings of a newly registered work are held.
+    pub earnings_hold: Rule<Span>,
+    /// Similarity of the text print from which an upload is the same work.
+    pub match_threshold: Rule<Percent>,
+    /// A buyer may give the licence away.
+    pub gift: Rule<bool>,
+    /// A buyer may sell the licence on.
+    pub resale: Rule<bool>,
+}
+
+impl GoodsRules {
+    /// The values as the parameters of `capita-goods`, checked.
+    pub fn params(&self) -> Result<capita_goods::GoodsParams, Error> {
+        let params = capita_goods::GoodsParams {
+            ban_months: self.ban_months.value,
+            reset_after: self.reset_after.value.0,
+            compensation_factor: self.compensation_factor.value,
+            finder_reward_factor: self.finder_reward_factor.value,
+            max_downloads: self.max_downloads.value,
+            answer_time: self.answer_time.value.0,
+            earnings_hold: self.earnings_hold.value.0,
+            match_threshold: self.match_threshold.value.0,
+            gift: self.gift.value,
+            resale: self.resale.value,
+        };
+        params.validate().map_err(|e| Error::at("goods", e))?;
+        Ok(params)
+    }
+}
+
 /// A rule that is behaviour, with the place it lives in.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -412,6 +460,8 @@ pub struct RuleSet {
     pub keys: KeysRules,
     /// The free quota of transactions.
     pub spam: SpamRules,
+    /// Sold digital goods.
+    pub goods: GoodsRules,
     /// Rules that are behaviour and live in code.
     #[serde(default)]
     pub register: Vec<RegisterEntry>,
@@ -601,6 +651,7 @@ impl RuleSet {
                 "must be above zero: nobody could join",
             ));
         }
+        self.goods.params()?;
         if self.identity.membership_period.value.0.is_zero() {
             return Err(Error::at(
                 "identity.membership_period",
@@ -793,6 +844,51 @@ impl RuleSet {
             &spam.new_keys_per_block,
             spam.new_keys_per_block.value.to_string(),
         ));
+        let g = &self.goods;
+        lines.extend([
+            value(
+                "goods.ban_months",
+                &g.ban_months,
+                g.ban_months.value.to_string(),
+            ),
+            value(
+                "goods.reset_after",
+                &g.reset_after,
+                g.reset_after.value.to_string(),
+            ),
+            value(
+                "goods.compensation_factor",
+                &g.compensation_factor,
+                g.compensation_factor.value.to_string(),
+            ),
+            value(
+                "goods.finder_reward_factor",
+                &g.finder_reward_factor,
+                g.finder_reward_factor.value.to_string(),
+            ),
+            value(
+                "goods.max_downloads",
+                &g.max_downloads,
+                g.max_downloads.value.to_string(),
+            ),
+            value(
+                "goods.answer_time",
+                &g.answer_time,
+                g.answer_time.value.to_string(),
+            ),
+            value(
+                "goods.earnings_hold",
+                &g.earnings_hold,
+                g.earnings_hold.value.to_string(),
+            ),
+            value(
+                "goods.match_threshold",
+                &g.match_threshold,
+                g.match_threshold.value.to_string(),
+            ),
+            value("goods.gift", &g.gift, g.gift.value.to_string()),
+            value("goods.resale", &g.resale, g.resale.value.to_string()),
+        ]);
         lines.extend(self.register.iter().map(|e| Line {
             path: format!("register {}", e.id),
             value: e.rule.clone(),

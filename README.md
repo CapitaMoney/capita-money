@@ -6,7 +6,7 @@ Every verified person receives Capita continuously, at the same rate, worldwide.
 Website: [capitamoney.com](https://capitamoney.com)
 
 ## Status
-Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Lost key (M3b): a person verifies again and the account moves to the new key. Person key (M3b): `capita-person-key` – one identifier per person, without personal data. Identity service (M3b): `capita-issuer` checks a person and signs the claim. Euro door: GNU Taler takes euros, the chain mints bought Capita (`capita-door`, `pallet-capita-door`, `services/door`). Face check (1c): `capita-face` – selfie against the document photo, with a liveness challenge. Next: a check of identity documents, the app. Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
+Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate pallet (M2): `pallet-capita`. A local test chain around it (M2): `capita-runtime` and `capita-node`, with Duniter's identity and membership pallets, without its web of trust. Identity (M3): trusted identity services sign short claims about the holders of accounts; `capita-credential` checks them, `pallet-capita-credential` keeps the list of services and the claims on chain. Lost key (M3b): a person verifies again and the account moves to the new key. Person key (M3b): `capita-person-key` – one identifier per person, without personal data. Identity service (M3b): `capita-issuer` checks a person and signs the claim. Euro door: GNU Taler takes euros, the chain mints bought Capita (`capita-door`, `pallet-capita-door`, `services/door`). Face check (1c): `capita-face` – selfie against the document photo, with a liveness challenge. Sold digital goods: `capita-goods` – the sanction ladder for leaked copies and stolen works, the work registry; `capita-marks` – personal copies of EPUB and PDF with a hidden mark, the mark reader, fingerprints ([ADR 0019](docs/adr/0019-sold-digital-goods.md)). Next: a check of identity documents, the app. Rules are being finalized in parallel: every rule value stands in one file, [`rules/alpha.toml`](rules/alpha.toml), with its status – decided, default or example.
 
 ## Layout
 - [`docs/architecture.md`](docs/architecture.md) – components, data flows, trust boundaries, threat model
@@ -18,6 +18,8 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`crates/capita-person-key`](crates/capita-person-key) – the person key: canonical form of checked data, keyed function (Rust, `no_std`)
 - [`services/issuer`](services/issuer) – the identity service: checks a person, signs the claim, forgets the data
 - [`crates/capita-door`](crates/capita-door) – the euro door: vouchers and tickets, signed bytes, check (Rust, `no_std`)
+- [`crates/capita-goods`](crates/capita-goods) – sold digital goods: sanction ladder, compensation, work registry, text print (Rust, `no_std`)
+- [`crates/capita-marks`](crates/capita-marks) – personal copies of EPUB, PDF and text with a hidden mark, the mark reader, fingerprints; command line `capita-marks`
 - [`services/door`](services/door) – the euro door service: GNU Taler payment in, voucher or tickets out
 - [`services/face`](services/face) – the face check: selfie against document photo, liveness by head movements, keeps nothing
 - [`crates/capita-rulefile`](crates/capita-rulefile) – reads and checks a rules file
@@ -81,6 +83,7 @@ Euros → Capita, never back (diary 3). A door takes a payment through GNU Taler
 - **Limits** come from the rules file: `door.capita_per_euro`, `door.max_payment_eur`, `verification.price_eur`.
 ```
 cargo test -p capita-door -p capita-door-service
+cargo test -p capita-goods -p capita-marks
 cargo test -p pallet-capita-door
 services/door/demo/run-demo.sh                 # test chain + door + GNU Taler demo money (KUDOS)
 MERCHANT=mock services/door/demo/run-demo.sh   # the same without a wallet: orders count as paid

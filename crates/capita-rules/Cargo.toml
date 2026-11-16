@@ -17,10 +17,11 @@ workspace = true
 default = []
 # Forwards `std` to the core. The crate itself never uses the standard
 # library.
-std = ["capita-core/std"]
+std = ["capita-core/std", "capita-goods/std"]
 
 [dependencies]
 capita-core = { workspace = true }
+capita-goods = { workspace = true }
 
 [build-dependencies]
 capita-rulefile = { workspace = true }
