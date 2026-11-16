@@ -258,7 +258,7 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 26 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 29 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
@@ -269,6 +269,9 @@ fn the_overview_lists_every_rule_with_its_status() {
     assert_eq!(line("identity.membership_period").value, "365 days");
     assert_eq!(line("demurrage.rate").value, "off");
     assert_eq!(line("door.max_payment_eur").value, "100.00");
+    assert_eq!(line("spam.person_per_day").value, "100");
+    assert_eq!(line("spam.new_key_per_day").value, "5");
+    assert_eq!(line("spam.new_keys_per_block").value, "10");
     assert_eq!(line("lending.repayment_share").status, Status::Example);
 }
 
@@ -310,6 +313,31 @@ fn rules_that_do_not_fit_together_are_refused() {
     // a rule of the register without a place
     let problem = fixture_with("planned = \"market (M5)\"", "").unwrap_err();
     assert!(problem.contains("digital-goods-first"), "{problem}");
+
+    // a free quota that lets nobody pay, verify or join
+    let spam = |number: &str, note: &str| {
+        format!("value = {number}\nstatus = \"default\"\nsource = \"ADR 0029\"\nnote = \"{note}")
+    };
+    for (from, to, rule) in [
+        (
+            spam("100", "Transactions a verified person"),
+            spam("0", "Transactions a verified person"),
+            "spam.person_per_day",
+        ),
+        (
+            spam("5", "Transactions a key without"),
+            spam("1", "Transactions a key without"),
+            "spam.new_key_per_day",
+        ),
+        (
+            spam("10", "Transactions of keys without"),
+            spam("0", "Transactions of keys without"),
+            "spam.new_keys_per_block",
+        ),
+    ] {
+        let problem = fixture_with(&from, &to).unwrap_err();
+        assert!(problem.contains(rule), "{problem}");
+    }
 }
 
 #[test]
@@ -322,6 +350,9 @@ fn the_source_of_a_rule_set_names_its_values() {
     assert!(source.contains("VERIFICATION_PRICE_EUR_CENTS: u64 = 100"));
     assert!(source.contains("PERSON_KEY_BASIS: &str = \"name-birthdate\""));
     assert!(source.contains("Duration::from_secs(604800)"));
+    assert!(source.contains("SPAM_PERSON_PER_DAY: u32 = 100"));
+    assert!(source.contains("SPAM_NEW_KEY_PER_DAY: u32 = 5"));
+    assert!(source.contains("SPAM_NEW_KEYS_PER_BLOCK: u32 = 10"));
     let both = codegen::library(&[set.clone(), set]).unwrap_err();
     assert!(both.0.contains("two rule sets"), "{}", both.0);
 }

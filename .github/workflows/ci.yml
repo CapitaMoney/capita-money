@@ -154,17 +154,19 @@ jobs:
       # compiler errors and failed tests become annotations of the run
       - run: echo "::add-matcher::.github/rust-problem-matcher.json"
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy --target wasm32v1-none
-      - run: cargo clippy -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys --all-targets -- -D warnings
-      - run: cargo test -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys
+      - run: cargo clippy -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys -p pallet-capita-quota --all-targets -- -D warnings
+      - run: cargo test -p pallet-capita -p pallet-capita-credential -p pallet-capita-door -p pallet-capita-keys -p pallet-capita-quota
       - run: cargo check -p pallet-capita --features try-runtime
       - run: cargo check -p pallet-capita-credential --features try-runtime
       - run: cargo check -p pallet-capita-door --features try-runtime
       - run: cargo check -p pallet-capita-keys --features try-runtime
+      - run: cargo check -p pallet-capita-quota --features try-runtime
       # the form the pallets take inside a runtime: WebAssembly, no std
       - run: cargo check -p pallet-capita --no-default-features --target wasm32v1-none
       - run: cargo check -p pallet-capita-credential --no-default-features --target wasm32v1-none
       - run: cargo check -p pallet-capita-door --no-default-features --target wasm32v1-none
       - run: cargo check -p pallet-capita-keys --no-default-features --target wasm32v1-none
+      - run: cargo check -p pallet-capita-quota --no-default-features --target wasm32v1-none
   # The test chain, natively: genesis, signed transactions, invariants.
   runtime:
     runs-on: ubuntu-latest

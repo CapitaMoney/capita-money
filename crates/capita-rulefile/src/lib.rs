@@ -350,6 +350,20 @@ pub struct KeysRules {
     pub home_delay: Rule<Span>,
 }
 
+/// What keeps the ledger from being filled without a fee (rules diary 32,
+/// ADR 0029), read by the runtime of a chain (`pallet-capita-quota`), not
+/// by the core.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpamRules {
+    /// Transactions a verified person may send per day.
+    pub person_per_day: Rule<u32>,
+    /// Transactions a key without a person may send per day.
+    pub new_key_per_day: Rule<u32>,
+    /// Transactions of keys without a person one block takes.
+    pub new_keys_per_block: Rule<u32>,
+}
+
 /// A rule that is behaviour, with the place it lives in.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -396,6 +410,8 @@ pub struct RuleSet {
     pub door: DoorRules,
     /// The keys of an account's devices.
     pub keys: KeysRules,
+    /// The free quota of transactions.
+    pub spam: SpamRules,
     /// Rules that are behaviour and live in code.
     #[serde(default)]
     pub register: Vec<RegisterEntry>,
@@ -566,6 +582,24 @@ impl RuleSet {
         }
         if !(1..=8).contains(&self.keys.max_keys.value) {
             return Err(Error::at("keys.max_keys", "between 1 and 8"));
+        }
+        if self.spam.person_per_day.value == 0 {
+            return Err(Error::at(
+                "spam.person_per_day",
+                "must be above zero: a person could never pay",
+            ));
+        }
+        if self.spam.new_key_per_day.value < 2 {
+            return Err(Error::at(
+                "spam.new_key_per_day",
+                "at least 2: open an account, present the claim",
+            ));
+        }
+        if self.spam.new_keys_per_block.value == 0 {
+            return Err(Error::at(
+                "spam.new_keys_per_block",
+                "must be above zero: nobody could join",
+            ));
         }
         if self.identity.membership_period.value.0.is_zero() {
             return Err(Error::at(
@@ -743,6 +777,22 @@ impl RuleSet {
         lines.push(value("keys.max_keys", keys, keys.value.to_string()));
         let home = &self.keys.home_delay;
         lines.push(value("keys.home_delay", home, home.value.to_string()));
+        let spam = &self.spam;
+        lines.push(value(
+            "spam.person_per_day",
+            &spam.person_per_day,
+            spam.person_per_day.value.to_string(),
+        ));
+        lines.push(value(
+            "spam.new_key_per_day",
+            &spam.new_key_per_day,
+            spam.new_key_per_day.value.to_string(),
+        ));
+        lines.push(value(
+            "spam.new_keys_per_block",
+            &spam.new_keys_per_block,
+            spam.new_keys_per_block.value.to_string(),
+        ));
         lines.extend(self.register.iter().map(|e| Line {
             path: format!("register {}", e.id),
             value: e.rule.clone(),

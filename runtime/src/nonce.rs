@@ -14,7 +14,7 @@
 // Adapted from `frame_system::CheckNonce` of the Polkadot SDK
 // (Copyright (C) Parity Technologies (UK) Ltd., Apache-2.0).
 
-//! Replay protection without payment.
+//! Replay protection without payment, and the free quota in place of a fee.
 //!
 //! The nonce check of the SDK refuses a transaction from an account nobody has
 //! paid storage for – on chains with fees, an account without funds. This
@@ -22,13 +22,18 @@
 //! transaction, the one that opens its Capita account. This check keeps the
 //! replay protection and drops that condition.
 //!
-//! Decided (diary 32): no fees; a free quota of transactions per verified
-//! person. Not built: until then any key may write a nonce to the state.
+//! What a fee does elsewhere – keep the ledger from being filled for nothing –
+//! the free quota does here (rules diary 32, ADR 0029): a verified person
+//! sends so many transactions per day; a key without a person may only open
+//! an account and present its claim. The check asks `pallet-capita-quota`
+//! when a transaction enters the pool and counts it when it runs; only what
+//! it lets in writes a nonce to the state.
 
 use alloc::{vec, vec::Vec};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::TransactionSource};
-use frame_system::Config;
+use frame_system::Config as SystemConfig;
+use pallet_capita_quota::Pallet as Quota;
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{
@@ -41,8 +46,13 @@ use sp_runtime::{
     Saturating, Weight,
 };
 
+/// What a signed transaction needs: a place in the quota, and a nonce.
+pub trait Config: SystemConfig + pallet_capita_quota::Config {}
+impl<T: SystemConfig + pallet_capita_quota::Config> Config for T {}
+
 /// Nonce check and increment: every transaction of an account carries the
-/// number of its predecessors and runs once.
+/// number of its predecessors and runs once – if the free quota of its
+/// sender lets it in.
 ///
 /// Name and encoding equal those of the SDK, so wallets need no change.
 #[derive(Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
@@ -73,13 +83,14 @@ where
     type Pre = ();
 
     fn weight(&self, _: &T::RuntimeCall) -> Weight {
-        <T::DbWeight as frame_support::traits::Get<_>>::get().reads_writes(1, 1)
+        // the nonce; for the quota: who sends, the numbers, the counters
+        <T::DbWeight as frame_support::traits::Get<_>>::get().reads_writes(9, 3)
     }
 
     fn validate(
         &self,
         origin: DispatchOriginOf<T::RuntimeCall>,
-        _call: &T::RuntimeCall,
+        call: &T::RuntimeCall,
         _info: &DispatchInfoOf<T::RuntimeCall>,
         _len: usize,
         _self_implicit: Self::Implicit,
@@ -93,6 +104,9 @@ where
         if self.0 < current {
             return Err(InvalidTransaction::Stale.into());
         }
+        // Whoever sent less today comes first; a person before a key
+        // without one.
+        let priority = Quota::<T>::check(who, call, false)?;
         let provides: Vec<Vec<u8>> = vec![(who.clone(), self.0).encode()];
         let requires: Vec<Vec<u8>> = if current < self.0 {
             vec![(who.clone(), self.0.saturating_sub(One::one())).encode()]
@@ -100,7 +114,7 @@ where
             vec![]
         };
         let validity = ValidTransaction {
-            priority: 0,
+            priority,
             requires,
             provides,
             longevity: TransactionLongevity::MAX,
@@ -114,7 +128,7 @@ where
         self,
         val: Self::Val,
         _origin: &DispatchOriginOf<T::RuntimeCall>,
-        _call: &T::RuntimeCall,
+        call: &T::RuntimeCall,
         _info: &DispatchInfoOf<T::RuntimeCall>,
         _len: usize,
     ) -> Result<Self::Pre, TransactionValidityError> {
@@ -122,6 +136,9 @@ where
         if self.0 > frame_system::Pallet::<T>::account_nonce(&who) {
             return Err(InvalidTransaction::Future.into());
         }
+        // Counted when it runs, whatever the call then does: a failing
+        // call fills a block as well as any other.
+        Quota::<T>::spend(&who, call)?;
         frame_system::Pallet::<T>::inc_account_nonce(&who);
         Ok(())
     }

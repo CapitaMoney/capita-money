@@ -208,6 +208,15 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
          \x20   /// device (`keys.home_delay`).\n\
          \x20   pub const KEYS_HOME_DELAY: capita_core::types::Duration =\n\
          \x20       capita_core::types::Duration::from_secs({home_delay});\n\
+         \x20   /// Transactions a verified person may send per day\n\
+         \x20   /// (`spam.person_per_day`).\n\
+         \x20   pub const SPAM_PERSON_PER_DAY: u32 = {person_per_day};\n\
+         \x20   /// Transactions a key without a person may send per day\n\
+         \x20   /// (`spam.new_key_per_day`).\n\
+         \x20   pub const SPAM_NEW_KEY_PER_DAY: u32 = {new_key_per_day};\n\
+         \x20   /// Transactions of keys without a person one block takes\n\
+         \x20   /// (`spam.new_keys_per_block`).\n\
+         \x20   pub const SPAM_NEW_KEYS_PER_BLOCK: u32 = {new_keys_per_block};\n\
          \n\
          \x20   /// The monetary rules as parameters of the core, in force from the\n\
          \x20   /// start of time. Checked when this crate was built: never `None`.\n\
@@ -230,6 +239,9 @@ pub fn module(set: &RuleSet) -> Result<String, Error> {
         max_payment = set.door.max_payment_eur.value.0.cents(),
         max_keys = u32::from(set.keys.max_keys.value),
         home_delay = set.keys.home_delay.value.0.secs(),
+        person_per_day = set.spam.person_per_day.value,
+        new_key_per_day = set.spam.new_key_per_day.value,
+        new_keys_per_block = set.spam.new_keys_per_block.value,
         params = params_source(&params),
     );
     written.map_err(|e| Error(e.to_string()))?;

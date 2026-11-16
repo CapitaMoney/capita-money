@@ -39,6 +39,7 @@ use sp_version::RuntimeVersion;
 use super::{
     blocks,
     identity::{CapitaPurchases, CapitaRules, CredentialLink, DuniterIdentities},
+    quota::{KeysGate, WhoSends},
     AccountId, Aura, Block, BlockNumber, Hash, Identity, IdtyIndex, Nonce, PalletInfo, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeOrigin, RuntimeTask, Signature, Timestamp, DAYS,
     SLOT_DURATION, VERSION,
@@ -157,12 +158,35 @@ impl pallet_capita_keys::Config for Runtime {
     type Time = Timestamp;
     type MaxKeys = ConstU32<{ capita_rules::alpha::KEYS_MAX_KEYS }>;
     type HomeDelay = HomeDelay;
-    type UnsignedPriority = KeysPriority;
+    type Gate = KeysGate;
+}
+
+/// No fees: the free quota of transactions (rules diary 32, ADR 0029).
+impl pallet_capita_quota::Config for Runtime {
+    type Time = Timestamp;
+    type Senders = WhoSends;
+    type PersonPerDay = PersonPerDay;
+    type NewKeyPerDay = NewKeyPerDay;
+    type NewKeysPerBlock = NewKeysPerBlock;
 }
 
 parameter_types! {
-    /// Priority of an action of a key (no signer, no fee) in the pool.
-    pub const KeysPriority: u64 = 1 << 20;
+    /// Transactions a verified person may send per day (rule
+    /// `spam.person_per_day` of `rules/alpha.toml`). The three numbers of
+    /// the quota are kept in storage like `KeyMoveDelay`, so that root can
+    /// set others on a running chain (`system.setStorage`, key
+    /// `:PersonPerDay:` hashed with twox_128) – under an attack there is no
+    /// time for an upgrade.
+    pub storage PersonPerDay: u32 = capita_rules::alpha::SPAM_PERSON_PER_DAY;
+    /// Transactions a key without a person may send per day (rule
+    /// `spam.new_key_per_day`).
+    pub storage NewKeyPerDay: u32 = capita_rules::alpha::SPAM_NEW_KEY_PER_DAY;
+    /// Transactions of keys without a person one block takes (rule
+    /// `spam.new_keys_per_block`).
+    pub storage NewKeysPerBlock: u32 = capita_rules::alpha::SPAM_NEW_KEYS_PER_BLOCK;
+}
+
+parameter_types! {
     /// How long a linked device waits before it becomes the home device, in
     /// seconds. A rule (`keys.home_delay` of `rules/alpha.toml`). Kept in
     /// storage like `KeyMoveDelay`, so that root can shorten it on a test

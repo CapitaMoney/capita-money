@@ -16,6 +16,7 @@ members = [
     "pallets/credential",
     "pallets/door",
     "pallets/keys",
+    "pallets/quota",
     "runtime",
     "node",
     "services/door",
@@ -60,6 +61,7 @@ pallet-capita = { path = "pallets/capita", default-features = false }
 pallet-capita-credential = { path = "pallets/credential", default-features = false }
 pallet-capita-door = { path = "pallets/door", default-features = false }
 pallet-capita-keys = { path = "pallets/keys", default-features = false }
+pallet-capita-quota = { path = "pallets/quota", default-features = false }
 capita-runtime = { path = "runtime", default-features = false }
 
 clap = { version = "4.5" }

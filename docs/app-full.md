@@ -75,6 +75,7 @@ The document check itself (*how* chip + selfie is checked): the phone reads the 
 | 12 | German eID adapter (`eid-de`), built and tested against a stand-in; certificate = owner | Opus | next |
 | 13 | Capita by age (ADR 0026): date of birth in the claim, the age at the first verification, twice the age on each birthday; screen "Verified" with the amount and the ask for notifications; demo money by age | Fable | built 2026-11-15 (not yet: the reminder itself, the real balance in the app) |
 | 14 | money on chain in the app: balance, send by code, receive, birthdays claimed on opening ([ADR 0027](adr/0027-money-on-chain-in-the-app.md)) | Fable | built 2026-11-16 (CI pays on the chain; first phone test = owner) |
+| 15 | no fees, a free quota instead: so many transactions per verified person and day; an account that is not verified only verifies ([ADR 0029](adr/0029-free-quota-instead-of-fees.md)); the app says a refusal in words | Fable | built 2026-11-16 (CI: the node refuses what the rule forbids) |
 
 Tests the owner does: install the APK; verify with the German passport (chip + selfie); try the Personalausweis (expected: chip photo refused → eID later); the web app on the MX Linux laptop.
 

@@ -163,6 +163,7 @@ fn signed(who: Sr25519Keyring, nonce: Nonce, call: RuntimeCall) -> UncheckedExtr
 
 /// Runs a signed transaction inside the open block; fails the test unless
 /// the chain accepts it.
+#[track_caller]
 fn run(
     who: Sr25519Keyring,
     nonce: Nonce,
@@ -172,7 +173,35 @@ fn run(
         .expect("the chain accepts the transaction")
 }
 
+/// The chain does not let a transaction in: the free quota says no.
+fn not_let_in(code: u8) -> TransactionValidityError {
+    TransactionValidityError::Invalid(InvalidTransaction::Custom(code))
+}
+
+/// What `call` does for a key no person stands behind. As a transaction the
+/// chain refuses it – such a key may only open an account and present its
+/// claim (rules diary 32); checked here, with the nonce the key is at. The
+/// call is then put to the pallets directly: the rule behind it holds all
+/// the same, whoever the list lets in one day.
+#[track_caller]
+fn past_the_door(
+    who: Sr25519Keyring,
+    nonce: Nonce,
+    call: impl Into<RuntimeCall>,
+) -> sp_runtime::DispatchResult {
+    let call = call.into();
+    assert_eq!(
+        Executive::apply_extrinsic(signed(who, nonce, call.clone())),
+        Err(not_let_in(pallet_capita_quota::NOT_FOR_NEW_KEYS))
+    );
+    assert_eq!(System::account_nonce(who.to_account_id()), nonce);
+    call.dispatch(RuntimeOrigin::signed(who.to_account_id()))
+        .map(|_| ())
+        .map_err(|e| e.error)
+}
+
 /// A call with the authority of root, sent by the holder of the sudo key.
+#[track_caller]
 fn sudo(nonce: Nonce, call: impl Into<RuntimeCall>) {
     let call = pallet_sudo::Call::sudo {
         call: Box::new(call.into()),
@@ -334,7 +363,7 @@ fn a_new_key_sends_transactions_without_fee_and_each_runs_once() {
             Err(TransactionValidityError::Invalid(InvalidTransaction::Stale))
         );
         // a transaction that skips a number waits; it does not run early
-        let early = signed(Charlie, 5, pallet_capita::Call::claim {}.into());
+        let early = signed(Charlie, 5, pallet_capita::Call::pay_verification {}.into());
         assert_eq!(
             Executive::apply_extrinsic(early),
             Err(TransactionValidityError::Invalid(
@@ -342,7 +371,7 @@ fn a_new_key_sends_transactions_without_fee_and_each_runs_once() {
             ))
         );
         // a signature by another key is refused
-        let mut forged = signed(Charlie, 1, pallet_capita::Call::claim {}.into());
+        let mut forged = signed(Charlie, 1, pallet_capita::Call::pay_verification {}.into());
         forged.function = pallet_capita::Call::close {}.into();
         assert_eq!(
             Executive::apply_extrinsic(forged),
@@ -402,7 +431,7 @@ fn the_alpha_rules_run_on_the_chain_whatever_their_numbers() {
         // one cap period later
         start_block(2, elapsed);
         assert_ok!(run(Charlie, 4, pallet_capita::Call::claim {}));
-        assert_ok!(run(Dave, 1, pallet_capita::Call::claim {}));
+        assert_ok!(past_the_door(Dave, 1, pallet_capita::Call::claim {}));
         assert_eq!(balance(Charlie), due(&top));
         assert_eq!(balance(Dave), grant + due(&first));
         end_block();
@@ -625,14 +654,14 @@ fn a_person_becomes_a_member_by_presenting_a_claim() {
             ))
         );
         assert_eq!(
-            run(Dave, 3, create),
+            past_the_door(Dave, 3, create),
             Err(pallet_identity::Error::<Runtime>::IdtyIndexNotFound.into())
         );
         assert_eq!(Identity::identity_index_of(Dave.to_account_id()), None);
 
         // With a claim of its own, and no name chosen, Dave is identity 3
         // under a name derived from the key.
-        assert_ok!(run(Dave, 4, present(claim(Dave, 2, 4, 30), None)));
+        assert_ok!(run(Dave, 3, present(claim(Dave, 2, 4, 30), None)));
         let name = derived_name(&Dave.to_account_id());
         assert_eq!(name.0.len(), 42);
         assert!(name.0.starts_with(b"0x"));
@@ -713,7 +742,7 @@ fn a_membership_that_runs_out_takes_the_level_until_renewed() {
             Err(pallet_capita_credential::Error::<Runtime>::NoLongerCounts.into())
         );
         assert!(Membership::is_member(&2));
-        assert_ok!(run(
+        assert_ok!(past_the_door(
             Dave,
             0,
             pallet_capita_credential::Call::drop_invalid {
@@ -851,7 +880,7 @@ fn a_revoked_identity_freezes_the_account_and_no_identity_moves_to_another_key()
         );
         let revoked = payload.using_encoded(|bytes| Charlie.sign(bytes));
         assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
-        assert_ok!(run(
+        assert_ok!(past_the_door(
             Dave,
             1,
             pallet_identity::Call::revoke_identity {
@@ -971,7 +1000,11 @@ fn a_stopped_move_locks_the_account_until_the_board_decides() {
             from: charlie.clone(),
             grant,
         };
-        assert_eq!(run(Dave, 2, decide(true)), Err(DispatchError::BadOrigin));
+        assert_eq!(
+            past_the_door(Dave, 2, decide(true)),
+            Err(DispatchError::BadOrigin)
+        );
+        assert_eq!(run(Charlie, 8, decide(true)), Err(DispatchError::BadOrigin));
         sudo(1, decide(true));
         let old = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
         assert_eq!(old.status, AccountStatus::Closed);
@@ -981,7 +1014,7 @@ fn a_stopped_move_locks_the_account_until_the_board_decides() {
         assert_eq!(level(Dave), 1);
         // What accrued under the old key, the dispute included, is claimed
         // with the new one: a lock is not a sanction.
-        assert_ok!(run(Dave, 3, pallet_capita::Call::claim {}));
+        assert_ok!(run(Dave, 2, pallet_capita::Call::claim {}));
         let minutes = i64::try_from(delay / 60).unwrap();
         assert!(balance(Dave) >= grant + minutes);
         end_block();
@@ -1096,7 +1129,7 @@ fn a_lost_key_is_replaced_by_verifying_again() {
         assert_eq!(old.status, capita_core::account::AccountStatus::Closed);
         assert_eq!(old.person, None);
         assert_eq!(
-            run(Charlie, 4, pallet_capita::Call::claim {}),
+            past_the_door(Charlie, 4, pallet_capita::Call::claim {}),
             Err(pallet_capita::Error::<Runtime>::AccountNotActive.into())
         );
         // what accrued under the lost key is claimed with the new one: the
@@ -1114,7 +1147,7 @@ fn a_lost_key_is_replaced_by_verifying_again() {
                 amount: capita_core::types::Amount::from_cents(500),
             },
         );
-        assert_ok!(run(
+        assert_ok!(past_the_door(
             Bob,
             3,
             pallet_capita::Call::transfer {
@@ -1622,4 +1655,375 @@ fn the_app_reads_the_ledger_as_the_runtime_wrote_it() {
         "app/tests/state-vectors.json is not what the runtime writes now: \
          CAPITA_WRITE_VECTORS=1 cargo test -p capita-runtime the_app_reads"
     );
+}
+
+// ------------------------------------------------------------------ quota
+//
+// No fees (rules diary 12); in their place a free number of transactions
+// per verified person and day, and a short list for keys without a person
+// (rules diary 32, ADR 0029).
+
+use crate::configs::{NewKeyPerDay, NewKeysPerBlock, PersonPerDay};
+use crate::{Keys, Quota};
+use capita_keys::encoding::{account_of, act_challenge};
+use capita_keys::types::{DeviceKey, Proof};
+use pallet_capita_quota::{NOT_FOR_NEW_KEYS, PERSON_PRIORITY, SERVICE_PRIORITY, USED_UP};
+use sp_runtime::transaction_validity::{TransactionSource, TransactionValidity};
+
+const DAY: u64 = 86_400;
+
+/// What the pool says to a transaction. The pool asks on a copy of the
+/// state; here the open block goes on afterwards, so nothing of the asking
+/// may stay.
+fn pool(tx: UncheckedExtrinsic) -> TransactionValidity {
+    frame_support::storage::with_transaction(|| {
+        let validity =
+            Executive::validate_transaction(TransactionSource::External, tx, System::parent_hash());
+        frame_support::storage::TransactionOutcome::Rollback(Ok::<_, DispatchError>(validity))
+    })
+    .expect("the storage layer opens")
+}
+
+fn remark() -> RuntimeCall {
+    frame_system::Call::remark { remark: vec![1] }.into()
+}
+
+fn pay(to: Sr25519Keyring) -> RuntimeCall {
+    pallet_capita::Call::transfer {
+        to: to.to_account_id(),
+        amount: capita_core::types::Amount::from_cents(1),
+    }
+    .into()
+}
+
+#[test]
+fn the_numbers_of_the_quota_are_those_of_the_rules() {
+    dev().execute_with(|| {
+        assert_eq!(
+            Quota::limits(),
+            capita_core::quota::Limits {
+                person_per_day: capita_rules::alpha::SPAM_PERSON_PER_DAY,
+                new_key_per_day: capita_rules::alpha::SPAM_NEW_KEY_PER_DAY,
+                new_keys_per_block: capita_rules::alpha::SPAM_NEW_KEYS_PER_BLOCK,
+            }
+        );
+    });
+}
+
+#[test]
+fn a_key_without_a_person_only_opens_an_account_and_presents_its_claim() {
+    dev().execute_with(|| {
+        start_block(1, 0);
+        let dave = Dave.to_account_id();
+        // Never seen by the chain: a payment, a remark, a claim of money are
+        // let into no pool and no block, and leave no trace.
+        let others: [RuntimeCall; 5] = [
+            remark(),
+            pay(Bob),
+            pallet_capita::Call::claim {}.into(),
+            pallet_capita::Call::close {}.into(),
+            pallet_capita_credential::Call::renew {}.into(),
+        ];
+        for call in &others {
+            assert_eq!(
+                pool(signed(Dave, 0, call.clone())),
+                Err(not_let_in(NOT_FOR_NEW_KEYS))
+            );
+            assert_eq!(
+                Executive::apply_extrinsic(signed(Dave, 0, call.clone())),
+                Err(not_let_in(NOT_FOR_NEW_KEYS))
+            );
+        }
+        assert!(!frame_system::Account::<Runtime>::contains_key(&dave));
+        assert_eq!(Quota::left(&dave), Some(NewKeyPerDay::get()));
+
+        // Opening an account is let in. Nobody stands behind it yet: still
+        // nothing else.
+        assert!(pool(signed(Dave, 0, pallet_capita::Call::open {}.into())).is_ok());
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        for call in &others {
+            assert_eq!(
+                Executive::apply_extrinsic(signed(Dave, 1, call.clone())),
+                Err(not_let_in(NOT_FOR_NEW_KEYS))
+            );
+        }
+        assert_eq!(System::account_nonce(&dave), 1);
+
+        // A few a day, whatever becomes of them (here: nobody to pay the
+        // verification to) – then the day is used up.
+        for nonce in 1..NewKeyPerDay::get() {
+            assert_eq!(
+                run(Dave, nonce, pallet_capita::Call::pay_verification {}),
+                Err(pallet_capita::Error::<Runtime>::NoServiceAccount.into())
+            );
+        }
+        assert_eq!(Quota::left(&dave), Some(0));
+        let more = signed(
+            Dave,
+            NewKeyPerDay::get(),
+            pallet_capita::Call::pay_verification {}.into(),
+        );
+        assert_eq!(pool(more.clone()), Err(not_let_in(USED_UP)));
+        assert_eq!(Executive::apply_extrinsic(more), Err(not_let_in(USED_UP)));
+        end_block();
+
+        // The next day the claim is presented: a person stands behind the
+        // key now, and it sends what a person sends.
+        start_block(2, DAY);
+        assert_eq!(Quota::left(&dave), Some(NewKeyPerDay::get()));
+        let nonce = NewKeyPerDay::get();
+        assert_ok!(run(Dave, nonce, present(claim(Dave, 1, 9, 30), None)));
+        assert_eq!(Quota::left(&dave), Some(PersonPerDay::get() - 1));
+        assert!(pool(signed(Dave, nonce + 1, remark())).is_ok());
+        assert_ok!(run(Dave, nonce + 1, remark()));
+        assert_ok!(run(Dave, nonce + 2, pallet_capita::Call::claim {}));
+        assert_eq!(Quota::left(&dave), Some(PersonPerDay::get() - 3));
+        end_block();
+    });
+}
+
+#[test]
+fn a_person_sends_so_many_transactions_a_day_and_the_authority_is_not_counted() {
+    dev().execute_with(|| {
+        charlie_is_verified();
+        let charlie = Charlie.to_account_id();
+        // Charlie sent three today, before a person stood behind the key;
+        // they count on. With six a day, three are left.
+        start_block(2, 60);
+        PersonPerDay::set(&6);
+        assert_eq!(Quota::left(&charlie), Some(3));
+        // whoever has more left comes first; a person before any new key
+        assert_eq!(
+            pool(signed(Charlie, 3, remark())).unwrap().priority,
+            PERSON_PRIORITY + 3
+        );
+        assert_eq!(
+            pool(signed(Dave, 0, pallet_capita::Call::open {}.into()))
+                .unwrap()
+                .priority,
+            u64::from(NewKeyPerDay::get())
+        );
+        assert_ok!(run(Charlie, 3, remark()));
+        assert_ok!(run(Charlie, 4, pallet_capita::Call::claim {}));
+        // a call that fails counts as well: it filled the block all the same
+        assert!(run(Charlie, 5, pay(Dave)).is_err());
+        assert_eq!(Quota::left(&charlie), Some(0));
+        let more = signed(Charlie, 6, pallet_capita::Call::claim {}.into());
+        assert_eq!(pool(more.clone()), Err(not_let_in(USED_UP)));
+        assert_eq!(
+            Executive::apply_extrinsic(more.clone()),
+            Err(not_let_in(USED_UP))
+        );
+        assert_eq!(System::account_nonce(&charlie), 6);
+
+        // The key of the authority keeps the lists and the rules: not
+        // counted, and first in the pool.
+        let alice = Alice.to_account_id();
+        assert_eq!(Quota::left(&alice), None);
+        for nonce in 1..20 {
+            assert_ok!(run(Alice, nonce, remark()));
+        }
+        assert_eq!(
+            pool(signed(Alice, 20, remark())).unwrap().priority,
+            SERVICE_PRIORITY
+        );
+        end_block();
+
+        // The next day of UTC (the test clock starts at 08:00) the same
+        // transaction runs.
+        start_block(3, 16 * 3_600);
+        assert_eq!(Quota::left(&charlie), Some(6));
+        assert_ok!(Executive::apply_extrinsic(more).unwrap());
+        end_block();
+    });
+}
+
+#[test]
+fn a_block_takes_only_so_many_keys_without_a_person() {
+    dev().execute_with(|| {
+        charlie_is_verified();
+        start_block(2, 6);
+        NewKeysPerBlock::set(&2);
+        let open = || -> RuntimeCall { pallet_capita::Call::open {}.into() };
+        let pay_verification =
+            || -> RuntimeCall { pallet_capita::Call::pay_verification {}.into() };
+        assert_ok!(run(Dave, 0, open()));
+        assert_ok!(run(Dave, 1, pay_verification()));
+        // The block is full for a third one: it is not wrong, it waits –
+        // the pool keeps it, the next block takes it.
+        let third = signed(Sr25519Keyring::Eve, 0, open());
+        assert!(pool(third.clone()).is_ok());
+        assert_eq!(
+            Executive::apply_extrinsic(third.clone()),
+            Err(TransactionValidityError::Invalid(
+                InvalidTransaction::ExhaustsResources
+            ))
+        );
+        assert_eq!(
+            System::account_nonce(Sr25519Keyring::Eve.to_account_id()),
+            0
+        );
+        // persons and the authority are not held up
+        assert_ok!(run(Charlie, 3, pallet_capita::Call::claim {}));
+        sudo(1, frame_system::Call::remark { remark: vec![] });
+        end_block();
+
+        start_block(3, 12);
+        assert_ok!(Executive::apply_extrinsic(third).unwrap());
+        end_block();
+    });
+}
+
+/// A device key (Ed25519, as a browser holds one) and the account derived
+/// from it.
+fn device(n: u8) -> (sp_core::ed25519::Pair, DeviceKey, AccountId) {
+    let pair = sp_core::ed25519::Pair::from_seed(&[n; 32]);
+    let key = DeviceKey::Ed25519(pair.public().0);
+    let account = AccountId::from(account_of(&key));
+    (pair, key, account)
+}
+
+fn device_proof(n: u8, nonce: u32, call: &RuntimeCall) -> Proof {
+    let (pair, _, account) = device(n);
+    let raw: [u8; 32] = account.into();
+    let challenge = act_challenge(
+        &Keys::audience(),
+        &raw,
+        nonce,
+        &sp_io::hashing::blake2_256(&call.encode()),
+    );
+    Proof::Ed25519(pair.sign(&challenge).0)
+}
+
+/// `keys.open`: device key `n` opens its account with `call`.
+fn device_opens(n: u8, call: RuntimeCall) -> UncheckedExtrinsic {
+    let proof = device_proof(n, 0, &call);
+    UncheckedExtrinsic::new_bare(
+        pallet_capita_keys::Call::open {
+            key: device(n).1,
+            call: Box::new(call),
+            proof,
+        }
+        .into(),
+    )
+}
+
+/// `keys.act`: device key `n` acts for its account.
+fn device_acts(n: u8, call: RuntimeCall) -> UncheckedExtrinsic {
+    let (_, key, account) = device(n);
+    let nonce = pallet_capita_keys::Nonce::<Runtime>::get(&account);
+    let proof = device_proof(n, nonce, &call);
+    UncheckedExtrinsic::new_bare(
+        pallet_capita_keys::Call::act {
+            account,
+            key,
+            call: Box::new(call),
+            nonce,
+            proof,
+        }
+        .into(),
+    )
+}
+
+#[test]
+fn the_quota_stands_at_the_actions_of_device_keys_too() {
+    dev().execute_with(|| {
+        start_block(1, 0);
+        let (_, _, account) = device(7);
+        let id = Capita::id(account.clone());
+        // A device key nobody stands behind opens its account with
+        // `capita.open` – with nothing else.
+        for call in [remark(), pay(Bob)] {
+            let tx = device_opens(7, call);
+            assert_eq!(pool(tx.clone()), Err(not_let_in(NOT_FOR_NEW_KEYS)));
+            assert_eq!(
+                Executive::apply_extrinsic(tx),
+                Err(not_let_in(NOT_FOR_NEW_KEYS))
+            );
+        }
+        assert!(pallet_capita_keys::Keys::<Runtime>::get(&account).is_empty());
+        let open = device_opens(7, pallet_capita::Call::open {}.into());
+        assert!(pool(open.clone()).is_ok());
+        assert_ok!(Executive::apply_extrinsic(open).unwrap());
+        assert!(pallet_capita::Accounts::<Runtime>::contains_key(id));
+        assert_eq!(Quota::left(&account), Some(NewKeyPerDay::get() - 1));
+        assert_eq!(Quota::new_keys_in_block(), 1);
+
+        // Open, not verified: no payment, no second device.
+        let (_, laptop, _) = device(8);
+        let link: RuntimeCall = pallet_capita_keys::Call::add_key {
+            key: laptop,
+            possession: Proof::Ed25519([0; 64]),
+        }
+        .into();
+        for call in [pay(Bob), link] {
+            let tx = device_acts(7, call);
+            assert_eq!(pool(tx.clone()), Err(not_let_in(NOT_FOR_NEW_KEYS)));
+            assert_eq!(
+                Executive::apply_extrinsic(tx),
+                Err(not_let_in(NOT_FOR_NEW_KEYS))
+            );
+        }
+        assert_eq!(pallet_capita_keys::Nonce::<Runtime>::get(&account), 1);
+
+        // The claim is presented through the same door …
+        let now = Credential::now();
+        let claim = Claim {
+            issuer: IssuerId(0),
+            serial: Serial([7; 16]),
+            subject: id,
+            subject_ref: SubjectRef([7; 32]),
+            replaces: None,
+            level: VerificationLevel(1),
+            residence: None,
+            born: None,
+            attributes: vec![],
+            issued_at: now,
+            expires_at: Some(Timestamp::from_secs(now.secs() + 30 * DAY)),
+        };
+        let tx = device_acts(7, present(claim, None).into());
+        assert!(pool(tx.clone()).is_ok());
+        assert_ok!(Executive::apply_extrinsic(tx).unwrap());
+        assert!(Capita::has_person(&id));
+
+        // … and a person acts as a person: counted per day, ahead of the
+        // keys without one.
+        PersonPerDay::set(&4);
+        assert_eq!(Quota::left(&account), Some(2));
+        let tx = device_acts(7, remark());
+        assert_eq!(pool(tx.clone()).unwrap().priority, PERSON_PRIORITY + 2);
+        assert_ok!(Executive::apply_extrinsic(tx).unwrap());
+        assert_ok!(Executive::apply_extrinsic(device_acts(7, pay(Bob))).unwrap());
+        assert_eq!(Quota::left(&account), Some(0));
+        let more = device_acts(7, remark());
+        assert_eq!(pool(more.clone()), Err(not_let_in(USED_UP)));
+        assert_eq!(Executive::apply_extrinsic(more), Err(not_let_in(USED_UP)));
+        assert_eq!(pallet_capita_keys::Nonce::<Runtime>::get(&account), 4);
+        end_block();
+    });
+}
+
+#[test]
+fn a_block_takes_only_so_many_device_keys_without_a_person() {
+    dev().execute_with(|| {
+        start_block(1, 0);
+        NewKeysPerBlock::set(&2);
+        let open = || -> RuntimeCall { pallet_capita::Call::open {}.into() };
+        assert_ok!(Executive::apply_extrinsic(device_opens(1, open())).unwrap());
+        assert_ok!(Executive::apply_extrinsic(device_opens(2, open())).unwrap());
+        let third = device_opens(3, open());
+        assert!(pool(third.clone()).is_ok());
+        assert_eq!(
+            Executive::apply_extrinsic(third.clone()),
+            Err(TransactionValidityError::Invalid(
+                InvalidTransaction::ExhaustsResources
+            ))
+        );
+        assert!(pallet_capita_keys::Keys::<Runtime>::get(device(3).2).is_empty());
+        end_block();
+
+        start_block(2, 6);
+        assert_ok!(Executive::apply_extrinsic(third).unwrap());
+        end_block();
+    });
 }

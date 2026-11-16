@@ -24,7 +24,7 @@ M2: a local chain on which the rules run next to Duniter's identity pallets. `pa
 + The whole chain side changes its sources in one place; a fork of our own under `CapitaMoney` is a change of two addresses.
 + The Duniter pallets stay unmodified: updates are a new commit hash.
 − The SDK comes from a branch Duniter maintains. The lockfile fixes the commit; an update is a deliberate step, and its changes should be read.
-− No protection against spam: any key may send transactions and write a nonce to the state. Before any public network: fees in Capita or a quota per identity (Duniter: `pallet-quota`).
+− ~~No protection against spam: any key may send transactions and write a nonce to the state. Before any public network: fees in Capita or a quota per identity (Duniter: `pallet-quota`).~~ Decided and built: no fees, a free quota per verified person ([ADR 0029](0029-free-quota-instead-of-fees.md)).
 − Any identity may create further identities, and nothing limits who is a member. Harmless while membership grants nothing on the Capita side; M3 closes it.
 − The sudo key can do everything, including replacing the runtime.
 − Building needs the Protocol Buffers compiler (`protoc`) and the target `wasm32v1-none`; a first build takes long.

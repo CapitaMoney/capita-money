@@ -256,6 +256,26 @@ status = "default"
 source = "ADR 0020"
 note = "A linked device asks to become the home device (the phone with the home key is lost). It takes over after this long, unless the home device acts in between."
 
+# -------------------------------------------------------------------- spam
+
+[spam.person_per_day]
+value = 100
+status = "default"
+source = "owner 2026-11-15, diary 32 (the number: Claude's default), ADR 0029"
+note = "No fees: transactions a verified person may send per day (UTC), free – payments, claims, device changes alike. Whoever sent less today comes first when blocks are full."
+
+[spam.new_key_per_day]
+value = 5
+status = "default"
+source = "owner 2026-11-15, diary 32 (the number: Claude's default), ADR 0029"
+note = "Transactions a key without a person may send per day. It may only open an account, pay its verification from the start grant, present its claim and ask for the move of a lost account (register spam-quota)."
+
+[spam.new_keys_per_block]
+value = 10
+status = "default"
+source = "ADR 0029 (Claude's default)"
+note = "Transactions of keys without a person one block takes (a block: 6 seconds; 10 = 144 000 a day). Keys cost nothing to make: this number keeps them from filling the ledger. Persons are not held up by it."
+
 # ---------------------------------------------------------------- register
 #
 # Rules that are behaviour, not numbers. They live in code; this list says
@@ -572,10 +592,10 @@ planned = "chain spec of the beta (set of block authors)"
 
 [[register]]
 id = "spam-quota"
-rule = "No fees. Every verified person may send a free number of transactions per day; a key without a person may only open an account and present its claim. The number is set when this is built."
+rule = "No fees. Every verified person may send a free number of transactions per day (spam.person_per_day); whoever sent less today comes first. A key without a person may only open an account, pay its verification from the start grant, present its claim and ask for, withdraw or complete the move of a lost account – a few times a day (spam.new_key_per_day), and a block takes only so many such transactions (spam.new_keys_per_block). The key of the authority is not counted. The same at both ways into the chain: signed transactions and the actions of device keys. ADR 0029."
 status = "decided"
 source = "owner 2026-11-15, diary 32, diary 12"
-planned = "runtime/src/nonce.rs (quota per person)"
+code = ["crates/capita-core/src/quota.rs", "pallets/quota/src/lib.rs", "runtime/src/quota.rs", "runtime/src/nonce.rs", "pallets/keys/src/lib.rs"]
 
 [[register]]
 id = "first-payout"

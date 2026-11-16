@@ -201,3 +201,21 @@ value = "2 minutes"
 status = "example"
 source = "test chain"
 note = "How long a linked device waits before it becomes the home device."
+
+[spam.person_per_day]
+value = 100
+status = "example"
+source = "test chain"
+note = "Transactions a verified person may send per day."
+
+[spam.new_key_per_day]
+value = 5
+status = "example"
+source = "test chain"
+note = "Transactions a key without a person may send per day."
+
+[spam.new_keys_per_block]
+value = 10
+status = "example"
+source = "test chain"
+note = "Transactions of keys without a person one block takes."

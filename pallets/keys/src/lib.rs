@@ -27,6 +27,9 @@
 //! - Both are transactions **without signer and without fee**, like
 //!   `door.redeem`: the signature of the key is the authority. Each action
 //!   carries the account's next nonce, so it runs once.
+//! - What stands in for the fee is the runtime's ([`Gate`]): whether the
+//!   account may send this call now, and its place in the pool (rules
+//!   diary 32: a free quota per verified person).
 //! - Devices: [`Pallet::add_key`] (the new key proves it is held),
 //!   [`Pallet::remove_key`]. The first key is the *home key*: only it
 //!   removes other keys; any key removes itself. A linked key becomes the
@@ -48,11 +51,38 @@
 extern crate alloc;
 
 pub use pallet::*;
+use sp_runtime::transaction_validity::{InvalidTransaction, TransactionPriority};
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+/// What stands at the door of the chain instead of a fee (rules diary 32):
+/// asked for every action of a key, as the nonce check asks for signed
+/// transactions.
+pub trait Gate<AccountId, Call> {
+    /// Whether `who` may send `call` now, and the place of the action in
+    /// the pool. `in_block`: right before the action runs.
+    fn check(
+        who: &AccountId,
+        call: &Call,
+        in_block: bool,
+    ) -> Result<TransactionPriority, InvalidTransaction>;
+    /// Counts the action; called when it runs.
+    fn spend(who: &AccountId, call: &Call) -> Result<(), InvalidTransaction>;
+}
+
+/// No gate: every action is let in.
+impl<AccountId, Call> Gate<AccountId, Call> for () {
+    fn check(_: &AccountId, _: &Call, _: bool) -> Result<TransactionPriority, InvalidTransaction> {
+        Ok(TransactionPriority::default())
+    }
+
+    fn spend(_: &AccountId, _: &Call) -> Result<(), InvalidTransaction> {
+        Ok(())
+    }
+}
 
 /// The Ed25519 check of the node the runtime runs on.
 pub struct HostVerify;
@@ -82,7 +112,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use sp_runtime::traits::{Dispatchable, Zero};
 
-    use super::HostVerify;
+    use super::{Gate, HostVerify};
 
     /// Most relying party ids on the list.
     pub type MaxRelyingParties = ConstU32<4>;
@@ -120,9 +150,9 @@ pub mod pallet {
         /// How long a linked key waits before it becomes the home key, in
         /// seconds (rule `keys.home_delay`).
         type HomeDelay: Get<u64>;
-        /// Priority of an action (no signer, no fee) in the pool.
-        #[pallet::constant]
-        type UnsignedPriority: Get<TransactionPriority>;
+        /// What stands in for the fee: whether an account may send a call
+        /// now, and the place of the action in the pool.
+        type Gate: Gate<Self::AccountId, <Self as Config>::RuntimeCall>;
     }
 
     /// The keys of an account; the first is the home key.
@@ -278,6 +308,10 @@ pub mod pallet {
         AlreadyHome,
         /// Too many sites, or a site name too long.
         PolicyTooLong,
+        /// The account may not send this now: its free transactions of the
+        /// day are used up, or it has no verified person yet and asked for
+        /// more than opening an account and presenting its claim.
+        NotLetIn,
     }
 
     /// Placeholder weight until the pallet is benchmarked.
@@ -292,7 +326,7 @@ pub mod pallet {
         #[pallet::call_index(0)]
         #[pallet::weight({
             let inner = call.get_dispatch_info();
-            weight_of::<T>(300_000_000, 6, 4).saturating_add(inner.call_weight)
+            weight_of::<T>(300_000_000, 14, 6).saturating_add(inner.call_weight)
         })]
         pub fn act(
             origin: OriginFor<T>,
@@ -304,6 +338,7 @@ pub mod pallet {
         ) -> DispatchResult {
             ensure_none(origin)?;
             Self::check_act(&account, &key, &call, nonce, &proof)?;
+            T::Gate::spend(&account, &call).map_err(|_| Error::<T>::NotLetIn)?;
             Nonce::<T>::insert(&account, nonce.saturating_add(1));
             Self::run(account, key, *call, nonce);
             Ok(())
@@ -314,7 +349,7 @@ pub mod pallet {
         #[pallet::call_index(1)]
         #[pallet::weight({
             let inner = call.get_dispatch_info();
-            weight_of::<T>(300_000_000, 6, 6).saturating_add(inner.call_weight)
+            weight_of::<T>(300_000_000, 14, 8).saturating_add(inner.call_weight)
         })]
         pub fn open(
             origin: OriginFor<T>,
@@ -324,6 +359,7 @@ pub mod pallet {
         ) -> DispatchResult {
             ensure_none(origin)?;
             let account = Self::check_open(&key, &call, &proof)?;
+            T::Gate::spend(&account, &call).map_err(|_| Error::<T>::NotLetIn)?;
             let mut keys = BoundedVec::<DeviceKey, T::MaxKeys>::new();
             keys.try_push(key).map_err(|_| Error::<T>::TooManyKeys)?;
             Keys::<T>::insert(&account, keys);
@@ -449,43 +485,16 @@ pub mod pallet {
         type Call = Call<T>;
 
         /// An action enters the pool if it would run: listed key, the
-        /// account's next nonce, valid signature. One transaction per
-        /// account and nonce (`provides`).
+        /// account's next nonce, valid signature, let in by the gate. One
+        /// transaction per account and nonce (`provides`).
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-            match call {
-                Call::act {
-                    account,
-                    key,
-                    call: inner,
-                    nonce,
-                    proof,
-                } => match Self::check_act(account, key, inner, *nonce, proof) {
-                    Ok(()) => Self::valid(account, *nonce),
-                    Err(error) if error == Error::<T>::BadNonce.into() => {
-                        if *nonce < Nonce::<T>::get(account) {
-                            InvalidTransaction::Stale.into()
-                        } else {
-                            InvalidTransaction::Future.into()
-                        }
-                    }
-                    Err(_) => InvalidTransaction::BadProof.into(),
-                },
-                Call::open {
-                    key,
-                    call: inner,
-                    proof,
-                } => match Self::check_open(key, inner, proof) {
-                    Ok(account) => Self::valid(&account, 0),
-                    Err(error)
-                        if error == Error::<T>::KeyTaken.into()
-                            || error == Error::<T>::AccountExists.into() =>
-                    {
-                        InvalidTransaction::Stale.into()
-                    }
-                    Err(_) => InvalidTransaction::BadProof.into(),
-                },
-                _ => InvalidTransaction::Call.into(),
-            }
+            Self::validity(call, false)
+        }
+
+        /// Right before an action runs: the same, and what only the block
+        /// knows (the gate's numbers per block).
+        fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+            Self::validity(call, true).map(|_| ())
         }
     }
 
@@ -509,9 +518,54 @@ pub mod pallet {
             T::Time::now().as_secs()
         }
 
-        fn valid(account: &T::AccountId, nonce: u32) -> TransactionValidity {
+        /// Whether an action would run, for the pool (`in_block` false) or
+        /// right before it runs.
+        fn validity(call: &Call<T>, in_block: bool) -> TransactionValidity {
+            match call {
+                Call::act {
+                    account,
+                    key,
+                    call: inner,
+                    nonce,
+                    proof,
+                } => match Self::check_act(account, key, inner, *nonce, proof) {
+                    Ok(()) => Self::valid(account, *nonce, inner, in_block),
+                    Err(error) if error == Error::<T>::BadNonce.into() => {
+                        if *nonce < Nonce::<T>::get(account) {
+                            InvalidTransaction::Stale.into()
+                        } else {
+                            InvalidTransaction::Future.into()
+                        }
+                    }
+                    Err(_) => InvalidTransaction::BadProof.into(),
+                },
+                Call::open {
+                    key,
+                    call: inner,
+                    proof,
+                } => match Self::check_open(key, inner, proof) {
+                    Ok(account) => Self::valid(&account, 0, inner, in_block),
+                    Err(error)
+                        if error == Error::<T>::KeyTaken.into()
+                            || error == Error::<T>::AccountExists.into() =>
+                    {
+                        InvalidTransaction::Stale.into()
+                    }
+                    Err(_) => InvalidTransaction::BadProof.into(),
+                },
+                _ => InvalidTransaction::Call.into(),
+            }
+        }
+
+        fn valid(
+            account: &T::AccountId,
+            nonce: u32,
+            call: &<T as Config>::RuntimeCall,
+            in_block: bool,
+        ) -> TransactionValidity {
+            let priority = T::Gate::check(account, call, in_block)?;
             ValidTransaction::with_tag_prefix("CapitaKeys")
-                .priority(T::UnsignedPriority::get())
+                .priority(priority)
                 .and_provides((account, nonce))
                 .longevity(64)
                 .propagate(true)

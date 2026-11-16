@@ -97,3 +97,14 @@ test("balance, account and rules read as the runtime wrote them", () => {
   assert.deepEqual(C.decodeRules(null), []);
   assert.throws(() => C.decodeRules(concat(fromHex(v.rules.bytes), Uint8Array.of(0))), RangeError);
 });
+
+test("a refusal of the free quota is said in words", () => {
+  const invalid = (data) => ({ code: 1010, message: "Invalid Transaction", data });
+  assert.match(C.refusalWords(invalid("Custom error: 32")), /enough for today/);
+  assert.match(C.refusalWords(invalid("Custom error: 33")), /Verify yourself first/);
+  // anything else keeps the node's own words
+  assert.equal(C.refusalWords(invalid("Custom error: 3")), "Invalid Transaction");
+  assert.equal(C.refusalWords(invalid("Transaction has a bad signature")), "Invalid Transaction");
+  assert.equal(C.refusalWords({ message: "Method not found" }), "Method not found");
+  assert.equal(C.refusalWords(undefined), "The network did not take it.");
+});

@@ -66,7 +66,7 @@ async function rpc(method, params = []) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
   const j = await r.json();
-  if (j.error) throw new Error(j.error.message);
+  if (j.error) throw new Error(C.refusalWords(j.error));
   return j.result;
 }
 async function read(address) {

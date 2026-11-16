@@ -46,6 +46,22 @@ function dateBytes(text) {
   return Uint8Array.of(year & 255, year >> 8, month, day);
 }
 
+// ---------------------------------------------------------------- refusals
+
+/**
+ * Why the chain did not take a transaction, in words for the screen. There
+ * is no fee; in its place every verified person has a number of free
+ * transactions per day, and an account that is not verified can only verify
+ * (ADR 0029). The node names the two cases by number (`pallet-capita-quota`:
+ * `USED_UP` 32, `NOT_FOR_NEW_KEYS` 33); anything else keeps the node's words.
+ */
+export function refusalWords(error) {
+  const custom = /Custom error: (\d+)/.exec(String(error?.data ?? ""));
+  if (custom?.[1] === "32") return "That was enough for today. Tomorrow it works again.";
+  if (custom?.[1] === "33") return "Verify yourself first – then this works.";
+  return String(error?.message ?? "The network did not take it.");
+}
+
 // ---------------------------------------------------------------- calls
 
 /** `capita.open()`: the account joins the ledger (start grant). */
