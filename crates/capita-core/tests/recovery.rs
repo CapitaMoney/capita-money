@@ -209,6 +209,17 @@ fn a_move_is_refused_where_it_would_take_or_hide_something() {
         go(&with_frozen, 1, 2, &att),
         Err(CoreError::AccountNotActive(AccountStatus::Frozen))
     );
+    // Locked by its own holder (a stolen key), or by a stopped move the
+    // second check then grants: these move (rules diary 15).
+    for lock in [AccountStatus::HolderFrozen, AccountStatus::Disputed] {
+        let locked = plan_set_status(world.state(1), world.balance(1), &list, lock, now);
+        let mut with_lock = World {
+            accounts: world.accounts.clone(),
+            ..World::default()
+        };
+        with_lock.apply(locked.unwrap());
+        assert_eq!(go(&with_lock, 1, 2, &att), Ok(()), "{lock:?}");
+    }
     // The old name of the person, replaced by a new one, moves as well.
     let mut renamed = attestation(8, 1, None, now, None);
     renamed.replaces = Some(PersonId([1; 32]));

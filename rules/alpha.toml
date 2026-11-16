@@ -220,7 +220,7 @@ note = "Youngest age in years at which a person is verified. 0: no minimum age; 
 value = "7 days"
 status = "decided"
 source = "owner 2026-11-14, diary 15, 2discuss M"
-note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. A stop freezes the account for both sides until a 2nd check decides (not built yet: today a stop only cancels). Off: at once."
+note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. A stop locks the account for both sides until a 2nd check decides (register key-move-stop). Off: at once."
 
 [verification.price_eur]
 value = "1.00"
@@ -355,10 +355,10 @@ code = ["crates/capita-core/src/recovery.rs", "pallets/credential/src/lib.rs", "
 
 [[register]]
 id = "key-move-stop"
-rule = "While a move waits (7 days), the old key can stop it, and whoever asked can withdraw it. A stop freezes the account for both sides (nobody can spend) until a 2nd check decides: in alpha the Verein board after a video call and identity document, later a 2nd independent identity service. Not built: a stop now only cancels the move."
+rule = "While a move waits (7 days), the old key can stop it, and whoever asked can withdraw it. A stop locks the account for both sides (nobody can spend, claim or close it) until a 2nd check decides: in alpha the Verein board after a video call and identity document (on the chain: the board's decision moves the account or returns it to the old key), later a 2nd independent identity service. What the person is entitled to keeps accruing during the lock. ADR 0028."
 status = "decided"
 source = "owner 2026-11-14, diary 15, 2discuss M"
-code = ["pallets/credential/src/lib.rs"]
+code = ["crates/capita-core/src/account.rs", "crates/capita-core/src/lifecycle.rs", "pallets/credential/src/lib.rs", "runtime/src/configs.rs"]
 
 [[register]]
 id = "issuance-by-age"
@@ -369,7 +369,7 @@ code = ["crates/capita-core/src/issuance.rs", "crates/capita-core/src/types.rs",
 
 [[register]]
 id = "move-without-debt"
-rule = "An account frozen by its own holder (stolen key) moves to the new key; one frozen by the authority, or one with a credit line or recorded debt, does not. Not built: the state does not record who froze, so every frozen account is refused for now."
+rule = "An account locked by its own holder (stolen key, own identity revoked) moves to the new key; one frozen by the authority, or one with a credit line or recorded debt, does not. The holder's lock is one-way for the key: only a new verification or the authority opens the account again. ADR 0028."
 status = "decided"
 source = "owner 2026-11-15, diary 15, B5, C1"
 code = ["crates/capita-core/src/recovery.rs"]

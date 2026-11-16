@@ -27,6 +27,13 @@ test("what may be sent leaves the welcome gift out", () => {
   assert.equal(M.spendableCents({ cents: 100, account: account(), rules }), 0);
   assert.equal(M.spendableCents({ cents: 0, account: null, rules }), 0);
   assert.equal(M.spendableCents(null), 0);
+  // Frozen or locked: nothing can be sent, and the screen says why (ADR 0028).
+  assert.equal(M.statusNote(view()), "");
+  for (const status of ["frozen", "holder-frozen", "disputed", "closed"]) {
+    assert.equal(M.spendableCents(view({ status })), 0, status);
+    assert.ok(M.statusNote(view({ status })).length > 0, status);
+    assert.equal(M.claimableCents(view({ status }), ms(BIRTHDAY + 5)), 0, status);
+  }
 });
 
 test("verified while the level holds and the account is active", () => {

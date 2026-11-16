@@ -450,6 +450,50 @@ fn a_verification_that_ends_takes_the_birthdays_before_it_along() {
 }
 
 #[test]
+fn a_locked_account_keeps_its_birthday() {
+    let p = rules();
+    let list = [p.clone()];
+    let (state, _) = verified(&p, date(1990, 5, 17), at(2026, 11, 15), 3 * YEAR);
+    // Locked by the holder before the birthday, in dispute over it, open
+    // again after: nobody could claim meanwhile, and nothing is lost.
+    let mut state = state;
+    for (status, when) in [
+        (AccountStatus::HolderFrozen, at(2027, 5, 1)),
+        (AccountStatus::Disputed, at(2027, 5, 10)),
+    ] {
+        state = plan_set_status(&state, Balance::ZERO, &list, status, when)
+            .unwrap()
+            .state;
+        assert_eq!(
+            plan_claim(&state, &list, plus(when, DAY)).map(|_| ()),
+            Err(CoreError::AccountNotActive(status))
+        );
+    }
+    let reopened = plan_set_status(
+        &state,
+        Balance::ZERO,
+        &list,
+        AccountStatus::Active,
+        at(2027, 5, 20),
+    )
+    .unwrap()
+    .state;
+    assert_eq!(claim(&reopened, &p, at(2027, 5, 21)).1, 7_400);
+    // Frozen by the authority out of a lock: what accrued until then is
+    // set aside, nothing after.
+    let frozen = plan_set_status(
+        &state,
+        Balance::ZERO,
+        &list,
+        AccountStatus::Frozen,
+        at(2027, 5, 20),
+    )
+    .unwrap()
+    .state;
+    assert_eq!(frozen.issuance.carried, cents(7_400));
+}
+
+#[test]
 fn a_frozen_account_earns_no_birthday() {
     let p = rules();
     let list = [p.clone()];

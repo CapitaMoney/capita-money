@@ -35,8 +35,24 @@ export function isVerified(view, now) {
 /** Whether the account was verified before and the year is over. */
 export const wasVerified = (view) => !!view?.account?.person;
 
-/** What may be sent: the balance without the earmarked start grant. */
-export const spendableCents = (view) => (view ? Math.max(0, view.cents - (view.account?.reservedCents ?? 0)) : 0);
+/** What may be sent: the balance without the earmarked start grant; nothing while the account is frozen or locked. */
+export const spendableCents = (view) =>
+  (view?.account?.status === "active" ? Math.max(0, view.cents - view.account.reservedCents) : 0);
+
+/**
+ * What to say under the balance while the account is not in normal
+ * operation ("" if it is): frozen by the authority, locked by its holder,
+ * or locked because a move to another device was stopped (ADR 0028).
+ */
+export function statusNote(view) {
+  switch (view?.account?.status) {
+    case "frozen": return "Your account is frozen. Nothing can be sent or received.";
+    case "holder-frozen": return "Your account is locked. Verify again to use it on a new device.";
+    case "disputed": return "A move of your account to another device was stopped. It is locked until the board has decided.";
+    case "closed": return "This account is closed.";
+    default: return "";
+  }
+}
 
 /** Days until the verification must be renewed; null if not verified or without end. */
 export function daysLeft(view, now) {

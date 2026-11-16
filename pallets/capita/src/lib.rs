@@ -488,7 +488,29 @@ pub mod pallet {
         #[pallet::weight(weight_of::<T>(5, 6))]
         pub fn close(origin: OriginFor<T>) -> DispatchResult {
             let who = Self::id(ensure_signed(origin)?);
+            // A locked account is not the key's to end: whose it is, a new
+            // verification or the second check says (rules diary 15).
+            ensure!(
+                !Self::account(&who)?.status.locked(),
+                Error::<T>::AccountNotActive
+            );
             Self::do_set_status(who, AccountStatus::Closed)
+        }
+
+        /// Lock the account of the caller ("my key was stolen"): from now
+        /// on nobody can spend or claim – whoever holds the key. The key
+        /// cannot open it again: the account moves to a new key after a
+        /// new verification (rules diary 15), or the authority reopens it.
+        /// What the person is entitled to keeps accruing meanwhile.
+        #[pallet::call_index(10)]
+        #[pallet::weight(weight_of::<T>(5, 6))]
+        pub fn freeze_own(origin: OriginFor<T>) -> DispatchResult {
+            let who = Self::id(ensure_signed(origin)?);
+            ensure!(
+                Self::account(&who)?.status == AccountStatus::Active,
+                Error::<T>::AccountNotActive
+            );
+            Self::do_set_status(who, AccountStatus::HolderFrozen)
         }
 
         /// Grant or change the credit line of an account.
@@ -704,6 +726,12 @@ pub mod pallet {
                 Self::deposit_event(Event::Rule(event));
             }
             Self::pay_first(&to, first_payout, &list, now)
+        }
+
+        /// The life-cycle state of an account, if it is open. For identity
+        /// pallets of the same runtime.
+        pub fn status_of(account: &CoreId) -> Option<AccountStatus> {
+            Accounts::<T>::get(account).map(|state| state.status)
         }
 
         /// Changes the life-cycle state of an account. For identity pallets

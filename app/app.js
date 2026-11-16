@@ -226,7 +226,7 @@ function face() {
     cents: v?.cents ?? 0, reserved: v?.account?.reservedCents ?? 0, spendable: M.spendableCents(v),
     verified: M.isVerified(v, t), renew: M.wasVerified(v), next: M.nextBirthday(v, t),
     history: theBook().history, due: waiting ? M.claimableCents(v, t - CLOCK_SLACK) : 0,
-    note: note || (v && !v.account ? "Capita opens your account when you verify." : ""),
+    note: note || M.statusNote(v) || (v && !v.account ? "Capita opens your account when you verify." : ""),
   };
 }
 

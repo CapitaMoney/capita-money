@@ -127,13 +127,15 @@ impl pallet_capita::Config for Runtime {
 }
 
 /// Who is a person: claims of the identity services on the list, which root
-/// maintains (F3 and E1 are not decided).
+/// maintains (F3 and E1 are not decided). Root also stands for the board
+/// that decides a stopped move of an account (rules diary 15, ADR 0028).
 impl pallet_capita_credential::Config for Runtime {
     type Time = Timestamp;
     type RegistryOrigin = EnsureRoot<AccountId>;
     type Memberships = DuniterIdentities;
     type Rules = CapitaRules;
     type MoveDelay = KeyMoveDelay;
+    type BoardOrigin = EnsureRoot<AccountId>;
 }
 
 /// The euro door: the list of doors kept by root (who may sell Capita is not

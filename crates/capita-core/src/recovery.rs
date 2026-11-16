@@ -25,10 +25,11 @@
 //! Offene Frage: 2discuss M – the waiting time, and who wins when the old
 //! key objects: a thief holding the old key can stop the rightful owner as
 //! well as the owner can stop a thief.
-//! Decided (owner 2026-11-15, diary 15): an account frozen by its own holder
-//! (stolen key) moves; one frozen by the authority does not (a freeze must
-//! not be escaped by a new key). Not built: the state does not record who
-//! froze, so every frozen account is refused for now.
+//! Decided (owner 2026-11-15, diary 15): an account locked by its own holder
+//! (stolen key) moves, and so does one whose move was stopped once the
+//! second check grants it; one frozen by the authority does not (a freeze
+//! must not be escaped by a new key). The status says which it is
+//! (`AccountStatus::may_move`, ADR 0028).
 //! Offene Frage: C1 – an account with a credit line or recorded debt does
 //! not move; other accounts that owe it money keep paying to the closed
 //! account, and the host has to forward what arrives there.
@@ -89,7 +90,9 @@ pub fn plan_move(
     if from.id == to.id {
         return Err(CoreError::SameAccount);
     }
-    require_active(from)?;
+    if !from.status.may_move() {
+        return Err(CoreError::AccountNotActive(from.status));
+    }
     require_active(to)?;
     if to.person.is_some() {
         return Err(CoreError::MoveTargetBound);

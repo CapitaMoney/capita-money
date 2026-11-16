@@ -115,7 +115,7 @@ impl pallet_capita_credential::Memberships<AccountId> for DuniterIdentities {
     }
 
     /// The person moved to another account: the identity is removed, not
-    /// revoked – a revocation would freeze the account and say something
+    /// revoked – a revocation would lock the account and say something
     /// went wrong. Its membership goes with it (`CredentialLink`); its name
     /// stays taken.
     fn retire(who: &AccountId) {
@@ -133,8 +133,12 @@ impl pallet_capita_credential::Rules<AccountId> for CapitaRules {
         Capita::do_attest(Capita::id(who.clone()), attestation)
     }
 
-    fn freeze(who: &AccountId) -> DispatchResult {
-        Capita::do_set_status(Capita::id(who.clone()), AccountStatus::Frozen)
+    fn status(who: &AccountId) -> Option<AccountStatus> {
+        Capita::status_of(&Capita::id(who.clone()))
+    }
+
+    fn set_status(who: &AccountId, status: AccountStatus) -> DispatchResult {
+        Capita::do_set_status(Capita::id(who.clone()), status)
     }
 
     fn holder(person: &PersonId) -> Option<AccountId> {
