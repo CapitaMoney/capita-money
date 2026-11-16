@@ -30,7 +30,7 @@
 [set]
 name = "alpha"
 title = "Alpha rules"
-diary = "rules diary v0.15 (2026-11-15; rule 3 change of v0.14 not yet mirrored)"
+diary = "rules diary v0.20 (2026-11-16; not yet mirrored: rule 3 change of v0.14, rule 14 without claim window of v0.19)"
 # Rises by one with every change of the monetary rules below that is to be
 # enacted on a running host.
 params_version = 1
@@ -663,8 +663,8 @@ code = ["crates/capita-core/src/quota.rs", "pallets/quota/src/lib.rs", "runtime/
 [[register]]
 id = "first-payout"
 rule = "Right at the first verification an account receives issuance.age.at_verification x age at once, without a claim; once per person – a new key after a lost one earns no second. From the first birthday on: the age factor x age. The app says so on the spot and asks to allow notifications."
-status = "default"
-source = "owner 2026-11-15, diary 4 (whether the first birthday already gives 2 x age: open; built: yes), ADR 0026"
+status = "decided"
+source = "owner 2026-11-15 and 2026-11-16 (first birthday already 2 x age; the first payout at once, not spread), diary 4, ADR 0026"
 code = ["crates/capita-core/src/issuance.rs", "crates/capita-core/src/lifecycle.rs", "pallets/capita/src/lib.rs", "app/screens.js"]
 
 [[register]]
