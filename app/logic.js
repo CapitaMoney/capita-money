@@ -212,8 +212,10 @@ export function describe(item) {
     case "age": return "Your age in Capita";
     case "birthday": return "Birthday";
     case "monthly": return "Your Capita"; // from before Capita came by age
-    case "in": return `From ${item.who}`;
-    case "out": return `To ${item.who}`;
+    // On the ledger a line carries a name only if this device knew it (money.js).
+    case "in": return item.who ? `From ${item.who}` : "Received";
+    case "out": return item.who ? `To ${item.who}` : "Paid from another of your devices";
+    case "before": return "Your Capita so far";
     default: return "";
   }
 }

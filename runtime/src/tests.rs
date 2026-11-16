@@ -1190,9 +1190,33 @@ fn the_apps_calls_and_storage_addresses_are_the_runtimes() {
         call(&calls["refuseHome"]),
         RuntimeCall::Keys(pallet_capita_keys::Call::refuse_home {})
     ));
+    // Money (ADR 0027): the claim, and a payment to an account.
+    assert!(matches!(
+        call(&calls["claim"]),
+        RuntimeCall::Capita(pallet_capita::Call::claim {})
+    ));
+    match call(&calls["transfer"]["call"]) {
+        RuntimeCall::Capita(pallet_capita::Call::transfer { to, amount }) => {
+            assert_eq!(to.encode(), bytes(&calls["transfer"]["to"]));
+            assert_eq!(amount.cents(), calls["transfer"]["cents"].as_u64().unwrap());
+        }
+        other => panic!("{other:?}"),
+    }
     let raw: [u8; 32] = n(&v["account"]);
     let account = AccountId::from(raw);
     let at = &v["storage"];
+    assert_eq!(
+        pallet_capita::Balances::<Runtime>::hashed_key_for(CoreId(raw)),
+        bytes(&at["balance"])
+    );
+    assert_eq!(
+        pallet_capita::MovedTo::<Runtime>::hashed_key_for(CoreId(raw)),
+        bytes(&at["movedTo"])
+    );
+    assert_eq!(
+        pallet_capita::ParamsHistory::<Runtime>::hashed_key().to_vec(),
+        bytes(&at["rules"])
+    );
     assert_eq!(
         pallet_capita_keys::Keys::<Runtime>::hashed_key_for(&account),
         bytes(&at["keys"])
@@ -1216,5 +1240,260 @@ fn the_apps_calls_and_storage_addresses_are_the_runtimes() {
     assert_eq!(
         pallet_capita::Accounts::<Runtime>::hashed_key_for(CoreId(raw)),
         bytes(&at["capitaAccount"])
+    );
+}
+
+/// What the app reads of the ledger (`app/chain/calls.js`, ADR 0027): the
+/// balance, the state of an account and the rules, as raw storage values of
+/// a chain under the alpha rules – after a verification with a date of
+/// birth, a payment and a birthday – next to what the runtime's own types
+/// say they mean. The app's tests decode the same bytes
+/// (`app/tests/state-vectors.json`, `app/tests/chain-read.test.mjs`).
+///
+/// The file is written by this test: `CAPITA_WRITE_VECTORS=1 cargo test -p
+/// capita-runtime the_app_reads`. Without the variable the test fails if
+/// the file is not what the runtime writes now.
+#[test]
+fn the_app_reads_the_ledger_as_the_runtime_wrote_it() {
+    use capita_core::account::AccountState;
+    use capita_core::attributes::{AttrKey, Residence};
+    use capita_core::params::{in_force_at, CountryAge, CountryCap, Params};
+    use capita_core::types::{Amount, CountryCode, ParamsVersion, Share};
+    use serde_json::json;
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().fold("0x".to_string(), |mut out, b| {
+            out.push_str(&format!("{b:02x}"));
+            out
+        })
+    }
+    fn raw(key: &[u8]) -> Vec<u8> {
+        frame_support::storage::unhashed::get_raw(key).expect("the value is stored")
+    }
+    fn date(d: Date) -> String {
+        format!("{:04}-{:02}-{:02}", d.year(), d.month(), d.day())
+    }
+    fn country(c: CountryCode) -> String {
+        String::from_utf8(c.0.to_vec()).unwrap()
+    }
+    // What `decodeAccount` of the app answers for `state`.
+    fn account_view(state: &AccountState) -> Value {
+        json!({
+            "person": state.person.is_some(),
+            "status": match state.status {
+                AccountStatus::Active => "active",
+                AccountStatus::Frozen => "frozen",
+                AccountStatus::Closed => "closed",
+            },
+            "openedAt": state.opened_at.secs(),
+            "level": state.level.0,
+            "levelUntil": state.level_until.map(Timestamp::secs),
+            "country": state.residence.map(|r| country(r.country)),
+            "born": state.born.map(date),
+            "firstPaid": state.first_payout_made,
+            "reservedCents": state.start_grant_reserved.cents(),
+            "paidUntil": state.issuance.paid_until.secs(),
+            "lastClaim": state.issuance.last_claim.secs(),
+            "carriedCents": state.issuance.carried.cents(),
+            "carriedRipeAt": state.issuance.carried_ripe_at.secs(),
+            "moves": state.next_op_seq,
+        })
+    }
+    // What `decodeRules` of the app answers for `list`.
+    fn rules_view(list: &[Params]) -> Value {
+        list.iter()
+            .map(|p| {
+                json!({
+                    "version": p.version.0,
+                    "validFrom": p.valid_from.secs(),
+                    "startGrantCents": p.start_grant.cents(),
+                    "age": {
+                        "minLevel": p.age.min_level.0,
+                        "perYearCents": p.age.per_year.cents(),
+                        "atVerificationCents": p.age.at_verification.cents(),
+                        "byCountry": p.age.by_country.iter().map(|c| json!({
+                            "country": country(c.country),
+                            "perYearCents": c.per_year.cents(),
+                        })).collect::<Vec<_>>(),
+                    },
+                    "claimWindow": p.claim_window.secs(),
+                    "ripening": p.ripening.secs(),
+                })
+            })
+            .collect()
+    }
+    // What a claim at `secs` pays for birthdays, by the rules themselves.
+    fn due(state: &AccountState, list: &[Params], secs: u64) -> u64 {
+        let now = Timestamp::from_secs(secs);
+        let current = in_force_at(list, now).unwrap();
+        let upto = now.checked_sub(current.ripening).unwrap();
+        let mut from = state.issuance.paid_until;
+        if upto <= from {
+            return 0;
+        }
+        if upto.duration_since(from).unwrap() > current.claim_window {
+            from = upto.checked_sub(current.claim_window).unwrap();
+        }
+        capita_core::issuance::birthdays_due(state, list, from, upto)
+            .unwrap()
+            .cents()
+    }
+    // One account as the app meets it: its storage values, their meaning,
+    // and what a claim would bring for birthdays at some moments.
+    fn snapshot(name: &str, who: Sr25519Keyring, list: &[Params], moments: &[u64]) -> Value {
+        let id = core_id(who);
+        let state = pallet_capita::Accounts::<Runtime>::get(id).unwrap();
+        json!({
+            "name": name,
+            "balance": {
+                "bytes": hex(&raw(&pallet_capita::Balances::<Runtime>::hashed_key_for(id))),
+                "cents": balance(who),
+            },
+            "account": {
+                "bytes": hex(&raw(&pallet_capita::Accounts::<Runtime>::hashed_key_for(id))),
+                "view": account_view(&state),
+            },
+            "due": moments.iter().map(|secs| json!({
+                "at": secs,
+                "cents": due(&state, list, *secs),
+            })).collect::<Vec<_>>(),
+        })
+    }
+
+    let born = Date::new(1990, 5, 17).unwrap();
+    let mut accounts = Vec::new();
+    let mut rules = Value::Null;
+    new_ext(sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET).execute_with(|| {
+        let list = pallet_capita::ParamsHistory::<Runtime>::get();
+        let window = in_force_at(&list, Timestamp::from_secs(T0))
+            .unwrap()
+            .claim_window
+            .secs();
+        // 15 January 2027: Charlie, 36, opens an account and is verified;
+        // Dave opens one. Charlie pays Dave 12.50.
+        start_block(1, 0);
+        assert_ok!(run(Charlie, 0, pallet_capita::Call::open {}));
+        let dated = Claim {
+            born: Some(born),
+            ..claim(Charlie, capita_rules::alpha::TOP_LEVEL.0, 1, 300)
+        };
+        assert_ok!(run(Charlie, 1, present(dated, None)));
+        assert_ok!(run(Dave, 0, pallet_capita::Call::open {}));
+        assert_ok!(run(
+            Charlie,
+            2,
+            pallet_capita::Call::transfer {
+                to: Dave.to_account_id(),
+                amount: Amount::from_cents(1250),
+            }
+        ));
+        end_block();
+        // The 37th birthday (17 May 2027, 00:00 UTC), seen from before,
+        // from the day itself, from within the claim window and from after.
+        let birthday = born.birthday(37).and_then(Date::start).unwrap().secs();
+        let moments = [
+            birthday - 1,
+            birthday,
+            birthday + 5,
+            birthday + window - 1,
+            birthday + window + 1,
+        ];
+        accounts.push(snapshot("verified, has paid", Charlie, &list, &moments));
+        accounts.push(snapshot(
+            "not verified, was paid",
+            Dave,
+            &list,
+            &[birthday + 5],
+        ));
+        // The birthday: Charlie claims; the money is there, nothing is due.
+        skip_to(2);
+        start_block(2, birthday + 5 - T0);
+        let before = balance(Charlie);
+        let expected = due(
+            &pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap(),
+            &list,
+            birthday + 5,
+        );
+        assert_ok!(run(Charlie, 3, pallet_capita::Call::claim {}));
+        assert!(expected > 0, "the alpha rules pay birthdays");
+        assert!(balance(Charlie) - before >= i64::try_from(expected).unwrap());
+        end_block();
+        accounts.push(snapshot(
+            "after the birthday claim",
+            Charlie,
+            &list,
+            &[birthday + 6, birthday + 86_400],
+        ));
+
+        // The same account with everything optional present: a residence, a
+        // lender, a level without end, frozen. And rules in two versions,
+        // the second with amounts per country.
+        let mut state = pallet_capita::Accounts::<Runtime>::get(core_id(Charlie)).unwrap();
+        state.status = AccountStatus::Frozen;
+        state.level_until = None;
+        state.residence = Some(Residence {
+            country: CountryCode(*b"DE"),
+            proven_at: Timestamp::from_secs(T0),
+        });
+        state.loan.lender = Some(core_id(Dave));
+        state.issuance.carried = Amount::from_cents(7400);
+        state.issuance.carried_ripe_at = Timestamp::from_secs(birthday + 86_400);
+        accounts.push(json!({
+            "name": "every optional field",
+            "balance": { "bytes": hex(&capita_core::types::Balance::from_cents(-250).encode()), "cents": -250 },
+            "account": { "bytes": hex(&state.encode()), "view": account_view(&state) },
+            "due": [],
+        }));
+        let mut second = list[list.len() - 1].clone();
+        second.version = ParamsVersion(second.version.0 + 1);
+        second.valid_from = Timestamp::from_secs(birthday);
+        second.age.by_country.push(CountryAge {
+            country: CountryCode(*b"DE"),
+            per_year: Amount::from_cents(250),
+        });
+        second.caps.by_country.push(CountryCap {
+            country: CountryCode(*b"DE"),
+            gni_per_capita: Amount::from_cents(4_800_000),
+            pct: Share::from_ppm(10_000).unwrap(),
+        });
+        second.sponsor_keys.push(AttrKey(3));
+        assert_eq!(second.validate(), Ok(()));
+        let mut two = list.clone();
+        two.push(second);
+        // A resident of Germany under the second version: the country's amount.
+        state.status = AccountStatus::Active;
+        state.issuance.paid_until = Timestamp::from_secs(birthday - 86_400);
+        accounts.push(json!({
+            "name": "resident of a country with its own amount",
+            "rules": { "bytes": hex(&two.encode()), "view": rules_view(&two) },
+            "balance": { "bytes": hex(&capita_core::types::Balance::from_cents(0).encode()), "cents": 0 },
+            "account": { "bytes": hex(&state.encode()), "view": account_view(&state) },
+            "due": [{ "at": birthday + 5, "cents": due(&state, &two, birthday + 5) }],
+        }));
+        rules = json!({
+            "bytes": hex(&raw(&pallet_capita::ParamsHistory::<Runtime>::hashed_key())),
+            "view": rules_view(&list),
+        });
+    });
+
+    let made = serde_json::to_string_pretty(&json!({
+        "note": "Written by runtime/src/tests.rs (the_app_reads_the_ledger_as_the_runtime_wrote_it). Do not edit.",
+        "rules": rules,
+        "accounts": accounts,
+    }))
+    .unwrap()
+        + "\n";
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../app/tests/state-vectors.json"
+    );
+    if std::env::var_os("CAPITA_WRITE_VECTORS").is_some() {
+        std::fs::write(path, &made).unwrap();
+    }
+    let file = std::fs::read_to_string(path).unwrap_or_default();
+    assert!(
+        file == made,
+        "app/tests/state-vectors.json is not what the runtime writes now: \
+         CAPITA_WRITE_VECTORS=1 cargo test -p capita-runtime the_app_reads"
     );
 }

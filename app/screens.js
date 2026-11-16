@@ -38,7 +38,7 @@ function para(text, cls) {
 }
 
 /** Words for what went wrong, without codes. */
-function plain(e) {
+export function plain(e) {
   if (e?.name === "AbortError") return null;
   if (e?.name === "NotAllowedError") return "Not confirmed. Nothing was sent.";
   if (e instanceof TypeError && /fetch/i.test(e.message)) return "No connection to the test network.";
@@ -67,8 +67,8 @@ export function install({ go, toast, getState, onVerified }) {
     if (!D.on()) {
       box.append(
         para("With your passport: your phone reads its chip and films your face – about two minutes. This demo is not connected to a network, so it verifies at a tap."),
-        button("Verify (demo)", true, () => {
-          if (!onVerified(false)) return toast("Not enough Capita to pay the verification.");
+        button("Verify (demo)", true, async () => {
+          if (!(await onVerified(false))) return toast("Not enough Capita to pay the verification.");
           go("verified", true);
         }),
       );
@@ -159,7 +159,7 @@ export function install({ go, toast, getState, onVerified }) {
       } else {
         say("Almost there …", "wait");
         await D.present(answer);
-        onVerified(true, answer.claim.born);
+        await onVerified(true, answer.claim.born);
         // The ledger paid the age at once: say so, and what comes next.
         stop();
         return go("verified", true);
@@ -191,7 +191,7 @@ export function install({ go, toast, getState, onVerified }) {
       if (!answer) { $("#handover-state").textContent = "The code ran out. Go back and try again."; return; }
       $("#handover-state").textContent = "Checked. Confirm on this device …";
       await D.present(answer);
-      onVerified(true, answer.claim.born);
+      await onVerified(true, answer.claim.born);
       stop();
       go("verified", true);
     } catch (e) {
@@ -202,22 +202,24 @@ export function install({ go, toast, getState, onVerified }) {
 
   // ------------------------------------------------------------ scanning a code
   let scanned = null; // what to do with an accepted code
+  let scanBack = "helper"; // where a code that does not fit leads back to
   async function scanner() {
     const signal = run("scan");
     try {
       const text = await scan($("#scan-video"), (t) => !!D.readCode(t), signal);
       const code = D.readCode(text);
-      if (!code.sameService) { toast("This code belongs to another test network."); return go("helper", true); }
+      if (!code.sameService) { toast("This code belongs to another test network."); return go(scanBack, true); }
       scanned?.(code);
     } catch (e) {
       const why = plain(e);
       if (why && !signal.aborted) $("#scan-sub").textContent = e?.name === "NotAllowedError" ? "The camera is needed to read the code." : why;
     }
   }
-  function startScan(title, sub, then) {
+  function startScan(title, sub, then, back = "helper") {
     $("#scan-title").textContent = title;
     $("#scan-sub").textContent = sub;
     scanned = then;
+    scanBack = back;
     go("scan");
   }
   $("#helper-scan").addEventListener("click", () => startScan("Scan their code", "The code on their Verify screen.", (code) => {
@@ -231,6 +233,12 @@ export function install({ go, toast, getState, onVerified }) {
       go("helper", true);
     }
   }));
+  // Paying: the code on the other person's Receive screen (ADR 0027).
+  const scanToPay = (then) => startScan("Scan their code", "The code on their Receive screen.", (code) => {
+    if (code.what === "pay") return then(code);
+    toast(code.what === "demo" ? "That code comes from the demo. It is not on this network." : "That is not a payment code. Ask for the code on their Receive screen.");
+    go("send", true);
+  }, "send");
 
   // ------------------------------------------------------------ devices
   async function devices() {
@@ -435,6 +443,8 @@ export function install({ go, toast, getState, onVerified }) {
       link,
       network,
     },
+    /** Opens the camera for a payment code; `then` gets { account, name, cents }. */
+    scanToPay,
     /** Called when a new device has joined an account. */
     set onLinked(fn) { onLinked = fn; },
   };

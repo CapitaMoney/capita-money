@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { xxhash64, twox128 } from "../chain/xxhash.js";
 import * as C from "../chain/calls.js";
-import { hex, concat, compact } from "../chain/keys.js";
+import { hex, fromHex, concat, compact } from "../chain/keys.js";
+import * as M from "../money.js";
 import { vectors } from "./make-call-vectors.mjs";
 
 const enc = new TextEncoder();
@@ -57,4 +58,42 @@ test("keys, nonce and home claim read back", () => {
   assert.equal(claim.since, 0x6b482f00);
   assert.equal(C.deviceOf(hw), "phone");
   assert.equal(C.deviceOf(ed), "browser");
+});
+
+test("a payment and a claim are the calls the runtime decodes", () => {
+  const to = Uint8Array.from({ length: 32 }, (_, i) => i);
+  assert.equal(hex(C.claim()), "0a01");
+  // capita.transfer: pallet 10, call 2, the account, the cents as 8 bytes little-endian
+  assert.equal(hex(C.transfer(to, 1250)), "0a02" + hex(to) + "e204000000000000");
+  for (const cents of [0, -5, 12.5, NaN, 2 ** 53]) assert.throws(() => C.transfer(to, cents), TypeError, String(cents));
+  assert.throws(() => C.transfer(to.slice(1), 100), TypeError);
+});
+
+// The runtime wrote these storage values on a chain under the alpha rules
+// and says what they mean (runtime/src/tests.rs writes the file).
+test("balance, account and rules read as the runtime wrote them", () => {
+  const v = JSON.parse(readFileSync(new URL("./state-vectors.json", import.meta.url), "utf8"));
+  const ledgerRules = C.decodeRules(fromHex(v.rules.bytes));
+  assert.deepEqual(ledgerRules, v.rules.view);
+  assert.ok(v.accounts.length >= 5);
+  for (const a of v.accounts) {
+    const bytes = fromHex(a.account.bytes);
+    const account = C.decodeAccount(bytes);
+    assert.deepEqual(account, a.account.view, a.name);
+    assert.equal(C.decodeBalance(fromHex(a.balance.bytes)), a.balance.cents, a.name);
+    const rules = a.rules ? C.decodeRules(fromHex(a.rules.bytes)) : ledgerRules;
+    if (a.rules) assert.deepEqual(rules, a.rules.view, a.name);
+    // What a claim would bring for birthdays: the app counts as the rules do.
+    for (const d of a.due) {
+      assert.equal(M.birthdaysDue({ cents: a.balance.cents, account, rules }, d.at * 1000), d.cents, `${a.name}, at ${d.at}`);
+    }
+    // A value laid out differently is refused, not guessed.
+    assert.throws(() => C.decodeAccount(bytes.slice(0, -1)), RangeError);
+    assert.throws(() => C.decodeAccount(concat(bytes, Uint8Array.of(0))), RangeError);
+  }
+  assert.ok(v.accounts.some((a) => a.due.some((d) => d.cents > 0)), "a birthday is due in the vectors");
+  assert.equal(C.decodeAccount(null), null);
+  assert.equal(C.decodeBalance(null), 0);
+  assert.deepEqual(C.decodeRules(null), []);
+  assert.throws(() => C.decodeRules(concat(fromHex(v.rules.bytes), Uint8Array.of(0))), RangeError);
 });

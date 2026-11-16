@@ -222,6 +222,7 @@
     <p>Show this to the person paying you.</p>
     <div class="qr" id="qr" role="img" aria-label="Your payment code"></div>
     <p class="who" id="receive-name"></p>
+    <p class="sub" id="receive-state" role="status"></p>
     <label class="label" for="receive-amount">Ask for an amount (optional)</label>
     <input id="receive-amount" class="field small" inputmode="decimal" placeholder="0.00">
   </section>
@@ -283,7 +284,7 @@
       <p>An experiment: what happens when every person receives the same small income? Capita cannot be borrowed and cannot be sold for euros. It is spent among people.</p>
       <p class="fine" id="verified-until"></p>
     </div>
-    <div class="card demo">
+    <div class="card demo" id="settings-demo">
       <p class="label">Demo</p>
       <div class="row wrap">
         <button class="btn small" id="demo-pay">A friend pays you 2.00</button>

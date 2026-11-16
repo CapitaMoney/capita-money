@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const here = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(here, "www");
-const SHIP = ["index.html", "app.css", "app.js", "logic.js", "device.js", "screens.js", "scan.js", "sw.js", "manifest.webmanifest", "vendor", "icons", "fonts", "chain", "native"];
+const SHIP = ["index.html", "app.css", "app.js", "logic.js", "money.js", "device.js", "screens.js", "scan.js", "sw.js", "manifest.webmanifest", "vendor", "icons", "fonts", "chain", "native"];
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
 for (const f of SHIP) {

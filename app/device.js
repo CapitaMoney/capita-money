@@ -4,8 +4,9 @@
 // talks to, and the hand-over box between two devices. No screens here.
 //
 // Without a test network the app stays the demo of app.js: nothing leaves
-// the device. With one, verification and devices are real; the money shown
-// is still the demo's until the money screens reach the chain.
+// the device. With one, verification, devices and money are real: the
+// balance is the ledger's, a payment is signed by this device's key
+// (ADR 0027).
 
 import * as K from "./chain/keys.js";
 import * as C from "./chain/calls.js";
@@ -167,15 +168,15 @@ export async function ownerOf(raw) {
 }
 const nonce = async () => C.decodeNonce(await read(C.at.nonce(account())));
 
-/** Asks `check` every 1.5 s until it answers something, for `seconds`. */
-export async function waitFor(check, seconds = 45, signal) {
+/** Asks `check` every 1.5 s (or `every` ms) until it answers something, for `seconds`. */
+export async function waitFor(check, seconds = 45, signal, every = 1500) {
   const end = Date.now() + seconds * 1000;
   for (;;) {
     if (signal?.aborted) throw new DOMException("stopped", "AbortError");
     const v = await check().catch(() => null);
     if (v) return v;
     if (Date.now() > end) return null;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, every));
   }
 }
 
@@ -219,6 +220,41 @@ export async function present(answer) {
   }
 }
 
+// ---------------------------------------------------------------- money (ADR 0027)
+
+/**
+ * The account's money as the ledger has it: { cents, account, rules } –
+ * `account` null while the ledger does not know it (app/chain/calls.js).
+ */
+export async function money() {
+  const acc = account();
+  const [balance, state, rules] = await Promise.all([read(C.at.balance(acc)), read(C.at.capitaAccount(acc)), read(C.at.rules())]);
+  return { cents: C.decodeBalance(balance), account: C.decodeAccount(state), rules: C.decodeRules(rules) };
+}
+
+/** Whether Capita can be paid to `toHex`: the ledger knows the account. */
+export const canReceive = async (toHex) => !!(await read(C.at.capitaAccount(K.fromHex(toHex))));
+
+// A ledger operation of the account itself – a payment made, Capita minted –
+// counts up `moves`; a payment received does not. So this tells whether the
+// own call did something, whatever else happened in the same block.
+async function moved(call, title) {
+  const before = await money();
+  await act(call, title);
+  const after = await money();
+  return after.account && after.account.moves > (before.account?.moves ?? 0) ? after : null;
+}
+
+/** Pays `cents` to the account `toHex`, signed by this device. Answers the money after. */
+export async function pay(toHex, cents, title) {
+  const after = await moved(C.transfer(K.fromHex(toHex), cents), title);
+  if (!after) throw new Error("The network did not make the payment.");
+  return after;
+}
+
+/** Claims what fell due (birthdays). Answers the money after, or null if nothing came. */
+export const claimDue = (title) => moved(C.claim(), title);
+
 // ---------------------------------------------------------------- verification
 
 /** The account to verify and, in helper mode, this device's own account. */
@@ -241,8 +277,11 @@ export async function take(box, slot) {
 export const verifyCode = (box, name) =>
   `capita:verify?b=${box}&a=${saved.account}&s=${encodeURIComponent(saved.service)}&n=${encodeURIComponent(name ?? "")}`;
 export const linkCode = (box) => `capita:link?b=${box}&s=${encodeURIComponent(saved.service)}`;
+/** The code a payer scans: this account, the name to show, and the amount asked for, if any. */
+export const payCode = (name, cents = null) =>
+  `capita:pay?a=${saved.account}&s=${encodeURIComponent(saved.service)}&n=${encodeURIComponent(name ?? "")}${cents ? `&c=${cents}` : ""}`;
 
-/** Reads a scanned code: { what: "verify"|"link"|"pay", ... } or null. */
+/** Reads a scanned code: { what: "verify"|"link"|"pay"|"demo", ... } or null. */
 export function readCode(text) {
   let u;
   try { u = new URL(text); } catch { return null; }
@@ -255,7 +294,11 @@ export function readCode(text) {
     return { what, box, account: q.get("a"), name: q.get("n") ?? "", sameService };
   }
   if (what === "link" && /^[0-9a-f]{32}$/.test(box)) return { what, box, sameService };
-  if (what.startsWith("demo")) return { what: "pay" };
+  if (what === "pay" && /^[0-9a-f]{64}$/.test(q.get("a") ?? "")) {
+    const cents = /^[1-9]\d{0,8}$/.test(q.get("c") ?? "") ? Number(q.get("c")) : null;
+    return { what, account: q.get("a"), name: q.get("n") ?? "", cents, sameService };
+  }
+  if (what.startsWith("demo")) return { what: "demo", sameService: true }; // the unconnected demo's code
   return null;
 }
 
