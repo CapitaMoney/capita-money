@@ -7,6 +7,8 @@
 // signature must be refused. Then the screens' own calls: devices, and
 // money (ADR 0027) – a person is verified, receives the age in Capita, pays
 // another account, and the app's readers see both balances.
+// No fees, a free quota instead (ADR 0029): a key without a person opens its
+// account and presents its claim; anything else the node must refuse.
 
 import { webcrypto as crypto, createPrivateKey, sign as signWith } from "node:crypto";
 import * as K from "../chain/keys.js";
@@ -31,6 +33,8 @@ const audience = K.fromHex((await call("chain_getBlockHash", [0])).result);
 // system.remark(b"capita") – System is pallet 0, remark call 0
 const note = enc.encode("capita");
 const remark = K.concat(Uint8Array.of(0, 0), K.compact(note.length), note);
+// capita.open – what a new key opens its account with
+const open = C.openAccount();
 const sha256 = async (b) => new Uint8Array(await subtle.digest("SHA-256", b));
 
 async function send(label, extrinsic, expectOk) {
@@ -45,11 +49,13 @@ async function send(label, extrinsic, expectOk) {
   const pair = await subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   const key = { kind: "ed25519", public: new Uint8Array(await subtle.exportKey("raw", pair.publicKey)) };
   const account = K.accountOf(key);
-  const challenge = K.actChallenge(audience, account, 0, remark);
-  const signature = new Uint8Array(await subtle.sign("Ed25519", pair.privateKey, challenge));
+  const sign = async (inner) => new Uint8Array(await subtle.sign("Ed25519", pair.privateKey, K.actChallenge(audience, account, 0, inner)));
+  const signature = await sign(open);
   const forged = signature.slice(); forged[0] ^= 1;
-  await send("device key, forged", K.bareExtrinsic(K.openCall(key, remark, { kind: "ed25519", signature: forged })), false);
-  await send("device key", K.bareExtrinsic(K.openCall(key, remark, { kind: "ed25519", signature })), true);
+  await send("device key, forged", K.bareExtrinsic(K.openCall(key, open, { kind: "ed25519", signature: forged })), false);
+  // rightly signed, but not what a key without a person may send
+  await send("device key, a remark instead of opening", K.bareExtrinsic(K.openCall(key, remark, { kind: "ed25519", signature: await sign(remark) })), false);
+  await send("device key", K.bareExtrinsic(K.openCall(key, open, { kind: "ed25519", signature })), true);
 }
 
 // a passkey
@@ -57,7 +63,7 @@ async function send(label, extrinsic, expectOk) {
   const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
   const key = { kind: "passkey", public: K.compressP256(new Uint8Array(await subtle.exportKey("raw", pair.publicKey))) };
   const account = K.accountOf(key);
-  const challenge = K.actChallenge(audience, account, 0, remark);
+  const challenge = K.actChallenge(audience, account, 0, open);
   const authenticatorData = K.concat(await sha256(enc.encode("app.capitamoney.com")), Uint8Array.of(0x05, 0, 0, 0, 0));
   const assertion = async (origin) => {
     const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.get", challenge: K.base64url(challenge), origin, crossOrigin: false }));
@@ -65,8 +71,8 @@ async function send(label, extrinsic, expectOk) {
       K.concat(authenticatorData, await sha256(clientDataJSON))));
     return { kind: "passkey", authenticatorData, clientDataJSON, signature };
   };
-  await send("passkey from another site", K.bareExtrinsic(K.openCall(key, remark, await assertion("https://evil.example"))), false);
-  await send("passkey", K.bareExtrinsic(K.openCall(key, remark, await assertion("https://app.capitamoney.com"))), true);
+  await send("passkey from another site", K.bareExtrinsic(K.openCall(key, open, await assertion("https://evil.example"))), false);
+  await send("passkey", K.bareExtrinsic(K.openCall(key, open, await assertion("https://app.capitamoney.com"))), true);
 }
 // What the screens' code does (app/device.js), with keys made here.
 const read = async (address) => {
@@ -99,8 +105,14 @@ const act = async (label, who, inner, account = who.account) => {
   await send(label, K.bareExtrinsic(K.actCall(account, who.key, inner, n, proof)), true);
   await until(`${label} counted`, async () => (await nonceOf(account)) > n);
 };
+/** The node does not take `inner` from `who`: not into the pool, nothing counted. */
+const refused = async (label, who, inner, account = who.account) => {
+  const n = await nonceOf(account);
+  const proof = await who.sign(K.actChallenge(audience, account, n, inner));
+  await send(label, K.bareExtrinsic(K.actCall(account, who.key, inner, n, proof)), false);
+  sure(`${label}: nothing counted`, (await nonceOf(account)) === n);
+};
 const openLedgerAccount = async (label, who) => {
-  const open = C.openAccount();
   await send(label, K.bareExtrinsic(K.openCall(who.key, open, await who.sign(K.actChallenge(audience, who.account, 0, open)))), true);
   await until(`${label}: the ledger knows the account`, async () => !!(await read(C.at.capitaAccount(who.account))));
 };
@@ -111,8 +123,42 @@ const money = async (account) => ({
   rules: C.decodeRules(await read(C.at.rules())),
 });
 
-// the devices screen: open, link a second device, the linked one asks to
-// become the main one, the main one says no and removes it
+// The identity service of the test chains (its key is public) – what it
+// signs, and a person born half a year away from today's date.
+const be = (n, bytes) => { const out = new Uint8Array(bytes); let v = BigInt(n); for (let k = bytes - 1; k >= 0; k--) { out[k] = Number(v & 255n); v >>= 8n; } return out; };
+// What an identity service signs (`capita_credential::encoding::claim_bytes`).
+const signedBytes = (c) => K.concat(
+  enc.encode("capita-claim-v3"), audience, be(c.issuer, 4), K.fromHex(c.serial), K.fromHex(c.subject), K.fromHex(c.subjectRef),
+  Uint8Array.of(0), Uint8Array.of(c.level), Uint8Array.of(0),
+  Uint8Array.of(1), be(Number(c.born.slice(0, 4)), 2), Uint8Array.of(Number(c.born.slice(5, 7)), Number(c.born.slice(8, 10))),
+  be(0, 2), be(c.issuedAt, 8), Uint8Array.of(1), be(c.expiresAt, 8),
+);
+const issuer = createPrivateKey({
+  key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), Buffer.from("capita-money development issuer!")]),
+  format: "der", type: "pkcs8",
+});
+// The chain's clock, in seconds (`Timestamp::Now`, milliseconds).
+const now = Number(new DataView((await read(K.concat(twox128(enc.encode("Timestamp")), twox128(enc.encode("Now"))))).buffer).getBigUint64(0, true) / 1000n);
+// Born half a year away from today's date: no birthday falls into this run.
+const today = new Date(now * 1000);
+const half = new Date(Date.UTC(today.getUTCFullYear() - 30, today.getUTCMonth() + 6, 15));
+const born = half.toISOString().slice(0, 10);
+const age = ageAt(born, now * 1000);
+
+/** The identity service of the test chains verifies `who`; `who` presents the claim. */
+const verify = async (label, who) => {
+  const claim = {
+    issuer: 0, serial: "0x" + K.hex(crypto.getRandomValues(new Uint8Array(16))), subject: "0x" + K.hex(who.account),
+    subjectRef: "0x" + K.hex(crypto.getRandomValues(new Uint8Array(32))), replaces: null, level: 1, residence: null, born,
+    attributes: [], issuedAt: now - 30, expiresAt: now + 300 * 86400,
+  };
+  const answer = { call: "credential.present", claim, signature: "0x" + K.hex(new Uint8Array(signWith(null, signedBytes(claim), issuer))) };
+  await act(label, who, C.claimCall(answer));
+};
+
+// the devices screen: open, verify (an account without a person links no
+// device, ADR 0029), link a second device, the linked one asks to become
+// the main one, the main one says no and removes it
 {
   const phone = await device();
   const laptop = await device();
@@ -120,6 +166,9 @@ const money = async (account) => ({
   await openLedgerAccount("open the account", phone);
   const laptopRaw = K.keyBytes(laptop.key);
   const possession = await laptop.sign(K.addChallenge(audience, account, laptop.key));
+  await refused("add the laptop before verifying", phone, C.addKeyRaw(laptopRaw, K.proofBytes(possession)));
+  await verify("the phone's holder verifies", phone);
+  await until("the ledger knows the person", async () => M.isVerified(await money(account), now * 1000));
   await act("add the laptop", phone, C.addKeyRaw(laptopRaw, K.proofBytes(possession)));
   await until("two devices, the phone first", async () => {
     const keys = C.decodeKeys(await read(C.at.keys(account)));
@@ -138,26 +187,6 @@ const money = async (account) => ({
 // service of the test chains (its key is public), receives the age in
 // Capita in that transaction, and pays somebody. The app's readers see it.
 {
-  const be = (n, bytes) => { const out = new Uint8Array(bytes); let v = BigInt(n); for (let k = bytes - 1; k >= 0; k--) { out[k] = Number(v & 255n); v >>= 8n; } return out; };
-  // What an identity service signs (`capita_credential::encoding::claim_bytes`).
-  const signedBytes = (c) => K.concat(
-    enc.encode("capita-claim-v3"), audience, be(c.issuer, 4), K.fromHex(c.serial), K.fromHex(c.subject), K.fromHex(c.subjectRef),
-    Uint8Array.of(0), Uint8Array.of(c.level), Uint8Array.of(0),
-    Uint8Array.of(1), be(Number(c.born.slice(0, 4)), 2), Uint8Array.of(Number(c.born.slice(5, 7)), Number(c.born.slice(8, 10))),
-    be(0, 2), be(c.issuedAt, 8), Uint8Array.of(1), be(c.expiresAt, 8),
-  );
-  const issuer = createPrivateKey({
-    key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), Buffer.from("capita-money development issuer!")]),
-    format: "der", type: "pkcs8",
-  });
-  // The chain's clock, in seconds (`Timestamp::Now`, milliseconds).
-  const now = Number(new DataView((await read(K.concat(twox128(enc.encode("Timestamp")), twox128(enc.encode("Now"))))).buffer).getBigUint64(0, true) / 1000n);
-  // Born half a year away from today's date: no birthday falls into this run.
-  const today = new Date(now * 1000);
-  const half = new Date(Date.UTC(today.getUTCFullYear() - 30, today.getUTCMonth() + 6, 15));
-  const born = half.toISOString().slice(0, 10);
-  const age = ageAt(born, now * 1000);
-
   const anna = await device();
   const ben = await device();
   await openLedgerAccount("Anna opens her account", anna);
@@ -168,13 +197,9 @@ const money = async (account) => ({
   sure("a new account holds the welcome gift, earmarked", fresh.cents === rules.startGrantCents && fresh.account.reservedCents === rules.startGrantCents
     && M.spendableCents(fresh) === 0 && !M.isVerified(fresh, now * 1000));
 
-  const claim = {
-    issuer: 0, serial: "0x" + K.hex(crypto.getRandomValues(new Uint8Array(16))), subject: "0x" + K.hex(anna.account),
-    subjectRef: "0x" + K.hex(crypto.getRandomValues(new Uint8Array(32))), replaces: null, level: 1, residence: null, born,
-    attributes: [], issuedAt: now - 30, expiresAt: now + 300 * 86400,
-  };
-  const answer = { call: "credential.present", claim, signature: "0x" + K.hex(new Uint8Array(signWith(null, signedBytes(claim), issuer))) };
-  await act("Anna presents her verification", anna, C.claimCall(answer));
+  // Not verified: no payment – the node takes nothing from her but her verification.
+  await refused("Anna tries to pay before she is verified", anna, C.transfer(ben.account, 1));
+  await verify("Anna presents her verification", anna);
   const first = age * rules.age.atVerificationCents;
   await until("the ledger paid her age in Capita at once", async () => (await money(anna.account)).cents === rules.startGrantCents + first);
   const verified = await money(anna.account);
@@ -195,9 +220,16 @@ const money = async (account) => ({
   await act("Anna tries to pay more than she has", anna, C.transfer(ben.account, M.spendableCents(paid) + 1));
   const after = await money(anna.account);
   sure("nothing left her account", after.cents === paid.cents && after.account.moves === paid.account.moves);
-  // The welcome gift cannot be sent on.
-  await act("Ben tries to send his welcome gift on", ben, C.transfer(anna.account, 1251));
+  // Ben is not verified: what he received waits until he is.
+  await refused("Ben tries to send before he is verified", ben, C.transfer(anna.account, 1250));
   sure("Ben keeps it", (await money(ben.account)).cents === rules.startGrantCents + 1250);
+  await verify("Ben presents his verification", ben);
+  await until("the ledger paid Ben his age too", async () => (await money(ben.account)).cents === rules.startGrantCents + 1250 + first);
+  // The welcome gift cannot be sent on.
+  const benVerified = await money(ben.account);
+  sure("Ben may send all but the welcome gift", M.spendableCents(benVerified) === 1250 + first);
+  await act("Ben tries to send his welcome gift on", ben, C.transfer(anna.account, 1250 + first + 1));
+  sure("Ben keeps it all", (await money(ben.account)).cents === benVerified.cents);
   await act("Ben sends what he received", ben, C.transfer(anna.account, 1250));
   await until("Anna has it back", async () => (await money(anna.account)).cents === verified.cents);
 

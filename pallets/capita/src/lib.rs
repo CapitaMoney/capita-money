@@ -728,6 +728,12 @@ pub mod pallet {
             Self::pay_first(&to, first_payout, &list, now)
         }
 
+        /// Whether a verified person stands behind the account: the basis
+        /// of its free quota of transactions (rules diary 32).
+        pub fn has_person(account: &CoreId) -> bool {
+            Accounts::<T>::get(account).is_some_and(|state| state.person.is_some())
+        }
+
         /// The life-cycle state of an account, if it is open. For identity
         /// pallets of the same runtime.
         pub fn status_of(account: &CoreId) -> Option<AccountStatus> {

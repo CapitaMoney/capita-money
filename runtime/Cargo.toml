@@ -19,6 +19,7 @@ pallet-capita = { workspace = true }
 pallet-capita-credential = { workspace = true }
 pallet-capita-door = { workspace = true }
 pallet-capita-keys = { workspace = true }
+pallet-capita-quota = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive", "serde"] }
 serde_json = { workspace = true, features = ["alloc"] }
@@ -52,6 +53,7 @@ sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
+capita-keys = { workspace = true, features = ["scale", "std"] }
 sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 
@@ -76,6 +78,7 @@ std = [
     "pallet-capita-credential/std",
     "pallet-capita-door/std",
     "pallet-capita-keys/std",
+    "pallet-capita-quota/std",
     "pallet-capita/std",
     "pallet-grandpa/std",
     "pallet-identity/std",
@@ -109,6 +112,7 @@ try-runtime = [
     "pallet-capita-credential/try-runtime",
     "pallet-capita-door/try-runtime",
     "pallet-capita-keys/try-runtime",
+    "pallet-capita-quota/try-runtime",
     "pallet-capita/try-runtime",
     "pallet-grandpa/try-runtime",
     "pallet-identity/try-runtime",

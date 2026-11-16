@@ -442,3 +442,135 @@ fn a_phone_hardware_key_links_a_laptop_passkey() {
         assert_eq!(Nonce::<Test>::get(&account), 3);
     });
 }
+
+// ------------------------------------------------------------------- gate
+
+fn validity(call: &RuntimeCall) -> sp_runtime::transaction_validity::TransactionValidity {
+    let RuntimeCall::Keys(inner) = call else {
+        panic!("a call of the keys pallet");
+    };
+    <Keys as ValidateUnsigned>::validate_unsigned(TransactionSource::External, inner)
+}
+
+fn pre_dispatch(call: &RuntimeCall) -> Result<(), InvalidTransaction> {
+    let RuntimeCall::Keys(inner) = call else {
+        panic!("a call of the keys pallet");
+    };
+    <Keys as ValidateUnsigned>::pre_dispatch(inner).map_err(|e| match e {
+        sp_runtime::transaction_validity::TransactionValidityError::Invalid(i) => i,
+        other => panic!("unexpected {other:?}"),
+    })
+}
+
+fn act_call(n: u8, account: &AccountId32, call: RuntimeCall) -> RuntimeCall {
+    let nonce = Nonce::<Test>::get(account);
+    let proof = sign_ed(n, account, nonce, &call);
+    RuntimeCall::Keys(crate::Call::act {
+        account: account.clone(),
+        key: ed_key(n),
+        call: Box::new(call),
+        nonce,
+        proof,
+    })
+}
+
+fn open_call(n: u8, call: RuntimeCall) -> RuntimeCall {
+    let key = ed_key(n);
+    let account = AccountId32::from(account_of(&key));
+    let proof = sign_ed(n, &account, 0, &call);
+    RuntimeCall::Keys(crate::Call::open {
+        key,
+        call: Box::new(call),
+        proof,
+    })
+}
+
+#[test]
+fn every_action_that_runs_is_counted_once_also_one_that_fails() {
+    new_test_ext().execute_with(|| {
+        let account = open_ed(1);
+        assert_eq!(spent(), vec![(account.clone(), remark(0))]);
+
+        assert_ok!(act_ed(1, &account, remark(7)));
+        // a call that fails inside: the action ran, it counts
+        let fails = RuntimeCall::System(frame_system::Call::set_heap_pages { pages: 1 });
+        assert_ok!(act_ed(1, &account, fails.clone()));
+        assert!(last_result().unwrap().is_err());
+        assert_eq!(
+            spent(),
+            vec![
+                (account.clone(), remark(0)),
+                (account.clone(), remark(7)),
+                (account.clone(), fails),
+            ]
+        );
+        assert_eq!(Nonce::<Test>::get(&account), 3);
+    });
+}
+
+#[test]
+fn the_gate_gives_an_action_its_place_in_the_pool() {
+    new_test_ext().execute_with(|| {
+        let account = open_ed(1);
+        let call = act_call(1, &account, remark(1));
+        assert_eq!(validity(&call).unwrap().priority, PRIORITY);
+        assert_eq!(
+            validity(&open_call(2, remark(0))).unwrap().priority,
+            PRIORITY
+        );
+        // asking changes nothing
+        assert_eq!(spent().len(), 1);
+    });
+}
+
+#[test]
+fn what_the_gate_refuses_neither_enters_the_pool_nor_runs() {
+    new_test_ext().execute_with(|| {
+        let account = open_ed(1);
+        let refused = InvalidTransaction::Custom(32);
+        shut(Some(refused));
+
+        let call = act_call(1, &account, remark(1));
+        assert_eq!(validate(&call), Err(refused));
+        assert_eq!(pre_dispatch(&call), Err(refused));
+        assert_noop!(
+            call.dispatch(RuntimeOrigin::none()),
+            Error::<Test>::NotLetIn
+        );
+        // not run: the nonce is not spent, nothing counted
+        assert_eq!(Nonce::<Test>::get(&account), 1);
+        assert_eq!(spent().len(), 1);
+
+        let opening = open_call(2, remark(0));
+        assert_eq!(validate(&opening), Err(refused));
+        assert_noop!(
+            opening.dispatch(RuntimeOrigin::none()),
+            Error::<Test>::NotLetIn
+        );
+        assert_eq!(KeyOwner::<Test>::get(ed_key(2)), None);
+
+        // open again: the same action runs
+        shut(None);
+        let call = act_call(1, &account, remark(1));
+        assert_eq!(validate(&call), Ok(()));
+        assert_ok!(call.dispatch(RuntimeOrigin::none()));
+        assert_eq!(Nonce::<Test>::get(&account), 2);
+    });
+}
+
+#[test]
+fn a_full_block_keeps_an_action_in_the_pool() {
+    new_test_ext().execute_with(|| {
+        let account = open_ed(1);
+        let full = InvalidTransaction::ExhaustsResources;
+        BLOCK_FULL.with(|s| *s.borrow_mut() = Some(full));
+
+        let call = act_call(1, &account, remark(1));
+        // the pool takes it, the block does not
+        assert_eq!(validate(&call), Ok(()));
+        assert_eq!(pre_dispatch(&call), Err(full));
+
+        BLOCK_FULL.with(|s| *s.borrow_mut() = None);
+        assert_eq!(pre_dispatch(&call), Ok(()));
+    });
+}

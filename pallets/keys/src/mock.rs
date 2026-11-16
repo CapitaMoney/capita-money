@@ -18,6 +18,7 @@ use p256::ecdsa::signature::Signer;
 use p256::ecdsa::SigningKey;
 use sp_core::Pair;
 use sp_runtime::traits::IdentityLookup;
+use sp_runtime::transaction_validity::InvalidTransaction;
 use sp_runtime::{AccountId32, BuildStorage};
 
 use crate as pallet_capita_keys;
@@ -60,8 +61,47 @@ pub const WEEK: u64 = 7 * 24 * 3600;
 pub const RP: &str = "app.capitamoney.com";
 pub const ORIGIN: &str = "https://app.capitamoney.com";
 
-frame_support::parameter_types! {
-    pub const Priority: u64 = 1 << 20;
+/// Place in the pool the test gate gives an action.
+pub const PRIORITY: u64 = 1 << 20;
+
+thread_local! {
+    /// Why the test gate lets nothing in; `None`: open.
+    pub static SHUT: RefCell<Option<InvalidTransaction>> = const { RefCell::new(None) };
+    /// Why the test gate lets nothing into a block (the pool stays open).
+    pub static BLOCK_FULL: RefCell<Option<InvalidTransaction>> = const { RefCell::new(None) };
+    /// What the test gate counted: account and call of every action run.
+    pub static SPENT: RefCell<Vec<(AccountId32, RuntimeCall)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// A gate the tests open and shut, and that records what it counted.
+pub struct TestGate;
+
+impl crate::Gate<AccountId32, RuntimeCall> for TestGate {
+    fn check(_: &AccountId32, _: &RuntimeCall, in_block: bool) -> Result<u64, InvalidTransaction> {
+        if let Some(reason) = SHUT.with(|s| *s.borrow()) {
+            return Err(reason);
+        }
+        match BLOCK_FULL.with(|s| *s.borrow()) {
+            Some(reason) if in_block => Err(reason),
+            _ => Ok(PRIORITY),
+        }
+    }
+
+    fn spend(who: &AccountId32, call: &RuntimeCall) -> Result<(), InvalidTransaction> {
+        Self::check(who, call, true)?;
+        SPENT.with(|s| s.borrow_mut().push((who.clone(), call.clone())));
+        Ok(())
+    }
+}
+
+/// Shuts the test gate (`None`: opens it).
+pub fn shut(reason: Option<InvalidTransaction>) {
+    SHUT.with(|s| *s.borrow_mut() = reason);
+}
+
+/// What the test gate counted so far.
+pub fn spent() -> Vec<(AccountId32, RuntimeCall)> {
+    SPENT.with(|s| s.borrow().clone())
 }
 
 impl pallet_capita_keys::Config for Test {
@@ -70,11 +110,14 @@ impl pallet_capita_keys::Config for Test {
     type Time = Clock;
     type MaxKeys = ConstU32<3>;
     type HomeDelay = ConstU64<WEEK>;
-    type UnsignedPriority = Priority;
+    type Gate = TestGate;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
     NOW.with(|n| *n.borrow_mut() = 1_000_000);
+    SHUT.with(|s| *s.borrow_mut() = None);
+    BLOCK_FULL.with(|s| *s.borrow_mut() = None);
+    SPENT.with(|s| s.borrow_mut().clear());
     let storage = RuntimeGenesisConfig {
         system: Default::default(),
         keys: pallet_capita_keys::GenesisConfig {

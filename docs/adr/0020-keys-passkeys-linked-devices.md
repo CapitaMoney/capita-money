@@ -37,7 +37,7 @@ Challenge = `BLAKE2b-256("capita/act/v1" ‖ audience ‖ account ‖ nonce ‖ 
 + A synced passkey survives a lost phone without verifying again; linked devices too.
 + Every existing call works through `act`; pallets stay as they are.
 − P-256 is checked in the runtime itself (RustCrypto `p256`, WebAssembly), slower than a host function. Fine for the alpha's traffic; a host function is the later fix.
-− Transactions without fee: spam is limited by the need for a listed key and the nonce, not by money (open since M2: fees or quota, 2discuss O).
+− Transactions without fee: spam is limited by the need for a listed key and the nonce, not by money (open since M2: fees or quota, 2discuss O). Since [ADR 0029](0029-free-quota-instead-of-fees.md): by the free quota of the account's person – and an account without a person opens and presents its claim, it links no second device.
 − A passkey synced by Google or Apple makes their account a way in to the person's Capita; amounts are small, and a person may choose a password manager or none.
 − The passkey belongs to `app.capitamoney.com`. Changing that name later loses every passkey: the name is fixed from the first real user.
 - Offene Frage: the keys of an account that moved to a new key (ADR 0013) stay listed for the closed account; they can do nothing there. Clean-up when moves are revisited (2discuss M).

@@ -1202,6 +1202,7 @@ dependencies = [
  "capita-core",
  "capita-credential",
  "capita-door",
+ "capita-keys",
  "capita-rules",
  "duniter-primitives",
  "frame-executive",
@@ -1214,6 +1215,7 @@ dependencies = [
  "pallet-capita-credential",
  "pallet-capita-door",
  "pallet-capita-keys",
+ "pallet-capita-quota",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-membership",
@@ -5972,6 +5974,19 @@ dependencies = [
  "scale-info",
  "serde_json",
  "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-capita-quota"
+version = "0.1.0"
+dependencies = [
+ "capita-core",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
  "sp-io",
  "sp-runtime",
 ]

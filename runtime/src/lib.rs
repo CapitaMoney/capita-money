@@ -33,6 +33,7 @@ pub mod configs;
 pub mod genesis_config_presets;
 pub mod identity;
 pub mod nonce;
+pub mod quota;
 #[cfg(test)]
 mod tests;
 
@@ -93,7 +94,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("capita-test"),
     impl_name: alloc::borrow::Cow::Borrowed("capita-test"),
     authoring_version: 1,
-    spec_version: 7,
+    spec_version: 8,
     impl_version: 1,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 2,
@@ -167,7 +168,8 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 pub type BlockId = generic::BlockId<Block>;
 
 /// What every transaction is checked against before it runs. No entry charges
-/// a fee: the test chain has none (`docs/adr/0010-test-chain.md`).
+/// a fee: the chain has none (rules diary 12). In its place the nonce check
+/// counts the free transactions of the sender (`nonce`, ADR 0029).
 pub type TxExtension = (
     frame_system::AuthorizeCall<Runtime>,
     frame_system::CheckNonZeroSender<Runtime>,
@@ -258,4 +260,10 @@ mod runtime {
     /// (`app/chain/keys.js`, `KEYS.pallet`).
     #[runtime::pallet_index(24)]
     pub type Keys = pallet_capita_keys;
+
+    /// What stands in for the fee: a free number of transactions per
+    /// verified person and day; keys without a person may only open an
+    /// account and present their claim (rules diary 32, ADR 0029).
+    #[runtime::pallet_index(25)]
+    pub type Quota = pallet_capita_quota;
 }

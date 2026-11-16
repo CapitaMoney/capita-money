@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "pallet-capita-quota"
+description = "FRAME pallet: what stands at the door of the chain instead of a fee – a free number of transactions per verified person and day; keys without a person may only open an account and present their claim."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+capita-core = { workspace = true, features = ["scale"] }
+codec = { workspace = true, features = ["derive", "max-encoded-len"] }
+scale-info = { workspace = true, features = ["derive"] }
+# Polkadot SDK: source and version are set once, in the workspace (docs/adr/0010).
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-runtime = { workspace = true }
+
+[dev-dependencies]
+sp-io = { workspace = true, features = ["std"] }
+
+[features]
+default = ["std"]
+std = [
+    "capita-core/std",
+    "codec/std",
+    "frame-support/std",
+    "frame-system/std",
+    "scale-info/std",
+    "sp-runtime/std",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "sp-runtime/try-runtime",
+]
