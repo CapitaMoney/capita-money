@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-goods"
+description = "Sold digital goods of Capita Money: the sanction ladder for leaked copies and stolen works, compensation, the match of the work registry, text fingerprints, downloads and gifts. Pure, no_std."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Forwards `std` to the dependencies. The crate itself never uses the
+# standard library.
+std = ["capita-core/std", "codec?/std", "scale-info?/std", "serde?/std"]
+# Serialization of the data types (JSON for services and the app).
+serde = ["dep:serde", "capita-core/serde"]
+# SCALE encoding and type information, for storage and calls inside a
+# Substrate runtime.
+scale = ["dep:codec", "dep:scale-info", "capita-core/scale"]
+
+[dependencies]
+capita-core = { workspace = true }
+codec = { package = "parity-scale-codec", version = "3.7.4", default-features = false, features = ["derive", "max-encoded-len"], optional = true }
+scale-info = { version = "2.11", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+
+[dev-dependencies]
+capita-rules = { workspace = true }
+serde_json = "1"

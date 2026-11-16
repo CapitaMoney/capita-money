@@ -93,6 +93,11 @@ jobs:
       - run: cargo test -p capita-core -p capita-credential -p capita-door
       - run: cargo clippy -p capita-keys --all-targets --all-features -- -D warnings
       - run: cargo test -p capita-keys --all-features
+      # sold digital goods: sanction ladder, compensation, registry, text print
+      - run: cargo clippy -p capita-goods --all-targets --all-features -- -D warnings
+      - run: cargo clippy -p capita-goods --all-targets -- -D warnings
+      - run: cargo test -p capita-goods --all-features
+      - run: cargo test -p capita-goods
       # the rules files: read, checked, compiled, run through the core
       - run: cargo clippy -p capita-rulefile -p capita-rules --all-targets --all-features -- -D warnings
       - run: cargo test -p capita-rulefile -p capita-rules --all-features
@@ -100,11 +105,12 @@ jobs:
       - run: cargo clippy -p capita-person-key --all-targets -- -D warnings
       - run: cargo test -p capita-person-key
       # no_std: build for a target without an operating system
-      - run: cargo build -p capita-core -p capita-credential -p capita-door -p capita-rules -p capita-person-key --target thumbv7em-none-eabi
+      - run: cargo build -p capita-core -p capita-credential -p capita-door -p capita-goods -p capita-rules -p capita-person-key --target thumbv7em-none-eabi
       - run: cargo build -p capita-core --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-credential --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-door --features serde,scale --target thumbv7em-none-eabi
       - run: cargo build -p capita-keys --features scale --target thumbv7em-none-eabi
+      - run: cargo build -p capita-goods --features serde,scale --target thumbv7em-none-eabi
       # The lockfile as resolved in CI (new dependencies): compare and commit.
       - uses: actions/upload-artifact@v4
         if: always()
@@ -135,6 +141,15 @@ jobs:
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
       - run: cargo clippy -p capita-door-service --all-targets -- -D warnings
       - run: cargo test -p capita-door-service
+  # Personal copies of sold goods (EPUB, PDF): marks, mark reader, fingerprints.
+  marks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+      - run: cargo clippy -p capita-marks --all-targets -- -D warnings
+      - run: cargo test -p capita-marks
   # The face check: detector + recogniser of OpenCV Zoo, liveness challenge.
   face:
     runs-on: ubuntu-latest

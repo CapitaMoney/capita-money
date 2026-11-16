@@ -258,7 +258,7 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 29 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 39 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
@@ -273,6 +273,45 @@ fn the_overview_lists_every_rule_with_its_status() {
     assert_eq!(line("spam.new_key_per_day").value, "5");
     assert_eq!(line("spam.new_keys_per_block").value, "10");
     assert_eq!(line("lending.repayment_share").status, Status::Example);
+    assert_eq!(line("goods.ban_months").value, "1");
+    assert_eq!(line("goods.reset_after").value, "2 years");
+    assert_eq!(line("goods.match_threshold").value, "50 %");
+    assert_eq!(line("goods.gift").value, "false");
+}
+
+#[test]
+fn the_goods_rules_become_the_parameters_of_capita_goods() {
+    let g = alpha().goods.params().unwrap();
+    assert_eq!(g.ban_months, 1);
+    assert_eq!(g.compensation_factor, 1);
+    assert_eq!(g.max_downloads, 8);
+    assert_eq!(g.match_threshold.ppm(), 500_000);
+    assert!(!g.gift && !g.resale);
+    for (from, to, why) in [
+        (
+            "[goods.ban_months]\nvalue = 1",
+            "[goods.ban_months]\nvalue = 0",
+            "ban_months",
+        ),
+        (
+            "[goods.max_downloads]\nvalue = 8",
+            "[goods.max_downloads]\nvalue = 0",
+            "max_downloads",
+        ),
+        (
+            "[goods.resale]\nvalue = false",
+            "[goods.resale]\nvalue = true",
+            "resale needs gift",
+        ),
+        (
+            "[goods.reset_after]\nvalue = \"2 years\"",
+            "[goods.reset_after]\nvalue = \"off\"",
+            "reset_after",
+        ),
+    ] {
+        let e = fixture_with(from, to).unwrap_err();
+        assert!(e.contains("goods") && e.contains(why), "{e}");
+    }
 }
 
 #[test]
@@ -353,6 +392,8 @@ fn the_source_of_a_rule_set_names_its_values() {
     assert!(source.contains("SPAM_PERSON_PER_DAY: u32 = 100"));
     assert!(source.contains("SPAM_NEW_KEY_PER_DAY: u32 = 5"));
     assert!(source.contains("SPAM_NEW_KEYS_PER_BLOCK: u32 = 10"));
+    assert!(source.contains("pub fn goods() -> Option<capita_goods::GoodsParams>"));
+    assert!(source.contains("ban_months: 1,"));
     let both = codegen::library(&[set.clone(), set]).unwrap_err();
     assert!(both.0.contains("two rule sets"), "{}", both.0);
 }

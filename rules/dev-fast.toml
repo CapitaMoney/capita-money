@@ -219,3 +219,67 @@ value = 10
 status = "example"
 source = "test chain"
 note = "Transactions of keys without a person one block takes."
+# ------------------------------------------------------------------- goods
+# Sold digital goods (diary 27, 28; ADR 0019): protection by identity, not
+# by locks. Read by the market service and the chain (capita-goods).
+
+[goods.ban_months]
+value = 1
+status = "example"
+source = "test chain"
+note = "Length of one ban, in calendar months: the 17th to the 17th. 1st violation: a warning. 2nd: no selling for this long. 3rd and every further one: another such ban that adds no buying, no Capita movements and no chat, video chat or social network. Bans add up; seeing everything, voting, objecting, verifying again and receiving the Capita of one's age always stay."
+
+[goods.reset_after]
+value = "2 years"
+status = "example"
+source = "test chain"
+note = "This long without a violation and the ladder starts again at the warning. Sellers see only 'trust ok / reduced' until then."
+
+[goods.compensation_factor]
+value = 1
+status = "example"
+source = "test chain"
+note = "The seller of a leaked work receives this many times the price from the leaker, at every violation, the warning included. From the balance only, never below zero; the rest lapses (diary 10: no debt)."
+
+[goods.finder_reward_factor]
+value = 1
+status = "example"
+source = "test chain"
+note = "Whoever finds a stolen work receives this many times its price. Who pays it is open (diary 28)."
+
+[goods.max_downloads]
+value = 8
+status = "example"
+source = "test chain"
+note = "Downloads one sale gives; each one is the same personal copy."
+
+[goods.answer_time]
+value = "14 days"
+status = "example"
+source = "test chain"
+note = "Time an accused member has to answer (stolen device, hacked account) before the decision."
+
+[goods.earnings_hold]
+value = "14 days"
+status = "example"
+source = "test chain"
+note = "The earnings of a newly registered work are held this long before they can be spent, so that a compensation is still possible."
+
+[goods.match_threshold]
+value = "50 %"
+status = "example"
+source = "test chain"
+note = "An upload whose text print agrees this much with a work another seller registered earlier is held for review (first registration wins). Small edits, a new cover or another format stay far above; different books lie near 0 %."
+
+[goods.gift]
+value = false
+status = "example"
+source = "test chain"
+note = "A buyer may give the licence away: the receiver gets a personal copy of their own. Off in alpha, on from step 2 of the market."
+
+[goods.resale]
+value = false
+status = "example"
+source = "test chain"
+note = "A buyer may sell the licence on. Off in alpha; later the seller opts in per listing and the price is free."
+
