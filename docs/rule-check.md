@@ -1,6 +1,6 @@
 # Rule check: 100, 1 000 and 100 000 members
 
-Checks the rules of [rule-set.md](rule-set.md) (rules diary v0.24) with numbers. Produced by [`tools/rule-check/simulate.py`](../tools/rule-check/simulate.py): expected values, monthly steps, 5 years, no randomness. Every number that is not a rule is a named assumption in the script (most are guesses, marked there); the tables at the end are its unedited output. Run `python3 tools/rule-check/simulate.py` after changing a rule or an assumption.
+Checks the rules of [rule-set.md](rule-set.md) (rules diary v0.25; the check is unchanged by v0.25) with numbers. Produced by [`tools/rule-check/simulate.py`](../tools/rule-check/simulate.py): expected values, monthly steps, 5 years, no randomness. Every number that is not a rule is a named assumption in the script (most are guesses, marked there); the tables at the end are its unedited output. Run `python3 tools/rule-check/simulate.py` after changing a rule or an assumption. Rule numbers below are those of the rules diary, not of rule-set.md.
 
 ## The main result
 
