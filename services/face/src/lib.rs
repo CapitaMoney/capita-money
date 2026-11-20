@@ -25,12 +25,15 @@
 //!
 //! Runs in the identity service, never on the phone: a changed app could
 //! otherwise simply answer "same person". Nothing is kept: pictures and face
-//! prints live in memory for the length of one call (ADR 0017).
+//! prints live in memory for the length of one call (ADR 0017). The print of
+//! the document photo is handed back in [`Passed`]: face dedup in the
+//! identity service keeps it when the rules switch it on (rule 33, ADR 0030).
 
 pub mod align;
 pub mod detect;
 pub mod embed;
 pub mod live;
+pub mod measure;
 
 use detect::{Detector, Face};
 use embed::Recogniser;
@@ -134,6 +137,10 @@ pub enum Refusal {
 pub struct Passed {
     /// Likeness of the weaker of the two straight looks (cosine).
     pub likeness: f32,
+    /// The face print of the document photo. Face dedup keeps it when the
+    /// rules switch it on (rule 33, ADR 0030); otherwise it is dropped with
+    /// the call.
+    pub document: embed::Print,
 }
 
 /// Detector, recogniser and the open challenges.
@@ -192,6 +199,12 @@ impl FaceCheck {
             return Ok(None);
         };
         Ok(Some(pa.cosine(&pb)))
+    }
+
+    /// The print of the strongest face in a picture; `None` if it shows no
+    /// face.
+    pub fn print_of(&self, img: &RgbImage) -> Result<Option<embed::Print>, Error> {
+        self.print_of_strongest(img)
     }
 
     fn print_of_strongest(&self, img: &RgbImage) -> Result<Option<embed::Print>, Error> {
@@ -258,7 +271,10 @@ impl FaceCheck {
         let doc = self.print(document, doc_face)?;
         let likeness = live::likeness(&doc, &pick(take.first)?, &pick(take.last)?);
         Ok(if likeness >= self.settings.same_person {
-            Ok(Passed { likeness })
+            Ok(Passed {
+                likeness,
+                document: doc,
+            })
         } else {
             Err(Refusal::NotSamePerson { likeness })
         })

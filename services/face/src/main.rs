@@ -18,7 +18,10 @@
 //! capita-face <models> compare <document photo> <selfie>
 //! capita-face <models> challenge
 //! capita-face <models> check <moves, e.g. left,up> <document photo> <frame> <frame> ...
+//! capita-face <models> measure <folder: one folder per person, pictures inside>
 //! ```
+//! `measure` gives the numbers face dedup chooses its `same_person` value
+//! from (rule 33, ADR 0030): missed doubles and false holds per value.
 //! Prints results only; keeps nothing.
 
 use capita_face::live::Pose;
@@ -31,7 +34,30 @@ const USAGE: &str = "usage:
   capita-face <models folder> compare <document photo> <selfie>
   capita-face <models folder> challenge
   capita-face <models folder> check <moves, e.g. left,up> <document photo> <frame>...
+  capita-face <models folder> measure <folder with one folder per person>
 models: ./fetch-models.sh <models folder>";
+
+/// The folders, or the pictures, in a folder, sorted.
+fn listing(folder: &Path, folders: bool) -> Result<Vec<PathBuf>, String> {
+    let mut items = std::fs::read_dir(folder)
+        .map_err(|e| format!("{}: {e}", folder.display()))?
+        .filter_map(Result::ok)
+        .map(|item| item.path())
+        .filter(|path| {
+            if folders {
+                path.is_dir()
+            } else {
+                let ext = path
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(str::to_ascii_lowercase);
+                matches!(ext.as_deref(), Some("jpg" | "jpeg" | "png"))
+            }
+        })
+        .collect::<Vec<_>>();
+    items.sort();
+    Ok(items)
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -112,6 +138,30 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
                     Ok(ExitCode::from(1))
                 }
             }
+        }
+        ("measure", [folder]) => {
+            let (mut people, mut pictures, mut without_face) = (Vec::new(), 0usize, 0usize);
+            for person in listing(Path::new(folder), true)? {
+                let mut prints = Vec::new();
+                for picture in listing(&person, false)? {
+                    pictures += 1;
+                    let img = read_picture(&picture).map_err(|e| e.to_string())?;
+                    match fc.print_of(&img).map_err(|e| e.to_string())? {
+                        Some(print) => prints.push(print),
+                        None => without_face += 1,
+                    }
+                }
+                if !prints.is_empty() {
+                    people.push(prints);
+                }
+            }
+            let likenesses = capita_face::measure::likenesses(&people);
+            for line in
+                capita_face::measure::report(people.len(), pictures, without_face, &likenesses)
+            {
+                println!("{line}");
+            }
+            Ok(ExitCode::SUCCESS)
         }
         _ => Err(USAGE.into()),
     }

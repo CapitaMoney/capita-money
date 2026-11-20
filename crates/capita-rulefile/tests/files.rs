@@ -169,6 +169,7 @@ fn a_file_becomes_the_parameters_of_the_core() {
     );
     assert_eq!(set.identity.minimum_age.value, 0);
     assert_eq!(set.identity.key_move_delay.value.0.secs(), 7 * 86_400);
+    assert!(!set.identity.face_dedup.value);
     assert_eq!(set.issuance.start_grant.status, Status::Decided);
 }
 
@@ -258,7 +259,7 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 39 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 40 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
@@ -267,6 +268,7 @@ fn the_overview_lists_every_rule_with_its_status() {
     assert_eq!(line("issuance.age.at_verification").value, "1.50");
     assert_eq!(line("issuance.age.min_level").value, "1");
     assert_eq!(line("identity.membership_period").value, "365 days");
+    assert_eq!(line("identity.face_dedup").value, "false");
     assert_eq!(line("demurrage.rate").value, "off");
     assert_eq!(line("door.max_payment_eur").value, "100.00");
     assert_eq!(line("spam.person_per_day").value, "100");

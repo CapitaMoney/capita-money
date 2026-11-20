@@ -185,6 +185,12 @@ status = "default"
 source = "diary 15, 2discuss M"
 note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. Off: at once."
 
+[identity.face_dedup]
+value = false
+status = "decided"
+source = "diary 33"
+note = "Face dedup at every document check. Off until the legal check."
+
 [verification.price_eur]
 value = "1.00"
 status = "decided"

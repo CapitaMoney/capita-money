@@ -23,9 +23,16 @@ use tract_onnx::prelude::*;
 /// Length of a face print.
 pub const DIM: usize = 128;
 
-/// A face print, scaled to length 1.
-#[derive(Clone, Debug, PartialEq)]
+/// A face print, scaled to length 1. Biometric data: `Debug` shows no
+/// number of it, so that no log can hold a print.
+#[derive(Clone, PartialEq)]
 pub struct Print(pub [f32; DIM]);
+
+impl std::fmt::Debug for Print {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Print(..)")
+    }
+}
 
 impl Print {
     /// Cosine of the angle between two prints: 1 = same direction.

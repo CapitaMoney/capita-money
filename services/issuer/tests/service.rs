@@ -78,6 +78,7 @@ fn rules(basis: Basis) -> Rules {
         minimum_age: 0,
         validity: YEAR,
         level: 1,
+        face_dedup: false,
     }
 }
 
@@ -126,6 +127,7 @@ fn request(account: u8, person: Person) -> Request {
         former: None,
         ticket: None,
         helper: None,
+        face: None,
     }
 }
 

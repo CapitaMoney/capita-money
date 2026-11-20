@@ -12,6 +12,7 @@ Not on the phone. A changed app could simply answer "same person"; only a check 
 
 ### Nothing is kept
 Pictures and face prints exist in memory for the length of one call, then are dropped. Not stored, not logged, not sent on. What remains is the outcome inside the claim (ADR 0014): verified or not. No face print goes on chain.
+Exception, only when the rules switch face dedup on (`identity.face_dedup`, off until the legal check P04.3): the identity service keeps the print of the chip photo, sealed, to find one person with two documents (ADR 0030).
 
 ### Models: OpenCV Zoo, open licences
 - Finding faces: YuNet (`face_detection_yunet_2023mar.onnx`, MIT licence) – box, score, five landmarks.
@@ -34,6 +35,7 @@ Frames are as the camera sees them, not mirrored. A still photo, a printed photo
 
 ### Not high-risk AI
 EU AI Act, Annex III 1(a): biometric verification whose sole purpose is to confirm that a person is who they claim to be is not a high-risk system (one-to-one comparison, no search in a database). The check compares one person with one document and searches nothing.
+Face dedup (ADR 0030), when switched on, adds a search inside the people of one date of birth: that part is identification, and this reasoning does not cover it; its class is open (P04.3).
 
 ## Consequences
 + A stolen document alone no longer gets an account.

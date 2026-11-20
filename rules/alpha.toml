@@ -222,6 +222,12 @@ status = "decided"
 source = "owner 2026-11-14, diary 15, 2discuss M"
 note = "A lost key: the account moves to a new key after a new verification. The move waits this long, and the old key can stop it. A stop locks the account for both sides until a 2nd check decides (register key-move-stop). Off: at once."
 
+[identity.face_dedup]
+value = false
+status = "decided"
+source = "owner 2026-11-15 + 2026-11-20, diary 33, 2discuss B, ADR 0030"
+note = "Face dedup: at every document check the face print of the chip photo is compared with the people of the same date of birth; a match holds the verification until the Verein board decides (same person: refused; different: the pair is marked). Off until the legal check (P04.3). On, the identity service keeps one sealed face print per person (exception to diary 24). Read by identity services, not by the ledger."
+
 [verification.price_eur]
 value = "1.00"
 status = "decided"
@@ -466,7 +472,7 @@ code = ["crates/capita-core/src/lifecycle.rs", "crates/capita-credential/src/che
 
 [[register]]
 id = "service-forgets"
-rule = "An identity service keeps no name, no document and no address: only the person key, the account, the day and the kind of proof."
+rule = "An identity service keeps no name, no document and no address: only the person key, the account, the day and the kind of proof. Exception when identity.face_dedup is on: one sealed face print of the chip photo per person, in groups by a keyed hash of the date of birth (ADR 0030)."
 status = "default"
 source = "2discuss K, ADR 0013"
 code = ["services/issuer/src/store.rs", "services/issuer/src/issue.rs"]
@@ -578,10 +584,10 @@ planned = "identity service + app (task 1c)"
 
 [[register]]
 id = "face-dedup"
-rule = "One person with two documents whose names are spelled differently: at every document check the face print of the chip photo is compared with the accounts of the same birth date; a match holds the new account until the Verein board decides; same person: refused (double account), different persons: the pair is marked and the account opens. Not before the legal check (P04.3)."
+rule = "One person with two documents whose names are spelled differently: at every document check the face print of the chip photo is compared with the accounts of the same birth date; a match holds the new account until the Verein board decides; same person: refused (double account), different persons: the pair is marked and the account opens. Built; switched by identity.face_dedup, off until the legal check (P04.3)."
 status = "decided"
 source = "owner 2026-11-15, diary 33, 2discuss B"
-planned = "identity service + face check, after legal check P04.3"
+code = ["services/issuer/src/dedup.rs", "services/issuer/src/issue.rs", "services/issuer/src/main.rs", "services/face/src/lib.rs"]
 
 [[register]]
 id = "banned-goods"
