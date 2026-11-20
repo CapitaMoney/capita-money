@@ -31,6 +31,7 @@ use capita_rulefile::RuleSet;
 use serde::Deserialize;
 
 use crate::checks::ChallengerConfig;
+use crate::dedup::{Dedup, DedupKey, FileFaceStore};
 use crate::issue::{Payment, Rules, Service, Settings};
 use crate::store::FileStore;
 use crate::unhex;
@@ -201,12 +202,38 @@ impl Config {
             payment,
             allow_name_change: self.policy.allow_name_change,
         };
-        Ok(Service::new(
+        let service = Service::new(
             settings,
             key(&self.keys.person_key_secret_file)?,
             previous,
             &seed,
             FileStore::open(&self.store)?,
-        ))
+        );
+        let dedup = self.checks.document.as_ref().and_then(|d| d.dedup.as_ref());
+        match dedup {
+            Some(dedup) => {
+                let own = secret(&dedup.key_file)?;
+                if own == secret(&self.keys.person_key_secret_file)? {
+                    return Err(format!(
+                        "{}: the face store needs a secret of its own, not the secret of the person keys",
+                        dedup.key_file.display()
+                    ));
+                }
+                let key = DedupKey::from_secret(&own)
+                    .map_err(|e| format!("{}: {e}", dedup.key_file.display()))?;
+                let store = Box::new(FileFaceStore::new(&dedup.store));
+                Ok(service.with_dedup(Dedup::new(
+                    key,
+                    store,
+                    dedup.same_person,
+                    dedup.contact.clone(),
+                )?))
+            }
+            None if rules.face_dedup => Err(
+                "identity.face_dedup is on in the rules: [checks.document.dedup] is needed (ADR 0030)"
+                    .into(),
+            ),
+            None => Ok(service),
+        }
     }
 }

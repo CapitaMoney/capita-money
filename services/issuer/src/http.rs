@@ -245,6 +245,7 @@ fn refusal(refusal: &Refusal) -> Answer {
     let status = match refusal {
         Refusal::Store(_) | Refusal::System(_) | Refusal::Key(_) => 500,
         Refusal::NotPaid => 402,
+        Refusal::Held { .. } | Refusal::DoubleAccount => 409,
         _ => 422,
     };
     refuse(status, refusal.code(), &refusal.to_string())
@@ -385,6 +386,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 former,
                 ticket: ask.ticket,
                 helper: None,
+                face: None,
             },
             now,
         )
@@ -464,6 +466,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 former: session.former,
                 ticket: session.ticket,
                 helper: None,
+                face: None,
             },
             now,
         )
@@ -619,14 +622,14 @@ impl<K: KeyService, S: Store> App<K, S> {
             phone: &session.phone_nonce,
             chip: &session.chip_nonce,
         };
-        let person = match document.finish(&nonces, challenge, &chip, &phone, &frames, now) {
-            Ok(person) => person,
+        let checked = match document.finish(&nonces, challenge, &chip, &phone, &frames, now) {
+            Ok(checked) => checked,
             Err(why) => return refuse(422, why.code(), &why.message()),
         };
         self.issue(
             Request {
                 account: session.base.account,
-                person,
+                person: checked.person,
                 proof: if session.base.helper.is_some() {
                     "via-helper".into()
                 } else {
@@ -635,6 +638,7 @@ impl<K: KeyService, S: Store> App<K, S> {
                 former: session.base.former,
                 ticket: session.base.ticket,
                 helper: session.base.helper,
+                face: Some(checked.print),
             },
             now,
         )

@@ -14,11 +14,14 @@
 //!    Name and date of birth from the chip make the person key; the claim
 //!    is signed as by every other check.
 //!
-//! Nothing is kept: chip data, photo and frames live for one call.
+//! Nothing is kept: chip data, photo and frames live for one call. The face
+//! print of the chip photo goes on to face dedup, which keeps it only when
+//! the rules switch it on (rule 33, `crate::dedup`, ADR 0030).
 
 use std::path::PathBuf;
 
 use capita_attest::AttestError;
+use capita_face::embed::Print;
 use capita_face::{FaceCheck, Refusal as FaceRefusal, Settings};
 use capita_mrtd::groups::ImageFormat;
 use capita_mrtd::pa::TrustList;
@@ -48,6 +51,10 @@ pub struct DocumentConfig {
     /// from a checked phone.
     #[serde(default)]
     pub phone: Option<PhoneConfig>,
+    /// Face dedup (rule 33, ADR 0030): its store and secret. Needed when the
+    /// rules switch it on (`identity.face_dedup`); unused while they don't.
+    #[serde(default)]
+    pub dedup: Option<crate::dedup::DedupConfig>,
 }
 
 /// Why a document check fails.
@@ -96,6 +103,16 @@ impl DocumentRefusal {
             Self::Picture(e) | Self::Face(e) | Self::System(e) => e.clone(),
         }
     }
+}
+
+/// What a document check established: the person the chip names, and the
+/// face print of the chip photo – for face dedup (rule 33), which keeps it
+/// only when the rules switch it on.
+pub struct Checked {
+    /// Name and date of birth from the chip.
+    pub person: Person,
+    /// The face print of the chip photo.
+    pub print: Print,
 }
 
 /// The chip check and the face check, loaded once.
@@ -186,7 +203,7 @@ impl DocumentCheck {
     }
 
     /// Checks phone, chip and film, in this order. Answers the person the
-    /// chip names.
+    /// chip names, with the face print of the chip photo.
     ///
     /// # Errors
     /// Why the check fails ([`DocumentRefusal`]).
@@ -198,7 +215,7 @@ impl DocumentCheck {
         phone: &PhoneProof,
         frames: &[Vec<u8>],
         now: u64,
-    ) -> Result<Person, DocumentRefusal> {
+    ) -> Result<Checked, DocumentRefusal> {
         let digest = request_digest(
             nonces.phone,
             nonces.session,
@@ -242,7 +259,10 @@ impl DocumentCheck {
             );
         }
         match self.face.check(challenge, &photo, &pictures) {
-            Ok(Ok(_passed)) => Ok(person),
+            Ok(Ok(passed)) => Ok(Checked {
+                person,
+                print: passed.document,
+            }),
             Ok(Err(refusal)) => Err(DocumentRefusal::Face(face_words(&refusal))),
             Err(e) => Err(DocumentRefusal::System(format!("{e:?}"))),
         }

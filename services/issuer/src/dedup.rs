@@ -154,7 +154,9 @@ impl DedupKey {
             .len()
             .checked_sub(TAG_BYTES)
             .ok_or("sealed print: too short")?;
-        let (body, tag) = rest.split_at_checked(cut).ok_or("sealed print: too short")?;
+        let (body, tag) = rest
+            .split_at_checked(cut)
+            .ok_or("sealed print: too short")?;
         let mut plain = decrypt_aead(
             Cipher::aes_256_gcm(),
             &self.seal,
@@ -189,9 +191,28 @@ fn print_from(bytes: &[u8]) -> Result<Print, String> {
 /// HMAC-SHA256.
 fn mac(key: &[u8], data: &[u8]) -> Result<Vec<u8>, String> {
     let key = PKey::hmac(key).map_err(|e| format!("hmac: {e}"))?;
-    let mut signer = Signer::new(MessageDigest::sha256(), &key).map_err(|e| format!("hmac: {e}"))?;
+    let mut signer =
+        Signer::new(MessageDigest::sha256(), &key).map_err(|e| format!("hmac: {e}"))?;
     signer.update(data).map_err(|e| format!("hmac: {e}"))?;
     signer.sign_to_vec().map_err(|e| format!("hmac: {e}"))
+}
+
+/// `[checks.document.dedup]` of the configuration: needed when the rules
+/// switch face dedup on (`identity.face_dedup`).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DedupConfig {
+    /// The folder of the face store ([`FileFaceStore`]).
+    pub store: PathBuf,
+    /// The file with the secret of the face store: hexadecimal text, at
+    /// least 32 random bytes; not the secret of the person keys.
+    pub key_file: PathBuf,
+    /// Same person from this likeness (cosine) on. No default on purpose:
+    /// measure first (`capita-face <models> measure <folder>`).
+    pub same_person: f32,
+    /// Where a held person turns to: the Verein board (e-mail or web
+    /// address).
+    pub contact: String,
 }
 
 /// One person of a birthday group.
@@ -516,7 +537,9 @@ impl FileFaceStore {
 
     fn group_file(&self, group: &str) -> Result<PathBuf, String> {
         let valid = group.len() == GROUP_BYTES.saturating_mul(2)
-            && group.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+            && group
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
         if !valid {
             return Err("face store: not a group name".into());
         }
@@ -574,13 +597,8 @@ fn read_lines<T: DeserializeOwned>(path: &Path) -> Result<Vec<T>, String> {
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .map(|(number, line)| {
-            serde_json::from_str(line).map_err(|e| {
-                format!(
-                    "{}, line {}: {e}",
-                    path.display(),
-                    number.saturating_add(1)
-                )
-            })
+            serde_json::from_str(line)
+                .map_err(|e| format!("{}, line {}: {e}", path.display(), number.saturating_add(1)))
         })
         .collect()
 }
@@ -647,7 +665,8 @@ impl FaceStore for FileFaceStore {
         let path = self.group_file(group)?;
         let _lock = self.lock(true)?;
         if let Some(old) = replaces {
-            let (cases_file, pairs_file) = (self.dir.join("cases.jsonl"), self.dir.join("pairs.jsonl"));
+            let (cases_file, pairs_file) =
+                (self.dir.join("cases.jsonl"), self.dir.join("pairs.jsonl"));
             let mut cases: Vec<Case> = read_lines(&cases_file)?;
             let mut pairs: Vec<Pair> = read_lines(&pairs_file)?;
             lists::rename(&mut cases, &mut pairs, old, &entry.person);

@@ -27,7 +27,8 @@
 //! refuses it. The service only has to give the same person the same key.
 //!
 //! The data about the person is consumed by the call and dropped; what is
-//! kept is in [`crate::store`].
+//! kept is in [`crate::store`] – and, when the rules switch face dedup on
+//! (rule 33), the sealed face print of the chip photo in [`crate::dedup`].
 
 use std::collections::BTreeSet;
 
@@ -43,6 +44,7 @@ use capita_person_key::{namesake_tag, person_key, KeyError, KeyService};
 use capita_rulefile::RuleSet;
 use ed25519_dalek::{Signer, SigningKey};
 
+use crate::dedup::{Dedup, Outcome};
 use crate::store::{Record, Store};
 use crate::{hex, unhex_n};
 
@@ -163,6 +165,9 @@ pub struct Request {
     /// The account of the helper whose phone ran the check (ADR 0022),
     /// hexadecimal; `None` on the person's own device.
     pub helper: Option<String>,
+    /// The face print of the chip photo, from a document check: compared
+    /// and kept by face dedup when the rules switch it on, else dropped.
+    pub face: Option<capita_face::embed::Print>,
 }
 
 /// The rule values the service follows, from the rules file.
@@ -176,6 +181,8 @@ pub struct Rules {
     pub validity: u64,
     /// The verification level the claims state.
     pub level: u8,
+    /// Face dedup at every document check (`identity.face_dedup`, rule 33).
+    pub face_dedup: bool,
 }
 
 impl Rules {
@@ -195,6 +202,7 @@ impl Rules {
             minimum_age: set.identity.minimum_age.value,
             validity: set.identity.membership_period.value.0.secs(),
             level,
+            face_dedup: set.identity.face_dedup.value,
         })
     }
 }
@@ -279,6 +287,16 @@ pub enum Refusal {
     TooManyNamesakes,
     /// The person key could not be computed.
     Key(KeyError),
+    /// Face dedup: the face looks like the face of another person of the
+    /// same date of birth; the verification waits for the Verein board.
+    /// `contact`: where the person turns to.
+    Held {
+        /// Where the person turns to.
+        contact: String,
+    },
+    /// Face dedup: the board found that this person holds an account
+    /// already (rule 21).
+    DoubleAccount,
     /// The store failed; nothing was issued.
     Store(String),
     /// No random numbers, or a clock outside the calendar.
@@ -298,6 +316,13 @@ impl std::fmt::Display for Refusal {
             Self::AccountOfAnotherPerson => f.write_str("account belongs to another person"),
             Self::NotPaid => f.write_str("no valid ticket"),
             Self::TooManyNamesakes => f.write_str("too many people with the same data"),
+            Self::Held { contact } => write!(
+                f,
+                "your verification needs a short check by a person before it counts; please contact {contact}"
+            ),
+            Self::DoubleAccount => {
+                f.write_str("this person holds an account already; one person holds one account")
+            }
             Self::Key(e) => write!(f, "{e}"),
             Self::Store(e) => write!(f, "store: {e}"),
             Self::System(e) => f.write_str(e),
@@ -321,6 +346,8 @@ impl Refusal {
             Self::AccountOfAnotherPerson => "account-of-another-person",
             Self::NotPaid => "not-paid",
             Self::TooManyNamesakes => "too-many-namesakes",
+            Self::Held { .. } => "held",
+            Self::DoubleAccount => "double-account",
             Self::Key(_) => "key",
             Self::Store(_) => "store",
             Self::System(_) => "system",
@@ -335,6 +362,7 @@ pub struct Service<K: KeyService, S: Store> {
     previous: Vec<K>,
     signing: SigningKey,
     store: S,
+    dedup: Option<Dedup>,
 }
 
 /// A person key and the claim last issued for it, if any.
@@ -358,7 +386,37 @@ impl<K: KeyService, S: Store> Service<K, S> {
             previous,
             signing: SigningKey::from_bytes(signing_seed),
             store,
+            dedup: None,
         }
+    }
+
+    /// The service with face dedup (rule 33): used when the rules switch it
+    /// on (`identity.face_dedup`).
+    #[must_use]
+    pub fn with_dedup(mut self, dedup: Dedup) -> Self {
+        self.dedup = Some(dedup);
+        self
+    }
+
+    /// Face dedup, if the service has it: the board's commands.
+    #[must_use]
+    pub const fn dedup(&self) -> Option<&Dedup> {
+        self.dedup.as_ref()
+    }
+
+    /// Face dedup, if the service has it: the board's commands.
+    pub fn dedup_mut(&mut self) -> Option<&mut Dedup> {
+        self.dedup.as_mut()
+    }
+
+    /// The person key the service gives `person` now. The board finds a
+    /// held verification by the data of the document it is shown.
+    ///
+    /// # Errors
+    /// Data without canonical form, too many namesakes, the key service
+    /// failed.
+    pub fn person_key_of(&self, person: &Person) -> Result<[u8; 32], Refusal> {
+        self.find(&self.key, person).map(|(key, _, _)| key)
     }
 
     /// The public key the host lists for this service.
@@ -420,6 +478,7 @@ impl<K: KeyService, S: Store> Service<K, S> {
             former,
             ticket,
             helper,
+            face,
         } = request;
         if person.basis() != rules.basis {
             return Err(Refusal::WrongBasis);
@@ -476,6 +535,31 @@ impl<K: KeyService, S: Store> Service<K, S> {
                 Some(ticket)
             }
         };
+        // Face dedup (rule 33, ADR 0030): when the rules switch it on, for a
+        // check that brings a face print. Before anything is signed: a held
+        // verification leaves no claim behind and uses no ticket.
+        let keep = match (rules.face_dedup, face) {
+            (true, Some(print)) => {
+                let birth = person.born().ok_or(Refusal::AgeUnknown)?;
+                let dedup = self.dedup.as_mut().ok_or(Refusal::System(
+                    "face dedup is on, but the service has no face store",
+                ))?;
+                let earlier: Vec<String> = replaces.iter().map(|old| hex(old)).collect();
+                match dedup
+                    .check(&hex(&key), birth, &print, &earlier, now)
+                    .map_err(Refusal::Store)?
+                {
+                    Outcome::Clear => Some((birth, print)),
+                    Outcome::Double => return Err(Refusal::DoubleAccount),
+                    Outcome::Held(_) => {
+                        return Err(Refusal::Held {
+                            contact: dedup.contact().to_owned(),
+                        })
+                    }
+                }
+            }
+            _ => None,
+        };
         let mut serial = [0u8; 16];
         getrandom::fill(&mut serial).map_err(|_| Refusal::System("no random numbers"))?;
         let expires = now
@@ -498,6 +582,12 @@ impl<K: KeyService, S: Store> Service<K, S> {
             .signing
             .sign(&claim_bytes(&self.settings.audience, &claim))
             .to_bytes();
+        if let (Some((birth, print)), Some(dedup)) = (&keep, self.dedup.as_mut()) {
+            let old = replaces.map(|old| hex(&old));
+            dedup
+                .keep(&hex(&key), *birth, print, old.as_deref(), now)
+                .map_err(Refusal::Store)?;
+        }
         // Remembered before the claim leaves: a claim nobody remembers
         // could not be told from a second person later.
         self.store

@@ -294,6 +294,11 @@ pub struct Identity {
     /// How long the move of an account to a new key waits, so that the old
     /// key can stop it. Off: at once.
     pub key_move_delay: Rule<Span>,
+    /// Face dedup at every document check (diary 33, ADR 0030): the face
+    /// print of the chip photo is compared with the people of the same date
+    /// of birth, and a match waits for the Verein board. Read by identity
+    /// services, not by the ledger.
+    pub face_dedup: Rule<bool>,
 }
 
 /// What the person key is made from (`docs/adr/0013-person-key.md`).
@@ -814,6 +819,8 @@ impl RuleSet {
             delay,
             delay.value.to_string(),
         ));
+        let dedup = &self.identity.face_dedup;
+        lines.push(value("identity.face_dedup", dedup, dedup.value.to_string()));
         let price = &self.verification.price_eur;
         lines.push(value(
             "verification.price_eur",
