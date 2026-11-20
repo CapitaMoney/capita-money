@@ -328,6 +328,9 @@ impl<K: KeyService, S: Store> App<K, S> {
                 "minimumAge": settings.rules.minimum_age,
                 "level": settings.rules.level,
                 "validitySeconds": settings.rules.validity,
+                // Face dedup (rule 33): the app asks for consent to keeping
+                // the face print before the document check (GDPR Art. 9).
+                "faceDedup": settings.rules.face_dedup,
                 "checks": checks,
                 "phones": phones.unwrap_or_default(),
                 "handover": true,

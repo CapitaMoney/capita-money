@@ -37,6 +37,7 @@ use std::path::PathBuf;
 
 use capita_credential::types::{Audience, IssuerId};
 use capita_face::embed::{Print, DIM};
+use capita_issuer::config::Config;
 use capita_issuer::dedup::{
     Dedup, DedupKey, FaceStore, FileFaceStore, MemoryFaceStore, Outcome, Verdict,
 };
@@ -546,4 +547,71 @@ fn a_likeness_outside_zero_to_one_or_no_contact_is_refused() {
     assert!(Dedup::new(key(), store(), f32::NAN, BOARD.into()).is_err());
     assert!(Dedup::new(key(), store(), 0.6, " ".into()).is_err());
     assert!(Dedup::new(key(), store(), 0.6, BOARD.into()).is_ok());
+}
+
+#[test]
+fn the_configuration_needs_a_face_store_of_its_own_once_the_rules_switch_it_on() {
+    let dir = fresh_dir("face-config");
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, text: &str| {
+        std::fs::write(dir.join(name), text).unwrap();
+        dir.join(name)
+    };
+    let alpha = include_str!("../../../rules/alpha.toml");
+    let switched = alpha.replace(
+        "[identity.face_dedup]\nvalue = false",
+        "[identity.face_dedup]\nvalue = true",
+    );
+    assert_ne!(alpha, switched);
+    write("off.toml", alpha);
+    write("on.toml", &switched);
+    write("seed.hex", &hex(&[2; 32]));
+    write("secret.hex", &hex(&[1; 32]));
+    write("faces.hex", &hex(&[9; 32]));
+    let config = |rules: &str, dedup: Option<&str>| {
+        let mut text = format!(
+            "listen = \"127.0.0.1:0\"\nrules = {rules:?}\nstore = {store:?}\n\
+             [host]\naudience = \"0x{audience}\"\nissuer = 0\n\
+             [keys]\nsigning_seed_file = {seed:?}\nperson_key_secret_file = {secret:?}\n\
+             [policy]\nlevel = 1\n\
+             [checks.document]\ntrust = \"trust\"\nface_models = \"models\"\n",
+            rules = dir.join(rules),
+            store = dir.join("store.jsonl"),
+            audience = hex(&[7; 32]),
+            seed = dir.join("seed.hex"),
+            secret = dir.join("secret.hex"),
+        );
+        if let Some(key) = dedup {
+            text.push_str(&format!(
+                "[checks.document.dedup]\nstore = {faces:?}\nkey_file = {key:?}\n\
+                 same_person = 0.6\ncontact = \"{BOARD}\"\n",
+                faces = dir.join("faces"),
+                key = dir.join(key),
+            ));
+        }
+        Config::load(&write("issuer.toml", &text))
+            .unwrap()
+            .service()
+    };
+    // on, without a face store: the service does not start
+    let Err(why) = config("on.toml", None) else {
+        panic!("started without a face store");
+    };
+    assert!(why.contains("identity.face_dedup"), "{why}");
+    // the secret of the person keys is not the secret of the faces
+    let Err(why) = config("on.toml", Some("secret.hex")) else {
+        panic!("started with the person-key secret");
+    };
+    assert!(why.contains("secret of its own"), "{why}");
+    // on, with its own store: on
+    let on = config("on.toml", Some("faces.hex")).unwrap();
+    assert!(on.settings().rules.face_dedup && on.dedup().is_some());
+    // off: the store may be configured, the rules decide
+    let off = config("off.toml", Some("faces.hex")).unwrap();
+    assert!(!off.settings().rules.face_dedup && off.dedup().is_some());
+    let off = config("off.toml", None).unwrap();
+    assert!(off.dedup().is_none());
+    // nothing was created on disk by starting
+    assert!(!dir.join("faces").exists());
+    let _ = std::fs::remove_dir_all(&dir);
 }

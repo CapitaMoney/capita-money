@@ -57,6 +57,15 @@ test = false
 # boot_keys = []                       # verified-boot keys of self-signed systems, e.g. GrapheneOS
 # apple_root = "trust/attestation/apple-app-attestation-root-ca.pem"
 # apple_app_ids = []                   # "<team id>.com.capitamoney.app" once the Apple account exists
+#
+# Face dedup (rule 33, ADR 0030): one person with two documents is held for
+# the Verein board. Switched by identity.face_dedup of the rules file, which
+# stays off until the legal check (P04.3); needed once it is on.
+# [checks.document.dedup]
+# store = "faces"                         # folder: one file per birthday group, owner-only
+# key_file = "secrets/face-store-secret"  # 32 random bytes, hexadecimal – NOT the person-key secret
+# same_person = …                         # no default on purpose: measure first (capita-face <models> measure <folder>)
+# contact = "board@example.org"           # where a held person turns to
 
 [payment]
 # One ticket code per line; each pays one verification. Without this line
