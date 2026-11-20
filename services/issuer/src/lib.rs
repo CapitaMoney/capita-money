@@ -30,6 +30,9 @@
 //!   an e-mail or a text message with a code); a document check comes later.
 //! - [`config`]: the configuration file; rule values come from the rules
 //!   file (`rules/alpha.toml`), not from here.
+//! - [`dedup`]: face dedup (rule 33, `docs/adr/0030-face-dedup.md`): one
+//!   person with two documents is held for the Verein board. Switched by
+//!   the rules file, off until the legal check.
 //! - [`http`]: the interface for apps.
 
 #![forbid(unsafe_code)]

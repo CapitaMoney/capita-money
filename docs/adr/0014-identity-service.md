@@ -34,6 +34,7 @@ JSON over HTTP, behind a web server that speaks TLS: `GET /v1/info`, `POST /v1/t
 
 ### Store
 One line per claim in a file, read at start; a database fits behind the same trait. The claim is remembered before it leaves the service.
+Face dedup (ADR 0030), only when the rules switch it on: a second store, one sealed face print of the chip photo per person, in files by birthday group.
 
 ## Consequences
 + A decision of the owner on basis, age or proof is a value in the rules file or the configuration.
