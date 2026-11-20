@@ -33,6 +33,7 @@ pub mod align;
 pub mod detect;
 pub mod embed;
 pub mod live;
+pub mod measure;
 
 use detect::{Detector, Face};
 use embed::Recogniser;
@@ -198,6 +199,12 @@ impl FaceCheck {
             return Ok(None);
         };
         Ok(Some(pa.cosine(&pb)))
+    }
+
+    /// The print of the strongest face in a picture; `None` if it shows no
+    /// face.
+    pub fn print_of(&self, img: &RgbImage) -> Result<Option<embed::Print>, Error> {
+        self.print_of_strongest(img)
     }
 
     fn print_of_strongest(&self, img: &RgbImage) -> Result<Option<embed::Print>, Error> {
