@@ -139,7 +139,7 @@ Root can still attest by hand (`sudo` → `capita.attest`), and keeps the list o
 ## Approach
 - **Modular:** all monetary rules live in one small Rust library (`capita-core`). The same rules can run on a central ledger or on a peer-to-peer blockchain.
 - **Built on existing open source** instead of starting from scratch:
-  - [Duniter v2](https://git.duniter.org/nodes/rust/duniter-v2s): Substrate modules for identity and membership, and its maintained fork of the Polkadot SDK
+  - [Duniter v2](https://git.duniter.org/nodes/rust/duniter-v2s): Substrate modules for identity and membership, and its maintained fork of the Polkadot SDK. Capita builds from its own copies, [capita-chain-pallets](https://github.com/CapitaMoney/capita-chain-pallets) and [capita-polkadot-sdk](https://github.com/CapitaMoney/capita-polkadot-sdk) ([ADR 0031](docs/adr/0031-own-copies-of-duniter-code.md))
   - [Ğecko](https://git.duniter.org/clients/gecko): mobile wallet (Flutter)
   - [GNU Taler](https://taler.net): privacy-friendly payments and shop integration
   - [Polkadot SDK / Substrate](https://github.com/paritytech/polkadot-sdk): blockchain framework
