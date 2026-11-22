@@ -1,14 +1,14 @@
 # Upstream mapping – what we reuse, and how
 
-Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M2 the repository holds upstream code in two places, each with a notice in the file: `runtime/` and `node/` start from the solo-chain template of the Polkadot SDK (public domain), and `runtime/src/nonce.rs` adapts `frame_system::CheckNonce` (Apache-2.0). Everything else upstream is a dependency: the Polkadot SDK from Duniter's fork, Duniter's pallets from its repository (ADR 0010).
+Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M2 the repository holds upstream code in two places, each with a notice in the file: `runtime/` and `node/` start from the solo-chain template of the Polkadot SDK (public domain), and `runtime/src/nonce.rs` adapts `frame_system::CheckNonce` (Apache-2.0). Everything else upstream is a dependency: the Polkadot SDK from our copy of Duniter's fork, Duniter's pallets from our fork (ADR 0010, 0031).
 Licences marked ✓ were read from the `LICENSE` file and manifest of the source snapshot of 2026-11-11. Marked ✓web: checked against Taler/Parity project pages on 2026-11-13 (not the licence files themselves); re-check the `COPYING` files before any code reuse. Unmarked = unverified.
 
 | Upstream | What | Used where | How | Licence |
 |---|---|---|---|---|
 | Duniter v2 `pallet-universal-dividend` | claim-based dividend: nothing written until the member claims | `issuance`, ADR 0002 | idea | AGPL-3.0 ✓ |
-| Duniter v2 `identity`, `membership` pallets | identity life cycle on chain | `runtime` (M2), steered by `pallet-capita-credential` (M3) | code, as dependency at a fixed commit, unchanged: coupled to the web of trust only through `Config` handlers (ADR 0009). Certification and distance are replaced by claims of identity services; the handlers are implemented in `runtime/src/identity.rs` (ADR 0011) | AGPL-3.0 ✓ |
-| Duniter v2 patches `multihash`, `sdk-tracing` | fixes for two dependencies of the SDK | workspace `[patch]` | code, as dependency, unchanged | MIT (multihash) ✓, Apache-2.0 / GPL-3.0 (tracing) ✓ |
-| Duniter `duniter-polkadot-sdk` | Duniter's fork of the Polkadot SDK | source of every SDK crate of the chain side | dependency (branch `duniter-substrate-v1.22.3`, commit fixed by `Cargo.lock`) | as Polkadot SDK |
+| Duniter v2 `identity`, `membership` pallets | identity life cycle on chain | `runtime` (M2), steered by `pallet-capita-credential` (M3) | code, from our fork `capita-chain-pallets` at a fixed commit, unchanged: coupled to the web of trust only through `Config` handlers (ADR 0009). Certification and distance are replaced by claims of identity services; the handlers are implemented in `runtime/src/identity.rs` (ADR 0011) | AGPL-3.0 ✓ |
+| Duniter v2 patches `multihash`, `sdk-tracing` | fixes for two dependencies of the SDK | workspace `[patch]` | code, from our fork, unchanged | MIT (multihash) ✓, Apache-2.0 / GPL-3.0 (tracing) ✓ |
+| Duniter `duniter-polkadot-sdk` | Duniter's fork of the Polkadot SDK | source of every SDK crate of the chain side | dependency from our unchanged copy `capita-polkadot-sdk` (commit `4fd8081`, tag `capita-base`) | as Polkadot SDK |
 | Duniter v2 dividend formula (re-evaluation by money mass and members) | – | not used: our rates come from the parameter ladder and caps | – | – |
 | encointer `balances` | demurrage computed lazily from balance + last update | `demurrage`, ADR 0007: linear integer formula instead of exponential fixed-point | idea | GPL-3.0-or-later ✓ |
 | encointer ceremonies | personhood by physical meetings | not used (remote newcomers) | – | – |
@@ -21,4 +21,4 @@ Licences marked ✓ were read from the `LICENSE` file and manifest of the source
 | W3C DID Core, `did:key` | identifiers of identity services | `capita-credential::did` | specification, reimplemented (syntax check, `did:key` of Ed25519 and Sr25519 keys) | W3C document licence, unverified |
 | Ğecko | Flutter wallet | app (M5) | fork | AGPL-3.0 ✓ |
 
-Source locations: Duniter https://git.duniter.org/nodes/rust/duniter-v2s (mirror used as dependency: https://github.com/duniter/duniter-v2s) · Duniter's SDK fork https://github.com/duniter/duniter-polkadot-sdk · Substrate https://github.com/paritytech/polkadot-sdk · ssi https://github.com/spruceid/ssi · Taler https://git.taler.net
+Source locations: Duniter https://git.duniter.org/nodes/rust/duniter-v2s (our fork used as dependency: https://github.com/CapitaMoney/capita-chain-pallets) · Duniter's SDK fork https://github.com/duniter/duniter-polkadot-sdk (our copy: https://github.com/CapitaMoney/capita-polkadot-sdk) · Substrate https://github.com/paritytech/polkadot-sdk · ssi https://github.com/spruceid/ssi · Taler https://git.taler.net
