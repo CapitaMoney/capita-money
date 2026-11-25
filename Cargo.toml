@@ -4,6 +4,7 @@
 resolver = "2"
 members = [
     "crates/capita-attest",
+    "crates/capita-chat",
     "crates/capita-core",
     "crates/capita-credential",
     "crates/capita-door",
@@ -30,6 +31,7 @@ members = [
 # `-p pallet-capita-credential`, `-p capita-runtime`, `-p capita-node`.
 default-members = [
     "crates/capita-attest",
+    "crates/capita-chat",
     "crates/capita-core",
     "crates/capita-credential",
     "crates/capita-door",

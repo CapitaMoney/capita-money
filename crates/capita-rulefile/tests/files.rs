@@ -259,10 +259,11 @@ fn the_register_names_files_that_exist() {
 fn the_overview_lists_every_rule_with_its_status() {
     let set = fixture();
     let lines = set.lines();
-    let values = 40 + set.issuance.ladder.len() + set.caps.country.len();
+    let values = 43 + set.issuance.ladder.len() + set.caps.country.len();
     assert_eq!(lines.len(), values + set.register.len());
     let line = |path: &str| lines.iter().find(|l| l.path == path).unwrap();
     assert_eq!(line("issuance.start_grant").value, "1.00");
+    assert_eq!(line("chat.messages_per_day").value, "500");
     assert_eq!(line("issuance.claim_window").value, "2 weeks");
     assert_eq!(line("issuance.age.per_year").value, "3.00");
     assert_eq!(line("issuance.age.at_verification").value, "1.50");
