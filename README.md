@@ -21,6 +21,7 @@ Rules as code with tests (M1): `capita-core`. The same rules inside a Substrate 
 - [`crates/capita-door`](crates/capita-door) – the euro door: vouchers and tickets, signed bytes, check (Rust, `no_std`)
 - [`crates/capita-goods`](crates/capita-goods) – sold digital goods: sanction ladder, compensation, work registry, text print (Rust, `no_std`)
 - [`crates/capita-marks`](crates/capita-marks) – personal copies of EPUB, PDF and text with a hidden mark, the mark reader, fingerprints; command line `capita-marks`
+- [`crates/capita-chat`](crates/capita-chat) – the verified chat: chat certificates signed by the Capita key, one account per person, end-to-end encrypted groups on MLS (OpenMLS), signed forum posts ([ADR 0032](docs/adr/0032-verified-chat.md))
 - [`services/door`](services/door) – the euro door service: GNU Taler payment in, voucher or tickets out
 - [`services/face`](services/face) – the face check: selfie against document photo, liveness by head movements, keeps nothing
 - [`crates/capita-rulefile`](crates/capita-rulefile) – reads and checks a rules file

@@ -369,6 +369,20 @@ pub struct SpamRules {
     pub new_keys_per_block: Rule<u32>,
 }
 
+/// The verified chat (ADR 0032): daily quota and how long a chat
+/// certificate holds. Read by the apps and mailboxes (`capita-chat`), not by
+/// the ledger.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChatRules {
+    /// Chat messages a verified person may send per day.
+    pub messages_per_day: Rule<u32>,
+    /// Forum posts and comments a verified person may write per day.
+    pub posts_per_day: Rule<u32>,
+    /// Days a chat certificate holds at most.
+    pub cert_days: Rule<u32>,
+}
+
 /// Sold digital goods (rules diary 27 and 28, ADR 0019): the sanction
 /// ladder, compensation, the work registry, downloads and gifts. Read by the
 /// market service and the chain (`capita-goods`), not by the core.
@@ -467,6 +481,8 @@ pub struct RuleSet {
     pub spam: SpamRules,
     /// Sold digital goods.
     pub goods: GoodsRules,
+    /// The verified chat.
+    pub chat: ChatRules,
     /// Rules that are behaviour and live in code.
     #[serde(default)]
     pub register: Vec<RegisterEntry>,
@@ -655,6 +671,15 @@ impl RuleSet {
                 "spam.new_keys_per_block",
                 "must be above zero: nobody could join",
             ));
+        }
+        if self.chat.messages_per_day.value == 0 || self.chat.posts_per_day.value == 0 {
+            return Err(Error::at(
+                "chat",
+                "messages_per_day and posts_per_day must be above zero: nobody could write",
+            ));
+        }
+        if !(1..=400).contains(&self.chat.cert_days.value) {
+            return Err(Error::at("chat.cert_days", "between 1 and 400"));
         }
         self.goods.params()?;
         if self.identity.membership_period.value.0.is_zero() {
@@ -851,6 +876,24 @@ impl RuleSet {
             &spam.new_keys_per_block,
             spam.new_keys_per_block.value.to_string(),
         ));
+        let chat = &self.chat;
+        lines.extend([
+            value(
+                "chat.messages_per_day",
+                &chat.messages_per_day,
+                chat.messages_per_day.value.to_string(),
+            ),
+            value(
+                "chat.posts_per_day",
+                &chat.posts_per_day,
+                chat.posts_per_day.value.to_string(),
+            ),
+            value(
+                "chat.cert_days",
+                &chat.cert_days,
+                chat.cert_days.value.to_string(),
+            ),
+        ]);
         let g = &self.goods;
         lines.extend([
             value(

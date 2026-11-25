@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[package]
+name = "capita-chat"
+description = "The verified chat of Capita Money: chat certificates signed by the Capita key, one account per person, end-to-end encrypted groups on MLS (OpenMLS), signed forum posts (ADR 0032)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+capita-keys = { workspace = true, features = ["std"] }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+openmls = "0.9.2"
+openmls_basic_credential = "0.6.0"
+openmls_rust_crypto = "0.6.0"
+openmls_traits = "0.6.0"
+
+[dev-dependencies]
+capita-rulefile = { workspace = true }

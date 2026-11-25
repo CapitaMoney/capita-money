@@ -240,6 +240,27 @@ value = 10
 status = "default"
 source = "ADR 0029"
 note = "Transactions of keys without a person one block takes."
+# -------------------------------------------------------------------- chat
+# The verified chat (2discuss AB, ADR 0032): read by the apps and mailboxes
+# (capita-chat), not by the ledger.
+[chat.messages_per_day]
+value = 500
+status = "default"
+source = "diary 32 (no fees, free quota), ADR 0032 (the number: Claude's default)"
+note = "Chat messages a verified person may send per day (UTC), free. Receiving apps and mailboxes drop what goes beyond."
+
+[chat.posts_per_day]
+value = 20
+status = "default"
+source = "diary 32, ADR 0032 (the number: Claude's default)"
+note = "Forum posts and comments a verified person may write per day (UTC), free."
+
+[chat.cert_days]
+value = 30
+status = "default"
+source = "ADR 0032 (Claude's default)"
+note = "Days a chat certificate holds: the Capita key signs a chat key of the device for this long; the app renews it quietly. Shorter: a stolen phone's chat key ends sooner; longer: fewer fingerprint prompts."
+
 # ------------------------------------------------------------------- goods
 # Sold digital goods (diary 27, 28; ADR 0019): protection by identity, not
 # by locks. Read by the market service and the chain (capita-goods).

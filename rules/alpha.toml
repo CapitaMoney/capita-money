@@ -281,6 +281,27 @@ value = 10
 status = "default"
 source = "ADR 0029 (Claude's default)"
 note = "Transactions of keys without a person one block takes (a block: 6 seconds; 10 = 144 000 a day). Keys cost nothing to make: this number keeps them from filling the ledger. Persons are not held up by it."
+# -------------------------------------------------------------------- chat
+# The verified chat (2discuss AB, ADR 0032): read by the apps and mailboxes
+# (capita-chat), not by the ledger.
+[chat.messages_per_day]
+value = 500
+status = "default"
+source = "diary 32 (no fees, free quota), ADR 0032 (the number: Claude's default)"
+note = "Chat messages a verified person may send per day (UTC), free. Receiving apps and mailboxes drop what goes beyond."
+
+[chat.posts_per_day]
+value = 20
+status = "default"
+source = "diary 32, ADR 0032 (the number: Claude's default)"
+note = "Forum posts and comments a verified person may write per day (UTC), free."
+
+[chat.cert_days]
+value = 30
+status = "default"
+source = "ADR 0032 (Claude's default)"
+note = "Days a chat certificate holds: the Capita key signs a chat key of the device for this long; the app renews it quietly. Shorter: a stolen phone's chat key ends sooner; longer: fewer fingerprint prompts."
+
 # ------------------------------------------------------------------- goods
 # Sold digital goods (diary 27, 28; ADR 0019): protection by identity, not
 # by locks. Read by the market service and the chain (capita-goods).
@@ -714,3 +735,45 @@ rule = "Who decides that a violation is proven: the board of the Verein until 10
 status = "default"
 source = "diary 27 (owner 2026-11-16: to discuss separately), ADR 0019"
 planned = "market service, glassroots"
+
+[[register]]
+id = "chat-login"
+rule = "The chat has no password and no server account: the Capita key of the account signs a chat key of each device for chat.cert_days (chat certificate). Every app checks the certificate against the keys of the account on the chain."
+status = "default"
+source = "2discuss AB, ADR 0032 (Claude's design)"
+code = ["crates/capita-chat/src/cert.rs", "crates/capita-chat/src/check.rs"]
+
+[[register]]
+id = "chat-one-account"
+rule = "Only verified persons write in the chat (messages, posts, comments, private chats), and only from the first account of their person: a younger account of the same person never writes, so nobody walks away and starts again under a new account. Unverified members read public forums; writing is greyed out."
+status = "default"
+source = "owner 2026-11-16 (2discuss AB), diary 5, 21, 29, 30, 32, ADR 0032"
+code = ["crates/capita-chat/src/rights.rs", "crates/capita-chat/src/group.rs", "crates/capita-chat/src/post.rs"]
+
+[[register]]
+id = "chat-sanctions"
+rule = "Bans are read from the chain by every app: a posting ban stops writing, reading stays; a ban from social interaction (diary 27, step 3 and further) closes the chat. A message of a banned sender is dropped by its receivers. Chat violations: 1st warning, 2nd one calendar month posting ban, 3rd and further the full ban (Claude's default, owner to confirm)."
+status = "default"
+source = "diary 27, ADR 0032 (ladder for chat violations: Claude's default)"
+code = ["crates/capita-chat/src/rights.rs", "crates/capita-chat/src/chain.rs"]
+
+[[register]]
+id = "chat-no-bots"
+rule = "No bots in the chat (owner): a chat certificate of any kind other than a person is refused. Rules for bots only with 2discuss AG."
+status = "decided"
+source = "owner 2026-11-16 (2discuss AB), 2discuss AG, ADR 0032"
+code = ["crates/capita-chat/src/cert.rs", "crates/capita-chat/src/check.rs"]
+
+[[register]]
+id = "chat-on-devices"
+rule = "Chats live on the members' devices, end-to-end encrypted (MLS); mailboxes keep only ciphertext until delivery; forum posts are signed, not encrypted, and kept by the devices that follow them."
+status = "default"
+source = "diary 24, ADR 0032"
+code = ["crates/capita-chat/src/group.rs", "crates/capita-chat/src/post.rs"]
+
+[[register]]
+id = "chat-transport"
+rule = "Chat messages and forum posts travel app to app (iroh), with mailboxes that hold ciphertext for devices that are offline: alpha on the owner's mini server with test data, later on always-on member devices."
+status = "default"
+source = "diary 24, diary 31 (direction), ADR 0032"
+planned = "transport (iroh), device store, mailbox service"

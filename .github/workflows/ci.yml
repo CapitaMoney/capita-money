@@ -150,6 +150,15 @@ jobs:
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
       - run: cargo clippy -p capita-marks --all-targets -- -D warnings
       - run: cargo test -p capita-marks
+  # The verified chat (ADR 0032): chat certificates, MLS groups, posts.
+  chat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "::add-matcher::.github/rust-problem-matcher.json"
+      - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+      - run: cargo clippy -p capita-chat --all-targets -- -D warnings
+      - run: cargo test -p capita-chat
   # The face check: detector + recogniser of OpenCV Zoo, liveness challenge.
   face:
     runs-on: ubuntu-latest

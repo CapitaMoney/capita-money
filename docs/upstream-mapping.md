@@ -1,6 +1,6 @@
 # Upstream mapping – what we reuse, and how
 
-Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M2 the repository holds upstream code in two places, each with a notice in the file: `runtime/` and `node/` start from the solo-chain template of the Polkadot SDK (public domain), and `runtime/src/nonce.rs` adapts `frame_system::CheckNonce` (Apache-2.0). Everything else upstream is a dependency: the Polkadot SDK from our copy of Duniter's fork, Duniter's pallets from our fork (ADR 0010, 0031).
+Rule: ideas are reimplemented; code is copied only with licence notice (ADR 0005). As of M2 the repository holds upstream code in two places, each with a notice in the file: `runtime/` and `node/` start from the solo-chain template of the Polkadot SDK (public domain), and `runtime/src/nonce.rs` adapts `frame_system::CheckNonce` (Apache-2.0). Everything else upstream is a dependency: the Polkadot SDK from our copy of Duniter's fork, Duniter's pallets from our fork (ADR 0010, 0031), OpenMLS for the encryption of the chat (MIT, ADR 0032).
 Licences marked ✓ were read from the `LICENSE` file and manifest of the source snapshot of 2026-11-11. Marked ✓web: checked against Taler/Parity project pages on 2026-11-13 (not the licence files themselves); re-check the `COPYING` files before any code reuse. Unmarked = unverified.
 
 | Upstream | What | Used where | How | Licence |
